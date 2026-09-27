@@ -1,0 +1,34 @@
+import { chromium } from '@playwright/test';
+const browser = await chromium.launch({executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH});
+const deadline = setTimeout(() => { console.error('Smoke check exceeded 30 seconds'); void browser.close(); }, 30000);
+try {
+  const context = await browser.newContext({viewport: {width: 390, height: 844}});
+  const page = await context.newPage();
+  await page.goto('http://127.0.0.1:8790/');
+  await page.getByRole('heading', {name: 'What would you like to say?'}).waitFor();
+  console.log('Online Home loaded');
+  await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+  console.log('Service worker ready');
+  await page.reload();
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+  console.log('Service worker controls page');
+  const caches = await page.evaluate(() => window.caches.keys());
+  if (!caches.some(name => name.includes('workbox-precache'))) throw new Error('No installed precache');
+  await context.setOffline(true);
+  await page.reload();
+  await page.getByRole('heading', {name: 'What would you like to say?'}).waitFor();
+  console.log('Home reloaded with network disabled');
+  const networkBlocked = await page.evaluate(async () => {
+    try { await fetch('/api/health', {cache: 'no-store', signal: AbortSignal.timeout(5000)}); return false; }
+    catch { return true; }
+  });
+  if (!networkBlocked) throw new Error('Network is not blocked');
+  console.log('API fetch blocked');
+  if (await page.locator('.home-grid .big-tile').count() !== 4) throw new Error('Missing input tiles');
+  await page.locator('.mobile-nav').getByRole('button', {name: 'My phrases'}).click();
+  await page.getByRole('heading', {name: 'My phrases', exact: true}).waitFor();
+  console.log('PASS: compiled PWA installs its service worker, reloads Home offline with four input tiles, and opens saved phrases offline. No live audio quality or phone installation claim.');
+} finally {
+  clearTimeout(deadline);
+  await browser.close();
+}

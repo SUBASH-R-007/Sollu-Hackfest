@@ -1,6 +1,6 @@
 # Sollu progress and acceptance ledger
 
-Last updated: 2026-09-27. **Current milestone: M0/M1 local implementation.** User approved the plan with no paid keys and requested a free alternative; hosting is deferred. The complete specification is [docs/SPEC.md](docs/SPEC.md); approved changes are [docs/DECISIONS.md](docs/DECISIONS.md).
+Last updated: 2026-09-27. **Current state: local M0–M6 prototype implemented; automated checks pass, human acceptance pending.** User approved the plan with no paid keys and requested a free alternative; hosting is deferred. The complete specification is [docs/SPEC.md](docs/SPEC.md); approved changes are [docs/DECISIONS.md](docs/DECISIONS.md). This is not a claim that the original full-product or paid-clone milestones are complete.
 
 Status vocabulary: **pending** = no completion evidence; **partial** = implementation exists with open checks; **passed** = dated execution evidence linked; **deferred** = explicitly outside the current cut. A milestone is not complete while its required checks remain pending. Evidence below must be replaced with actual output/paths, never an estimate. Human checks require the human's report.
 
@@ -8,48 +8,48 @@ Status vocabulary: **pending** = no completion evidence; **partial** = implement
 
 | Milestone / check | Status | Evidence / open work | Date |
 | --- | --- | --- | --- |
-| M0 [H] foundation implementation | partial | Workspace and local app in progress; audit all SPEC §17 foundation items before closure | 2026-09-27 |
-| M0 [auto] `pnpm verify` green | pending | Run after implementation; paste output/link result | 2026-09-27 |
+| M0 [H] foundation implementation | partial | Workspace, strict contracts, local API, IndexedDB, PWA, PIN, fictional seed, controls and docs implemented; native phone install pending | 2026-09-27 |
+| M0 [auto] `pnpm verify` green | passed | [Lint, type, unit and 19 browser checks](docs/evidence/verify.txt); [production build](docs/evidence/build.txt) | 2026-09-27 |
 | M0 [auto] provider facts recorded | passed (documentation only) | [Official-source ledger](docs/PROVIDERS.md); no live-provider call implied | 2026-09-27 |
 | M0 [human] HTTPS PWA installs on Android | deferred | Hosting explicitly deferred; H1 checklist below still required later | 2026-09-27 |
 | M0 Full: Dockerfile, encrypted backup/restore, voice admin scripts | deferred | Track each implemented item here; do not infer completion from a stub | 2026-09-27 |
-| M1 [H] core implementation | pending | Home, topic subflows, Type, context/clock, intent, confirmation, audio, attempt log | 2026-09-27 |
-| M1 [auto] 20:58 Topics → Medicine mock E2E | pending | Need three distinct Tamil options and mock label | 2026-09-27 |
+| M1 [H] core implementation | partial | Home, paged Topics/pain, Type, context/clock, mock/local intent, confirmation, audio and attempt log implemented; real-model and human checks pending | 2026-09-27 |
+| M1 [auto] 20:58 Medicine mock flow | partial | Type night-tablet E2E and 13 fixture regression pass; exact Topics → Medicine path is available but not a separately named browser assertion | 2026-09-27 |
 | M1 [auto] same flow with real provider | pending | No paid keys; optional local model is a separate measured alternative, not Anthropic evidence | 2026-09-27 |
-| M1 [auto] I-1/2/3/4/5/9/10 checks | pending | Include expired taps, Stop, no prefetch playback, safe fewer-options fallback, privacy and dimensions | 2026-09-27 |
-| M1 [auto] 13 [H] intent cases/report | pending | Fixture results must be labelled mock; live judge/quality evaluation separate | 2026-09-27 |
-| M1 independent review | pending | Review implementation against spec/invariants after checks | 2026-09-27 |
+| M1 [auto] I-1/2/3/4/5/9/10 checks | passed (bounded automated coverage) | [Verification](docs/evidence/verify.txt): trusted exact taps, expiry, Stop, superseding, lint boundary, fewer options, numerical/contact guards, image privacy, Home/confirmation dimensions and contrast. Semantic grounding and all-screen/manual accessibility remain pending | 2026-09-27 |
+| M1 [auto] 13 [H] intent cases/report | passed (mock only) | [13-case report](evals/intent/report.md): deterministic top-1 92.3%, top-3 100%; no LLM quality or live latency claim | 2026-09-27 |
+| M1 independent review | passed (local implementation) | [Review and evidence](docs/evidence/README.md); findings fixed and regression checked; native/clinical review separate | 2026-09-27 |
 | M1 [human] device voice plays selected card on phone | pending | H2 checklist | 2026-09-27 |
 | M1 Full: ≥20 eval cases | deferred | Expand with native speakers | 2026-09-27 |
-| M3 [H] voice/signing implementation | pending | Free exact recordings/device speech; original paid clone, upload extraction/trimming and history-deletion flow must be tracked separately | 2026-09-27 |
-| M3 [auto] I-6/7/8 checks | pending | Offline Help, consent gate/withdrawal, signature/grant misuse | 2026-09-27 |
+| M3 [H] voice/signing implementation | partial | Device speech, consented exact recordings with review/save/delete/withdraw, signed text and device-bound mock voice grants implemented. Paid cloning, upload/trim and provider history deletion deferred | 2026-09-27 |
+| M3 [auto] I-6/7/8 checks | passed (mock protocol/device harness) | [Verification](docs/evidence/verify.txt): offline Help, language-missing tone, consent gates, signature/text/expiry/device misuse; real microphone and provider deletion pending | 2026-09-27 |
 | M3 [auto] cached tap-to-sound ≤0.3s | pending | Actual audio-start instrumentation; a mocked play promise is not audible-latency evidence | 2026-09-27 |
 | M3 [human] cloned voice, listening rating, provider deletion | pending | Paid account/sample not supplied; H3 checklist | 2026-09-27 |
 | M3 free alternative [human] exact recording matches phrase | pending | H3a checklist; does not pass generative-clone acceptance | 2026-09-27 |
 | M3 Full: isolate, waveform, clean region, Sarvam routes, templates | deferred | Current provider shapes/retention and human comparison required first | 2026-09-27 |
-| M2 [H] speech implementation | pending | Immediate start, generous endpointing, transcript/retry, partner question; mock/browser/live STT distinguished | 2026-09-27 |
+| M2 [H] speech implementation | partial | Browser recognition, immediate start, 3-second pause/15-second limit, transcript/retry and partner question implemented. Mock samples explicitly labelled; paid STT unconnected | 2026-09-27 |
 | M2 [human] “tablet… raathiri” phone flow | pending | H4 checklist | 2026-09-27 |
-| M2 [auto] STT report without audio | pending | About ten consented clips; no CER/latency fabricated from fixtures | 2026-09-27 |
+| M2 [auto] STT report without audio | pending | [Pending report and ten-clip protocol](evals/stt/report.md); zero audio clips supplied/evaluated, no CER or latency result | 2026-09-27 |
 | M2 Full: provider comparison ≥20 clips/language | deferred | Compare Sarvam modes, Scribe/OpenAI; record chosen provider | 2026-09-27 |
-| M5 [H] caregiver implementation | pending | QR, role grants, encryption, feed, receipt, Help/ack, SMS/cancel | 2026-09-27 |
-| M5 [auto] two-context pairing/receipt/Help E2E | pending | Distinct browser storage contexts and real encrypted relay traffic | 2026-09-27 |
+| M5 [H] caregiver implementation | partial | QR/private link, role-bound grants, AES-GCM relay, feed/receipt/question, Help/ack/cancel, optional alarm and SMS composer implemented; real phones pending | 2026-09-27 |
+| M5 [auto] two-context pairing/receipt/Help E2E | passed | [Browser run](docs/evidence/verify.txt): isolated patient/caregiver storage, encrypted WebSocket frames, receipts, questions, acknowledgment and cancellation | 2026-09-27 |
 | M5 [human] two phones, ~1s sentence and Help round trip | pending | H5 checklist | 2026-09-27 |
-| M5 Full: remote question, reconnect outbox, installed QR scanner | deferred | Record items separately if implemented early | 2026-09-27 |
-| M4 [H] on-device camera implementation | pending | COCO-SSD whitelist + label; ordinary model asset downloads distinguished from image upload | 2026-09-27 |
-| M4 [auto] no image transfer while cloud consent off | pending | Inspect network requests/test assertions | 2026-09-27 |
+| M5 Full: remote question, reconnect outbox, installed QR scanner | partial | Remote question implemented/tested; persistent reconnect outbox and built-in scanner deferred; phone camera can open the QR link | 2026-09-27 |
+| M4 [H] on-device camera implementation | partial | Rear-camera/photo input, local COCO-SSD whitelist, label confirmation and explicit bottle demo implemented; real detection/phone checks pending | 2026-09-27 |
+| M4 [auto] no image transfer while cloud consent off | passed | [Camera E2E](docs/evidence/verify.txt) blocks model download, selects a photo, confirms no image request and explicit local-model failure | 2026-09-27 |
 | M4 [human] bottle photo yields water candidates | pending | H6 checklist | 2026-09-27 |
 | M4 Full: explicit opt-in cloud vision | deferred | No automatic image upload or implied consent | 2026-09-27 |
-| M6 [H] stage implementation | pending | Overlay, baseline, therapist-lite/chart/CSV, scenarios, labelled cache, warm-up | 2026-09-27 |
-| M6 [auto] overlay numbers match attempt log | pending | Scripted E2E with actual measured events | 2026-09-27 |
+| M6 [H] stage implementation | partial | Live tap/audio-start overlay, measured baseline, therapist metrics/chart/CSV, seven scenarios, silent three-scene warm-up and labelled offline cache implemented; rehearsal pending | 2026-09-27 |
+| M6 [auto] overlay numbers match attempt log | passed | [Stage and baseline E2E](docs/evidence/verify.txt), hand-computed median/CSV fixtures. Browser voice is simulated; no audible latency claim | 2026-09-27 |
 | M6 [human] two live and one offline phone rehearsals | pending | H7 checklist; use [demo script](docs/DEMO_SCRIPT.md) | 2026-09-27 |
-| M6 independent review / demo freeze | pending | No freeze until applicable auto checks and actual rehearsal reports are recorded | 2026-09-27 |
+| M6 independent review / demo freeze | partial | [Implementation review](docs/evidence/README.md) complete; human demo freeze awaits H7 rehearsals | 2026-09-27 |
 | M7 full onboarding, memory and context | deferred | People/aliases, places, routines/vocabulary, phrasebook/promotion, body map, backup | 2026-09-27 |
-| M7 [auto] usual/substitution/addressee mock E2E | pending | Two prior confirmations and real persistence/retrieval required | 2026-09-27 |
+| M7 [auto] usual/substitution/addressee mock E2E | partial | Addressee language regeneration passes; explicit memory/substitution persistence exists but the complete repeated-use learning acceptance remains pending | 2026-09-27 |
 | M7 [auto] learned-routine unit tests | pending | Hand-created 7-day fixtures and median-time checks | 2026-09-27 |
 | M8 personal objects | deferred | Teach photos, embeddings, kNN, threshold tuning and management | 2026-09-27 |
 | M8 [human] ≥80% top-1 on 20 held-out photos | pending | H8 checklist; ordinary COCO detection is not this result | 2026-09-27 |
 | M9 full therapist dashboard | deferred | Full metrics, heatmap, concepts/substitutions/rejected sets, encrypted export/import, print/study mode | 2026-09-27 |
-| M9 [auto] metrics fixtures and export/import round trip | pending | Hand-computed results and content equality after decrypt | 2026-09-27 |
+| M9 [auto] metrics fixtures and export/import round trip | partial | Hand-computed medians, success denominators, raw-text omission and CSV formula-escaping tests pass. Encrypted export/import not implemented | 2026-09-27 |
 | M10 Hindi/Telugu | deferred | UI, grammar, templates, routing and ≥15 cases per language | 2026-09-27 |
 | M10 [auto] language eval targets or recorded gaps | pending | Live provider results and native review separate from shape tests | 2026-09-27 |
 | M10 [human] nurse Hindi same-voice flow + language sign-off | pending | H9 checklist and [language inventory](docs/LANGUAGE_REVIEW.md) | 2026-09-27 |
@@ -77,7 +77,7 @@ When ready, ask the human to run the relevant checklist and record date, phone/b
 
 | Metric from SPEC §15.4 | Target | Measured result |
 | --- | --- | --- |
-| Initial JS gzip | ≤200 KB | pending build measurement |
+| Initial JS gzip | ≤200 KB | 155,639 bytes, entry + modulepreload + registration gzip; [method](docs/evidence/bundle-size.json). Excludes full offline precache |
 | Home interactive, budget Android/4G | <3s | pending human/device run |
 | STT, 2s clips | p50 ≤1.5s | pending consented audio evaluation |
 | Round-1 intent | p50 ≤3s / p95 ≤6s | pending live model measurement |
@@ -89,4 +89,5 @@ When ready, ask the human to run the relevant checklist and record date, phone/b
 
 - 2026-09-27: user approved the build, no paid keys, and deferred hosting. [Approved plan](docs/PLAN.md).
 - 2026-09-27: original brief preserved in `docs/SPEC.md`; [provider documentation review](docs/PROVIDERS.md) covers free modes and paid upgrades. No live-provider or human result claimed.
-- Implementation/test/commit evidence: pending; append actual commands, outputs, files and commit IDs after execution.
+- 2026-09-27: [automated verification](docs/evidence/verify.txt), [build](docs/evidence/build.txt), [mock evaluation](evals/intent/report.md) and [review/visual evidence](docs/evidence/README.md) recorded. No live model, paid provider, phone or native-speaker acceptance result is implied.
+- 2026-09-27: compiled PWA installed its service worker and loaded Home/My phrases with network transport disabled; [smoke output](docs/evidence/pwa-smoke.txt). This is desktop Chromium evidence, not an Android install report.

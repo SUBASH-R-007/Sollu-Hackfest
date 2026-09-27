@@ -18,7 +18,7 @@ pnpm dev
 
 Open the web address printed by Vite (normally `http://localhost:5173`). The API normally runs on port 8787. Keep `MOCK_PROVIDERS=1` for deterministic no-key development. The server is local; hosting has been deferred at the user's request.
 
-Open `/setup?demo=1` to create the fictional family and set a caregiver PIN. Settings at `/settings` are behind the caregiver control (hold for two seconds, then PIN); Voice Studio is under `/settings?tab=voice`. Choose a visible provider/voice mode before demonstrating. Open `/care` through its pairing link in a separate browser profile or context; the receiver must tap Enable alerts and keep that page open. A second tab sharing the patient browser's storage is not equivalent to an independent device.
+Open `/setup?demo=1` to create the fictional family and set a caregiver PIN. Hold the top gear for two seconds, then enter the PIN to open settings. Direct family routes (`/settings`, `/therapist` and `/demo`) require the PIN without the hold; Voice Studio is under `/settings?tab=voice`. This lock uses the same browser's stored PIN and an in-memory unlock state; it prevents accidental changes and is not account authentication or disk encryption. The guarded `/demo` page warms three sentence sets and prepares seven sample scenes. Reused suggestions are labelled **CACHED**, and sample-input buttons do not test a microphone or camera. Choose a visible provider/voice mode before demonstrating. Open `/care` through its pairing link in a separate browser profile or context; the receiver must tap Enable alerts and keep that page open. A second tab sharing the patient browser's storage is not equivalent to an independent device.
 
 For a production bundle, run `pnpm build`, then `pnpm start`. The exact available scripts and versions are in the root manifest and lockfile. Phone microphone/camera/PWA installation requires a secure context; ordinary LAN HTTP is not a substitute for HTTPS. No tunnel or deployment is created automatically.
 
@@ -29,12 +29,12 @@ For a production bundle, run `pnpm build`, then `pnpm start`. The exact availabl
 | Candidate generation | Deterministic mock now; optional local Ollama model | Mock is a rehearsal tool. Ollama needs an installed model and sufficient local hardware; Tamil grounding and speed need evaluation. |
 | Speech input | Browser SpeechRecognition when supported | May send audio to browser-vendor servers; language/support/offline behaviour vary. Type and Topics always provide another input route. |
 | Speak a new sentence | Available device/browser speech voice | Generic voice; Tamil voice may be missing and remote voices may need internet. |
-| Speak in a consenting person's actual voice | Record/upload an exact phrase and replay it for that phrase | Genuine recording, not a generative clone; it cannot say new text or translate the recording. |
+| Speak in a consenting person's actual voice | Record an exact phrase in Voice Studio and replay it for that phrase | Genuine recording, not a generative clone; it cannot say new text or translate the recording. File upload is not implemented. |
 | Bottle camera input | COCO-SSD on-device after model download | Generic classes only. Personal medicine boxes/spectacles need the later object-learning feature. |
 
 To use Ollama, install it separately, choose and download a local model suitable for your hardware, and confirm it appears in `ollama list`. Set `LLM_PROVIDER=ollama`, `MOCK_PROVIDERS=0`, `OLLAMA_BASE_URL=http://127.0.0.1:11434`, and `OLLAMA_MODEL` to that installed model's exact name in `.env`. Set `OLLAMA_NO_CLOUD=1` in the Ollama application's environment and restart Ollama for local-only operation. Sollu does not install models automatically. See [verified provider notes](docs/PROVIDERS.md) for the API and privacy limits.
 
-The paid upgrade path is Anthropic intent, evaluated Sarvam STT, and consented ElevenLabs cloning/TTS. Keys belong only in local server configuration. An enabled live provider needs the server access code and a strong persistent server secret. Do not purchase anything just to try the demo; free paths remain available. Paid adapters and retention/deletion claims need real account checks before being presented as working. [Provider ledger](docs/PROVIDERS.md)
+The future paid upgrade path is Anthropic intent, evaluated Sarvam STT, and consented ElevenLabs cloning/TTS. **These paid adapters are not connected in this build; adding keys alone does not enable them.** The implemented intent routes are mock and local Ollama. A production server requires `ACCESS_CODE` and a persistent `SERVER_SECRET` of at least 32 bytes. Keep secrets in server configuration. Paid integration, retention and deletion need implementation and real account checks. [Provider ledger](docs/PROVIDERS.md)
 
 ## Verification and status
 
@@ -45,6 +45,8 @@ pnpm eval
 pnpm verify
 pnpm build
 ```
+
+E2E tests need a compatible Chromium browser. The configuration reuses a locally installed Playwright Chromium or preinstalled Puppeteer Chrome on Windows; `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` can select an existing executable. If none is available, run `pnpm exec playwright install chromium` once, then `pnpm e2e`. This downloads a browser; the app does not install one automatically.
 
 Check [PROGRESS.md](PROGRESS.md) for what has actually run and what remains pending. Mock fixture evaluation is not measured LLM accuracy. Browser automation is not a phone listening test. Original full-product scope, including Hindi/Telugu, learned routines, personal objects and pilot hardening, remains in [the specification](docs/SPEC.md).
 

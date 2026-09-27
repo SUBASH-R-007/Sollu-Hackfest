@@ -1,0 +1,19 @@
+{
+  "method": "gzip entry script, HTML modulepreloads and SW registration; excludes lazy routes, fonts, CSS, SW precache downloads",
+  "files": [
+    {
+      "file": "/assets/index-C1lZkPO4.js",
+      "gzipBytes": 155004
+    },
+    {
+      "file": "/assets/rolldown-runtime-B0Z9INg1.js",
+      "gzipBytes": 510
+    },
+    {
+      "file": "/registerSW.js",
+      "gzipBytes": 125
+    }
+  ],
+  "totalGzipBytes": 155639,
+  "limitBytes": 200000
+}

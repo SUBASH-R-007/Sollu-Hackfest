@@ -1,0 +1,36 @@
+{
+  "name": "sollu",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c magenta,cyan \"pnpm --filter @sollu/server dev\" \"pnpm --filter @sollu/web dev\"",
+    "build": "pnpm --filter @sollu/web build && pnpm --filter @sollu/server build",
+    "start": "pnpm --filter @sollu/server start",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "e2e": "playwright test",
+    "eval": "tsx evals/run.ts",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm e2e",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@playwright/test": "^1.58.0",
+    "@axe-core/playwright": "^4.11.0",
+    "@types/node": "^22.19.0",
+    "concurrently": "^9.2.0",
+    "eslint": "^9.39.0",
+    "globals": "^16.5.0",
+    "prettier": "^3.7.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.48.0",
+    "vitest": "^5.0.2"
+  }
+}

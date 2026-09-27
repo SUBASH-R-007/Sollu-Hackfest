@@ -1,0 +1,6 @@
+Online Home loaded
+Service worker ready
+Service worker controls page
+Home reloaded with network disabled
+API fetch blocked
+PASS: compiled PWA installs its service worker, reloads Home offline with four input tiles, and opens saved phrases offline. No live audio quality or phone installation claim.

@@ -6,7 +6,7 @@ Updated 2026-09-27. This is an engineering data-flow record and a pilot review c
 
 Sollu helps a person choose words to communicate. The person decides which sentence is spoken. It is not a diagnosis, treatment tool or emergency service.
 
-Your profile, people, routine, phrases, consent records, recorded phrases and communication history are intended to stay in this browser's storage. Clearing site data can remove them. Anyone who can use the unlocked browser may be able to read this information. The caregiver PIN prevents accidental changes; it is not disk encryption or a separate user account.
+Your profile, people, routine, phrases, consent records, recorded phrases, rehearsal suggestions and communication history are saved in this browser's IndexedDB storage. Clearing site data can remove them. Anyone who can use the unlocked browser may be able to read this information. The caregiver PIN prevents accidental changes; it is not disk encryption or a separate user account.
 
 The statement “only the fragment and context packet leave the device” is incomplete. What leaves depends on the selected mode:
 
@@ -14,11 +14,11 @@ The statement “only the fragment and context packet leave the device” is inc
 | --- | --- | --- |
 | Ask for candidate sentences | Sollu server; selected LLM receives bounded fragment/context if enabled | Mock mode uses fixtures. Local Ollama sends the request from the server to the configured Ollama endpoint; loopback keeps it on that computer, not necessarily on the patient's phone. |
 | Browser speech recognition | Browser/vendor recognition service may receive microphone audio | Not guaranteed private or offline. Disclose this before enabling it; Topics and Type need no recognition service. |
-| Cloud transcription | Sollu server and selected STT provider receive a short clip | Disabled without the relevant provider configuration. Do not persist raw input audio. |
+| Cloud transcription | Future route: Sollu server and selected STT provider receive a short clip | No paid STT adapter is connected. The test endpoint returns an explicitly selected fixture or unavailable response. |
 | Device/browser speech | Operating-system or browser speech service receives the selected text | A voice may be local or remote. A generic device voice is not the person's clone. |
 | Recorded phrase playback | No provider; exact phrase recording is read from local storage | A consented recording can be replayed only for its associated text. Deleting it removes the local replay asset. |
-| Cloud TTS / prefetch | TTS provider receives sentence text, including unchosen prefetched candidates | Off without configured cloud speech. Provider history deletion, if implemented, must have confirmed success before the UI claims it. |
-| Clone or isolate a voice | Voice provider receives samples and consent summary | Requires a supported account and recorded consent. Saved clone remains at the provider until deletion succeeds. |
+| Cloud TTS / prefetch | Future route: TTS provider receives sentence text, including unchosen prefetched candidates | No paid TTS adapter is connected. The server's signed TTS protocol fixture produces a silent test WAV. Future provider history deletion must confirm success before the UI claims it. |
+| Clone or isolate a voice | Future route: voice provider receives samples and consent summary | No sample is uploaded or cloned in this build. Clone grants are mock test capabilities; isolation is unavailable. |
 | Extract audio from a video | Sollu server temporarily receives upload | Future extraction must bound MIME/size/time and remove temporary files on success, error and disconnect. |
 | Local object detection | Image stays in browser; model asset host receives ordinary download metadata | COCO-SSD inference runs locally after model download. Optional cloud-image recognition must be off by default and require a separate explicit action. |
 | Pair caregiver / send sentence or Help | Relay sees connection metadata and opaque encrypted frames | The room key stays in the URL fragment and the devices. The server must not log grants, keys, sentence content or full connection URLs. Caregiver plaintext exists on the receiving device. |
@@ -26,15 +26,17 @@ The statement “only the fragment and context packet leave the device” is inc
 | Export CSV | A readable file is saved for the user's chosen handling | CSV is not encrypted. Study/pseudonym options reduce exposure but do not make free text anonymous. |
 | Web Push | Browser push infrastructure receives encrypted alerts | M11, pending. Current caregiver view must stay open for relay alerts. |
 
-No hosting was requested for this build. A future host and its request logging, backups and retention must be reviewed before claiming that the deployment stores no content. Likewise a configured external Ollama host changes the data destination and needs a revised notice.
+No hosting was requested for this build. A future host and its request logging, backups and retention must be reviewed before claiming that the deployment stores no content. This build requires Ollama's address to be loopback and rejects cloud-model names.
+
+Speech attempts are recorded only when playback starts. If Help uses an alert tone because no matching voice is available, the attempt is stored as `alerted`; it has no time-to-speech value and is excluded from spoken-attempt metrics. A delivery receipt means the caregiver page received the encrypted message. “I'm coming” is a separate acknowledgement. Neither proves emergency assistance will arrive.
 
 ## Minimisation requirements
 
 - Send a manual place label, never coordinates. Bound context contacts, vocabulary, recent turns and examples as specified in SPEC §6.
 - Keep raw speech clips transient. Keep own-phrase recordings only with consent; never commit recordings, exports, account keys, tokens or real personal data to git.
 - Server logs may contain only operational metadata: route template, status, latency, provider/model, usage and validation-drop counts. Errors must not echo request bodies, text or credentials.
-- Local attempt retention defaults to the specification's 180-day target. Check the actual cleanup implementation before telling users it happens automatically.
-- Use separate app-use, voice, sample-retention, cloud-vision and study choices. Withdrawal must be easy to locate. A failed provider deletion must remain visibly pending and retryable; never hide it by removing the only local grant first.
+- Automatic 180-day attempt cleanup is not implemented. History remains until site data or the app's local-data erase action removes it; browser eviction may also remove it.
+- Recorded-phrase consent is implemented, including who gave it and local withdrawal/deletion. Separate app-use, sample-retention, cloud-vision and study consent flows remain pilot requirements. Future provider deletion failures must remain visibly pending and retryable.
 - Revoke consent locally before further synthesis and remove local samples/cache as selected. Existing exported files and another caregiver's browser are separate copies; do not promise that a local erase removes them.
 - Encrypted backups and role/device grants need round-trip, tamper and wrong-device tests. A stateless server does not automatically supply global token revocation.
 

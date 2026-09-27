@@ -5,11 +5,11 @@ Updated 2026-09-27. Hosting is deferred by the user. Run on a laptop with the lo
 ## Preparation
 
 1. Start `pnpm dev`; open the patient app and seed the fictional demo family through setup. Set the caregiver PIN. Use only consented recordings.
-2. In caregiver settings choose a visible mode: **Mock demo**, **local Ollama**, or configured cloud service. Keep mock/cached badges visible throughout. Verify the actual voice label: device voice, exact recorded phrase, or a verified clone.
+2. Use **Mock demo** or configure **local Ollama** on the server. Paid cloud services are not connected. Keep mock/cached badges visible throughout. Verify the actual voice label: device voice or exact recorded phrase.
 3. Set the demo clock to 20:58 and show its badge. Enable stage measurement; clear only disposable demo attempts if starting a fresh measured comparison.
-4. Use Voice Studio to prepare exact-phrase recordings if demonstrating the free own-voice path. Listen to each and confirm its text. Explain that new sentences use device speech unless an actual clone is configured.
+4. Use Voice Studio to record exact phrases if demonstrating the free own-voice path. Listen to each and confirm its text. Explain that new sentences use device speech; this build does not create a generative clone or import recording files.
 5. Pair a separate caregiver browser context and tap Enable alerts there. Keep it open. Check receipts and Help acknowledgement. Do not use a real phone number in projected settings.
-6. Warm up only the enabled integrations. Prepare a water bottle and grant camera permission. Model download may take time; recognition must be local unless cloud-image consent was explicitly enabled.
+6. Open `/demo` and tap **Warm up three scenarios**. This saves suggestion sets without playing audio. The seven sample scenes prepare inputs and clock settings; they do not exercise a microphone or camera. Prepare a water bottle and grant camera permission on the actual Camera page. Model download may take time; inference runs locally.
 7. For eventual phone rehearsal, charge two Android phones, arrange projector mirroring, confirm HTTPS microphone/camera access and check the chosen voices while offline. A LAN HTTP address usually cannot provide required secure-context APIs.
 
 ## Six-minute walkthrough
