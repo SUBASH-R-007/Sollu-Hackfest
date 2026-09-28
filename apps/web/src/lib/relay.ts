@@ -1,6 +1,14 @@
 import { RelayEnvelopeSchema } from "@sollu/shared";
 import { api } from "./api";
 import { getKV, setKV, type Pairing } from "../db";
+import {
+  DurableOutbox,
+  messageIsFresh,
+  ttlFor,
+  type OutboxEntry,
+  type OutboxStorage,
+  type QueuedType,
+} from "../features/relay/outbox";
 
 export interface RelayMessage {
   id: string;
@@ -100,7 +108,7 @@ export function parseRelayMessage(
   const required: Record<RelayMessage["type"], string[]> = {
     spoken: ["text", "gloss_en", "lang", "urgency"],
     help: [],
-    help_cancel: [],
+    help_cancel: ["refId"],
     delivered: ["refId"],
     ack: ["refId"],
     ask: ["text", "lang"],
@@ -221,16 +229,93 @@ export async function receivePairing() {
   history.replaceState({}, "", location.pathname);
   return pairing;
 }
+export type DeliveryStatus =
+  "queued" | "sent" | "delivered" | "expired" | "cancelled" | "failed";
+export interface DeliveryEvent {
+  id: string;
+  type: RelayMessage["type"];
+  status: DeliveryStatus;
+}
 export class RelayClient {
   private socket?: WebSocket;
   private stopped = false;
   private retry?: ReturnType<typeof setTimeout>;
-  private seen = new Set<string>();
+  private pump?: ReturnType<typeof setTimeout>;
+  private operations: Promise<unknown> = Promise.resolve();
+  private statuses = new Map<string, DeliveryStatus>();
+  private outbox: DurableOutbox;
+  private now: () => number;
   constructor(
     public pairing: Pairing,
     private onMessage: (message: RelayMessage) => void,
     private onStatus: (connected: boolean) => void,
-  ) {}
+    private onDelivery: (event: DeliveryEvent) => void = () => {},
+    options: { storage?: OutboxStorage; now?: () => number } = {},
+  ) {
+    this.now = options.now ?? (() => Date.now());
+    this.outbox = new DurableOutbox(
+      `${pairing.roomId}:${pairing.role}`,
+      options.storage,
+      this.now,
+    );
+  }
+  getDeliveryStatus(id: string): DeliveryStatus | undefined {
+    return this.statuses.get(id);
+  }
+  private status(
+    id: string,
+    type: RelayMessage["type"],
+    status: DeliveryStatus,
+  ) {
+    this.statuses.set(id, status);
+    if (this.statuses.size > 1000)
+      this.statuses.delete(this.statuses.keys().next().value!);
+    if (!this.stopped) this.onDelivery({ id, type, status });
+  }
+  private serial<T>(work: () => Promise<T>): Promise<T> {
+    const result = this.operations.then(work, work);
+    this.operations = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+  private startPump() {
+    clearTimeout(this.pump);
+    if (this.stopped || this.pairing.role !== "patient") return;
+    this.pump = setTimeout(() => {
+      void this.serial(() => this.flush())
+        .catch(() => undefined)
+        .finally(() => this.startPump());
+    }, 10_000);
+  }
+  private async flush(onlyId?: string) {
+    if (this.stopped || this.pairing.role !== "patient") return;
+    const { entries, expired } = await this.outbox.pending();
+    if (this.stopped) return;
+    for (const entry of expired) this.status(entry.id, entry.type, "expired");
+    const socket = this.socket;
+    for (const entry of entries
+      .filter((entry) => !onlyId || entry.id === onlyId)
+      .slice(0, 8)) {
+      if (
+        this.stopped ||
+        this.socket !== socket ||
+        socket?.readyState !== WebSocket.OPEN
+      ) {
+        this.status(entry.id, entry.type, "queued");
+        continue;
+      }
+      if (entry.expiresAt <= this.now()) continue;
+      try {
+        socket.send(entry.frame);
+        await this.outbox.sent(entry.id);
+        this.status(entry.id, entry.type, "sent");
+      } catch {
+        this.status(entry.id, entry.type, "queued");
+      }
+    }
+  }
   connect() {
     clearTimeout(this.retry);
     this.stopped = false;
@@ -239,27 +324,44 @@ export class RelayClient {
     );
     this.socket = socket;
     socket.onopen = () => {
-      if (!this.stopped && this.socket === socket) this.onStatus(true);
+      if (!this.stopped && this.socket === socket) {
+        this.onStatus(true);
+        void this.serial(() => this.flush()).catch(() => undefined);
+        this.startPump();
+      }
     };
     socket.onmessage = (event) => {
-      void decryptMessage(
-        String(event.data),
-        this.pairing.key,
-        this.pairing.role,
-      )
-        .then((message) => {
-          if (
-            this.stopped ||
-            this.socket !== socket ||
-            this.seen.has(message.id)
-          )
-            return;
-          this.seen.add(message.id);
-          if (this.seen.size > 1000)
-            this.seen.delete(this.seen.values().next().value!);
-          this.onMessage(message);
-        })
-        .catch(() => undefined);
+      void this.serial(async () => {
+        const message = await decryptMessage(
+          String(event.data),
+          this.pairing.key,
+          this.pairing.role,
+        );
+        if (
+          this.stopped ||
+          this.socket !== socket ||
+          !messageIsFresh(message.type, message.at, this.now())
+        )
+          return;
+        if (
+          (message.type === "delivered" || message.type === "ack") &&
+          message.refId
+        ) {
+          const entry = await this.outbox.receipt(message.refId);
+          if (entry) this.status(entry.id, entry.type, "delivered");
+        }
+        const first = await this.outbox.accept(message.id);
+        if (this.stopped || this.socket !== socket) return;
+        // A repeated frame may mean its receipt was lost. Confirm again without repeating UI or alarm.
+        if (
+          this.pairing.role === "care" &&
+          ["spoken", "help", "help_cancel"].includes(message.type)
+        )
+          void this.send("delivered", { refId: message.id }).catch(
+            () => undefined,
+          );
+        if (first) this.onMessage(message);
+      }).catch(() => undefined);
     };
     socket.onclose = () => {
       if (this.socket !== socket) return;
@@ -272,28 +374,74 @@ export class RelayClient {
     type: RelayMessage["type"],
     data: Partial<RelayMessage> = {},
   ): Promise<string | null> {
-    const socket = this.socket;
-    if (this.stopped || socket?.readyState !== WebSocket.OPEN) return null;
-    const message: RelayMessage = {
-      ...data,
-      id: crypto.randomUUID(),
-      type,
-      at: Date.now(),
-      from: { role: this.pairing.role, contactId: this.pairing.contactId },
-    };
-    const frame = await encryptMessage(message, this.pairing.key);
-    if (
-      this.stopped ||
-      socket !== this.socket ||
-      socket.readyState !== WebSocket.OPEN
-    )
-      return null;
-    socket.send(JSON.stringify(frame));
-    return message.id;
+    return this.serial(async () => {
+      if (this.stopped) return null;
+      const socket = this.socket;
+      const durable =
+        this.pairing.role === "patient" &&
+        ["spoken", "help", "help_cancel"].includes(type);
+      if (!durable && socket?.readyState !== WebSocket.OPEN) return null;
+      const message: RelayMessage = {
+        ...data,
+        id: crypto.randomUUID(),
+        type,
+        at: this.now(),
+        from: { role: this.pairing.role, contactId: this.pairing.contactId },
+      };
+      try {
+        const makeEntry = async (
+          value: RelayMessage,
+        ): Promise<OutboxEntry> => ({
+          id: value.id,
+          type: value.type as QueuedType,
+          at: value.at,
+          expiresAt: value.at + ttlFor(value.type)!,
+          frame: JSON.stringify(await encryptMessage(value, this.pairing.key)),
+        });
+        if (durable) {
+          if (type === "help_cancel") {
+            const cancelled = await this.outbox.cancel(data.refId, (refId) =>
+              makeEntry({ ...message, refId }),
+            );
+            if (!cancelled) return null;
+            this.status(cancelled.refId, "help", "cancelled");
+            if (cancelled.displaced)
+              this.status(
+                cancelled.displaced.id,
+                cancelled.displaced.type,
+                "failed",
+              );
+          } else {
+            const entry = await makeEntry(message);
+            if (this.stopped) return null;
+            const expired = await this.outbox.add(entry);
+            for (const old of expired) this.status(old.id, old.type, "expired");
+          }
+          this.status(message.id, type, "queued");
+          await this.flush(message.id);
+          this.startPump();
+          return message.id;
+        }
+        const frame = await encryptMessage(message, this.pairing.key);
+        if (
+          this.stopped ||
+          socket !== this.socket ||
+          socket?.readyState !== WebSocket.OPEN
+        )
+          return null;
+        socket.send(JSON.stringify(frame));
+        this.status(message.id, type, "sent");
+        return message.id;
+      } catch {
+        this.status(message.id, type, "failed");
+        return null;
+      }
+    });
   }
   disconnect() {
     this.stopped = true;
     clearTimeout(this.retry);
+    clearTimeout(this.pump);
     this.socket?.close();
   }
 }

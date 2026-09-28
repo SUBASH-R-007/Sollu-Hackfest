@@ -71,6 +71,12 @@ export default function Therapist() {
 
   const statCards = [
     {
+      label: "Confirmed understood",
+      value: visible.filter((a) => a.communicationOutcome === "understood")
+        .length,
+      icon: <CheckCircle2 size={22} aria-hidden="true" />,
+    },
+    {
       label: "Attempts",
       value: summary.total,
       icon: <MessageCircle size={22} aria-hidden="true" />,
@@ -186,7 +192,9 @@ export default function Therapist() {
           <p className="muted">
             Tap and time medians use spoken attempts. Mock, demo-time and cached
             entries remain labelled below; these numbers are not a clinical
-            outcome measure.
+            outcome measure. “Confirmed understood” records the person’s
+            explicit choice after checking with their partner; playback and
+            delivery alone do not count.
           </p>
           {!visible.length ? (
             <Empty icon="🌱" title="Every conversation starts somewhere">

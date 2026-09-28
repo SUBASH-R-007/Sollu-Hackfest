@@ -9,6 +9,7 @@ export interface OutputOptions {
   signal: AbortSignal;
   deadline: number;
   volume: number;
+  rate?: number;
   onStart: (source: AudioSource) => void;
 }
 
@@ -91,7 +92,7 @@ export class BrowserAudioOutput implements AudioOutput {
       utterance.voice = voice;
       utterance.lang = voice.lang;
       utterance.volume = options.volume;
-      utterance.rate = 0.9;
+      utterance.rate = options.rate ?? 0.9;
       let settled = false;
       let started = false;
       const finish = (error?: OutputError) => {

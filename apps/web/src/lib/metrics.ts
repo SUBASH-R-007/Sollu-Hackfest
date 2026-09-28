@@ -50,6 +50,8 @@ export function attemptsCsv(attempts: Attempt[], study = true): string {
     "none_count",
     "demo",
     "cached",
+    "communication_outcome",
+    "partner_understanding",
   ];
   const rows = attempts.map((a) => [
     "participant-001",
@@ -62,6 +64,8 @@ export function attemptsCsv(attempts: Attempt[], study = true): string {
     a.rounds.filter((r) => r.noneOfThese).length,
     a.demoClock,
     a.demoCached,
+    a.communicationOutcome ?? "unconfirmed",
+    study ? "" : (a.partnerUnderstanding ?? ""),
   ]);
   return (
     "\uFEFF" +

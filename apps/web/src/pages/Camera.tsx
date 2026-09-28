@@ -12,6 +12,7 @@ import type { ObjectDetection } from "@tensorflow-models/coco-ssd";
 import type { Fragment } from "@sollu/shared";
 import { useApp } from "../state";
 import { Back, Hint, PageTitle, TapButton } from "../ui";
+import { copy } from "../lib/copy";
 
 const concepts: Record<string, string> = {
   bottle: "Drink",
@@ -328,7 +329,17 @@ export default function Camera() {
             >
               <CameraIcon size={48} aria-hidden="true" />
               <p>
-                {opening ? "Opening your camera…" : "Take or choose a photo"}
+                {opening
+                  ? copy(
+                      settings.lang,
+                      "Opening your camera…",
+                      "கேமரா திறக்கிறது…",
+                    )
+                  : copy(
+                      settings.lang,
+                      "Take or choose a photo",
+                      "படம் எடு அல்லது தேர்ந்தெடு",
+                    )}
               </p>
             </div>
           )}
@@ -344,7 +355,7 @@ export default function Camera() {
               onActivate={capture}
             >
               <CameraIcon />
-              <span>Take photo</span>
+              <span>{copy(settings.lang, "Take photo", "படம் எடு")}</span>
             </TapButton>
           )}
           {!cameraReady && (
@@ -355,7 +366,11 @@ export default function Camera() {
               }}
             >
               <RefreshCw />
-              <span>{photo ? "Take another photo" : "Open camera"}</span>
+              <span>
+                {photo
+                  ? copy(settings.lang, "Take another photo", "வேறு படம் எடு")
+                  : copy(settings.lang, "Open camera", "கேமராவைத் திற")}
+              </span>
             </TapButton>
           )}
           <TapButton
@@ -363,7 +378,9 @@ export default function Camera() {
             onActivate={() => fileInput.current?.click()}
           >
             <ImagePlus />
-            <span>Choose a photo</span>
+            <span>
+              {copy(settings.lang, "Choose a photo", "படத்தைத் தேர்ந்தெடு")}
+            </span>
           </TapButton>
           <input
             ref={fileInput}
@@ -395,7 +412,13 @@ export default function Camera() {
             </div>
             <TapButton className="primary-button" onActivate={useObject}>
               <ArrowRight />
-              <span>Find my words for this {label}</span>
+              <span>
+                {copy(
+                  settings.lang,
+                  `Find my words for this ${label}`,
+                  "இந்தப் பொருளுக்கான வார்த்தைகளைக் காட்டு",
+                )}
+              </span>
             </TapButton>
           </div>
         )}
@@ -419,11 +442,19 @@ export default function Camera() {
         >
           <TapButton onActivate={() => navigate("/topics")}>
             <span aria-hidden="true">🗂️</span>
-            <span>Use Topics</span>
+            <span>
+              {copy(settings.lang, "Use Topics", "தலைப்புகளைக் காட்டு")}
+            </span>
           </TapButton>
           <TapButton disabled={working} onActivate={demoBottle}>
             <span aria-hidden="true">🧪</span>
-            <span>Try demo: water bottle</span>
+            <span>
+              {copy(
+                settings.lang,
+                "Try demo: water bottle",
+                "மாதிரி: தண்ணீர் பாட்டில்",
+              )}
+            </span>
           </TapButton>
         </div>
         <p className="muted">

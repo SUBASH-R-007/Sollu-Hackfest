@@ -55,7 +55,7 @@ test("two isolated devices pair, exchange encrypted words/receipts/questions and
     await page.getByRole("button", { name: /^Type / }).click();
     await page.getByLabel(/Your words/).fill("water");
     await page.getByRole("button", { name: "Find my words" }).click();
-    await expect(candidates(page)).toHaveCount(3);
+    await expect(candidates(page)).toHaveCount(1);
     const chosen = await sentenceAt(page, 0);
     await clickAndWaitForSpeech(page, candidates(page).first());
     await expect(care.locator(".care-latest .care-sentence")).toHaveText(
@@ -108,7 +108,7 @@ test("two isolated devices pair, exchange encrypted words/receipts/questions and
 test("therapist metrics reflect actual rejected sets and study CSV excludes raw text", async ({
   page,
 }) => {
-  await startTyped(page, "table");
+  await startTyped(page, "left shoulder pain");
   await page.getByRole("button", { name: /None of these/ }).click();
   await expect(page.locator(".round-label")).toContainText("Choice round 2");
   await expect(candidates(page)).toHaveCount(3);
@@ -156,7 +156,7 @@ test("therapist metrics reflect actual rejected sets and study CSV excludes raw 
   for await (const piece of stream) pieces.push(Buffer.from(piece));
   const csv = Buffer.concat(pieces).toString("utf8");
   expect(csv).toContain("participant-001");
-  expect(csv).not.toContain("table");
+  expect(csv).not.toContain("left shoulder pain");
   expect(csv).not.toContain("Priya");
   expect(csv.trim().split(/\r?\n/)).toHaveLength(2);
   expect(await spokenCalls(page)).toEqual([]); // Reloading this local log never plays an unpicked sentence.

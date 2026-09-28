@@ -2,7 +2,7 @@
   "name": "@sollu/web", "version": "0.1.0", "private": true, "type": "module",
   "scripts": { "dev": "vite --host 127.0.0.1", "build": "tsc --noEmit && vite build", "typecheck": "tsc --noEmit", "preview": "vite preview" },
   "dependencies": {
-    "@sollu/shared": "workspace:*", "react": "^19.3.0", "react-dom": "^19.3.0",
+    "@sollu/shared": "workspace:*", "zod": "^3.24.2", "react": "^19.3.0", "react-dom": "^19.3.0",
     "react-router-dom": "^7.13.0", "dexie": "^4.2.1", "dexie-react-hooks": "^4.2.0",
     "lucide-react": "^0.577.0", "qrcode": "^1.5.4",
     "@fontsource/noto-sans": "^5.2.8", "@fontsource/noto-sans-tamil": "^5.2.8",

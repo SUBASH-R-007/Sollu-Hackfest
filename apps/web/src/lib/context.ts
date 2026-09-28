@@ -35,7 +35,7 @@ export function buildContext(
     now?: number;
     round?: 1 | 2 | 3;
     exclude?: string[];
-    question?: { text: string; at: number };
+    question?: { text: string; at: number; lang?: ContextPacket["outputLang"] };
     memories?: MemoryEntry[];
     substitutions?: WordSubstitution[];
   } = {},
@@ -63,7 +63,7 @@ export function buildContext(
     opts.question && realNow - opts.question.at < 300000
       ? {
           text: opts.question.text,
-          lang: settings.lang,
+          lang: opts.question.lang ?? settings.lang,
           minutesAgo: Math.max(0, (realNow - opts.question.at) / 60000),
         }
       : undefined;
@@ -80,11 +80,12 @@ export function buildContext(
     place: settings.place,
     speaker: {
       preferredName: settings.name,
-      gender: "female",
-      dialectNote: "Chennai Tamil",
+      gender: settings.speakerGender ?? "unspecified",
+      dialectNote: settings.dialectNote || undefined,
     },
     addressee: contact
       ? {
+          id: contact.id,
           name: contact.name,
           relation: contact.relation,
           register: contact.register,
@@ -103,11 +104,22 @@ export function buildContext(
     substitutions: (opts.substitutions ?? [])
       .filter(
         (s) =>
-          s.count >= 2 &&
+          s.confirmed === true &&
+          (!s.lang || s.lang === (contact?.lang ?? settings.lang)) &&
+          (!s.place || s.place === settings.place) &&
+          (!s.addresseeId || s.addresseeId === settings.addressee) &&
           fragment.raw.toLowerCase().includes(s.heard.toLowerCase()),
       )
       .slice(0, 10),
     ownExamples: (opts.memories ?? [])
+      .filter(
+        (m) =>
+          m.confirmed === true &&
+          m.lang === (contact?.lang ?? settings.lang) &&
+          m.placeLabel === settings.place &&
+          m.addresseeId === settings.addressee &&
+          memoryScore(m, fragment.raw, timeBucket(now.getHours()), realNow) > 0,
+      )
       .slice(0, 5)
       .map((m) => ({
         fragment: m.fragmentRaw.slice(0, 120),

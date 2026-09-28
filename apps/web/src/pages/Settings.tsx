@@ -36,6 +36,8 @@ import { useApp } from "../state";
 import { Back, Hint, PageTitle, TapButton } from "../ui";
 import { audio, type VoiceInfo } from "../features/audio";
 import { startPhraseRecording, type PhraseRecorder } from "../features/voice";
+import { MemoryPanel, OfflinePanel } from "./Communication";
+import { BackupPanel } from "./Support";
 
 const sections = [
   { id: "general", label: "General", icon: Settings2 },
@@ -272,6 +274,92 @@ function General() {
             onChange={(value) => change("twoStep", value)}
           >
             Select a sentence, then tap it again to speak
+          </Toggle>
+        </div>
+      </Card>
+      <Card title="Comfort & access">
+        <div style={gridStyle}>
+          <Field label="Choices shown at once">
+            <select
+              style={fieldStyle}
+              value={draft.choiceCount}
+              onChange={(e) =>
+                change("choiceCount", Number(e.target.value) as 1 | 2 | 3)
+              }
+            >
+              {[1, 2, 3].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Ignore repeated taps within">
+            <select
+              style={fieldStyle}
+              value={draft.tapFilterMs}
+              onChange={(e) => change("tapFilterMs", Number(e.target.value))}
+            >
+              {[200, 400, 600, 800].map((n) => (
+                <option key={n} value={n}>
+                  {n} ms
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Pause before speech input finishes">
+            <select
+              style={fieldStyle}
+              value={draft.pauseSeconds}
+              onChange={(e) => change("pauseSeconds", Number(e.target.value))}
+            >
+              {[3, 5, 8].map((n) => (
+                <option key={n} value={n}>
+                  {n} seconds
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Device speech speed">
+            <select
+              style={fieldStyle}
+              value={draft.speechRate}
+              onChange={(e) => change("speechRate", Number(e.target.value))}
+            >
+              <option value={0.7}>Slower</option>
+              <option value={0.9}>Steady</option>
+              <option value={1}>Normal</option>
+            </select>
+          </Field>
+          <Field label="Speaker gender (optional)">
+            <select
+              style={fieldStyle}
+              value={draft.speakerGender}
+              onChange={(e) =>
+                change(
+                  "speakerGender",
+                  e.target.value as UserSettings["speakerGender"],
+                )
+              }
+            >
+              <option value="unspecified">Not specified</option>
+              <option value="female">Female</option>
+              <option value="male">Male</option>
+            </select>
+          </Field>
+          <Field label="Dialect or wording preference (optional)">
+            <input
+              style={fieldStyle}
+              maxLength={120}
+              value={draft.dialectNote}
+              onChange={(e) => change("dialectNote", e.target.value)}
+            />
+          </Field>
+          <Toggle
+            checked={draft.quietMode}
+            onChange={(v) => change("quietMode", v)}
+          >
+            Quiet screen: fewer labels and no decorative motion
           </Toggle>
         </div>
       </Card>
@@ -1181,6 +1269,9 @@ function Privacy() {
           lock.
         </p>
       </Card>
+      <OfflinePanel />
+      <MemoryPanel />
+      <BackupPanel />
       <Card title="Erase this device’s Sollu data">
         <p>
           This removes saved recordings, consent, phrases, history, learned

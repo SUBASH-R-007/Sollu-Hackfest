@@ -33,6 +33,8 @@ import { db } from "../db";
 import { clockNow, minuteDistance } from "../lib/context";
 import { audio } from "../features/audio";
 import { Back, Empty, Hint, PageTitle, TapButton, Tile } from "../ui";
+import { copy, uiText } from "../lib/copy";
+import { extractTranscript } from "../lib/transcript";
 
 const ticket = (event: Event, text: string) =>
   audio.createTap(event, text, { role: "patient", surface: "patient" });
@@ -81,7 +83,9 @@ export function Home() {
         >
           <span className="avatar">{contact?.name.charAt(0) ?? "P"}</span>
           <span>
-            <small>I’m talking to</small>
+            <small>
+              {copy(settings.lang, "I’m talking to", "நான் பேசுவது")}
+            </small>
             <strong>{contact?.name ?? "Someone nearby"}</strong>
           </span>
           <ChevronRight size={19} />
@@ -131,13 +135,19 @@ export function Home() {
         />
       </div>
       <div className="home-bottom">
-        <Hint>You choose the words. Sollu only speaks when you tap.</Hint>
+        <Hint>
+          {copy(
+            settings.lang,
+            "You choose the words. Sollu only speaks when you tap.",
+            "நீங்கள் தேர்ந்தெடுத்து தொட்டால் மட்டுமே பேசும்.",
+          )}
+        </Hint>
         <TapButton
           className="partner-button"
           onActivate={() => navigate("/question")}
         >
           <HeartHandshake size={22} />
-          <span>They asked…</span>
+          <span>{uiText(settings.lang, "They asked…")}</span>
           <ArrowRight size={19} />
         </TapButton>
       </div>
@@ -156,8 +166,12 @@ export function QuickStrip() {
       aria-label="Quick phrases"
     >
       <div className="quick-heading">
-        <span>ALWAYS WITH YOU</span>
-        <span>One tap to say it</span>
+        <span>
+          {copy(settings.lang, "ALWAYS WITH YOU", "எப்போதும் உங்களுடன்")}
+        </span>
+        <span>
+          {copy(settings.lang, "One tap to say it", "தொட்டால் பேசும்")}
+        </span>
       </div>
       <div className="quick-buttons">
         {(["help", "yes", "no", "wait"] as const).map((key) => {
@@ -202,12 +216,8 @@ export function QuickStrip() {
   );
 }
 export function TypePage() {
-  const { settings, session, begin, generate } = useApp();
-  const [value, setValue] = useState(
-    session?.context.fragment.modality === "text"
-      ? session.context.fragment.raw
-      : "",
-  );
+  const { settings, session, begin, generate, updateDraft } = useApp();
+  const [value, setValue] = useState(session?.context.fragment.raw ?? "");
   const words = [
     ...settings.contacts.map((c) => c.name),
     ...settings.vocabulary,
@@ -232,7 +242,10 @@ export function TypePage() {
           rows={3}
           maxLength={500}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => {
+            setValue(e.target.value);
+            updateDraft({ modality: "text", raw: e.target.value });
+          }}
           placeholder="tablet… night"
           className="fragment-input"
         />
@@ -252,7 +265,7 @@ export function TypePage() {
           }}
         >
           <Sparkles size={23} />
-          Find my words
+          {uiText(settings.lang, "Find my words")}
           <ArrowRight size={23} />
         </TapButton>
       </form>
@@ -352,7 +365,11 @@ export function TopicsPage() {
             : category === "pain"
               ? "Where does it hurt?"
               : selected
-                ? `Let’s talk about ${selected.en.toLowerCase()}.`
+                ? copy(
+                    settings.lang,
+                    `Let’s talk about ${selected.en.toLowerCase()}.`,
+                    `${selected.ta} பற்றிப் பேசுவோம்`,
+                  )
                 : "What’s on your mind?"
         }
         subtitle={
@@ -371,7 +388,11 @@ export function TopicsPage() {
           }}
         >
           <ChevronLeft />
-          Back to {part ? "body parts" : "topics"}
+          {copy(
+            settings.lang,
+            `Back to ${part ? "body parts" : "topics"}`,
+            part ? "உடல் பகுதிகளுக்குத் திரும்பு" : "தலைப்புகளுக்குத் திரும்பு",
+          )}
         </TapButton>
       )}
       {part ? (
@@ -385,8 +406,16 @@ export function TopicsPage() {
               <span className="topic-emoji">
                 {side === "left" ? "⬅️" : "➡️"}
               </span>
-              <strong>{side === "left" ? "Left" : "Right"}</strong>
-              <span lang="ta">{side === "left" ? "இடது" : "வலது"}</span>
+              <strong>
+                {copy(
+                  settings.lang,
+                  side === "left" ? "Left" : "Right",
+                  side === "left" ? "இடது" : "வலது",
+                )}
+              </strong>
+              {settings.lang === "en" && (
+                <span lang="ta">{side === "left" ? "இடது" : "வலது"}</span>
+              )}
             </TapButton>
           ))}
         </div>
@@ -400,8 +429,8 @@ export function TopicsPage() {
                 onActivate={() => choose(t.id)}
               >
                 <span className="topic-emoji">{t.icon}</span>
-                <strong>{t.en}</strong>
-                <span lang="ta">{t.ta}</span>
+                <strong>{copy(settings.lang, t.en, t.ta)}</strong>
+                {settings.lang === "en" && <span lang="ta">{t.ta}</span>}
               </TapButton>
             ))}
           </div>
@@ -412,7 +441,7 @@ export function TopicsPage() {
                 onActivate={() => setPage((p) => p - 1)}
               >
                 <ChevronLeft />
-                Previous
+                {uiText(settings.lang, "Previous")}
               </TapButton>
               <span>
                 {page + 1} of {Math.ceil(items.length / 4)}
@@ -421,7 +450,7 @@ export function TopicsPage() {
                 disabled={(page + 1) * 4 >= items.length}
                 onActivate={() => setPage((p) => p + 1)}
               >
-                More topics
+                {copy(settings.lang, "More topics", "மேலும் தலைப்புகள்")}
                 <ChevronRight />
               </TapButton>
             </div>
@@ -514,7 +543,13 @@ export function ConfirmPage() {
                 </div>
               </div>
             ))}
-            <p>Finding a few ways to say it…</p>
+            <p>
+              {copy(
+                settings.lang,
+                "Finding a few ways to say it…",
+                "வாக்கியங்களைத் தேடுகிறோம்…",
+              )}
+            </p>
           </div>
         ) : (
           candidates.map((c, i) => (
@@ -532,7 +567,14 @@ export function ConfirmPage() {
                 <span className="candidate-icon">{c.icon}</span>
                 <span className="candidate-copy">
                   {session.usual === c.text && (
-                    <span className="usual-label">★ Your usual</span>
+                    <span className="usual-label">
+                      ★{" "}
+                      {copy(
+                        settings.lang,
+                        "Your approved phrase",
+                        "நீங்கள் ஒப்புக்கொண்ட வாக்கியம்",
+                      )}
+                    </span>
                   )}
                   <span
                     className="candidate-sentence"
@@ -552,7 +594,7 @@ export function ConfirmPage() {
                 onActivate={(event) => speak(c, ticket(event, c.text), true)}
               >
                 <Ear size={25} />
-                <span>Listen</span>
+                <span>{uiText(settings.lang, "Listen")}</span>
               </TapButton>
             </div>
           ))
@@ -586,20 +628,32 @@ export function ConfirmPage() {
         >
           <RotateCcw size={22} />
           <span>
-            None of these <small lang="ta">இதுல எதுவும் இல்ல</small>
+            {copy(settings.lang, "None of these", "இவற்றில் எதுவும் இல்லை")}
           </span>
           <ArrowRight size={22} />
         </TapButton>
       )}
       <div className="round-label">
-        Choice round {context.round} of 3 · You can always start over
+        {copy(
+          settings.lang,
+          `Choice round ${context.round} of 3 · You can always start over`,
+          `${context.round} / 3 · மீண்டும் தொடங்கலாம்`,
+        )}
       </div>
     </>
   );
 }
 export function SpeakingPage({ help = false }: { help?: boolean }) {
-  const { session, speak, stop, settings, helpAck, cancelHelp, abandon } =
-    useApp();
+  const {
+    session,
+    speak,
+    stop,
+    settings,
+    helpAck,
+    cancelHelp,
+    abandon,
+    markCommunication,
+  } = useApp();
   const navigate = useNavigate();
   const c = session?.chosen;
   if (!c)
@@ -640,16 +694,28 @@ export function SpeakingPage({ help = false }: { help?: boolean }) {
           ))}
         </div>
         <span className="source-label">
-          {session.source || "Waiting for playback"}
+          {uiText(settings.lang, session.source || "Waiting for playback")}
         </span>
       </div>
       <p className="audio-status" role="status">
-        {session.audioStatus}
+        {uiText(settings.lang, session.audioStatus)}
       </p>
+      {session.returnTo && (
+        <TapButton
+          className="full"
+          onActivate={() => navigate(session.returnTo!)}
+        >
+          {copy(
+            settings.lang,
+            "Back to my message",
+            "என் செய்திக்குத் திரும்பு",
+          )}
+        </TapButton>
+      )}
       <div className="speaking-actions">
         <TapButton className="stop-button" onActivate={stop}>
           <Square fill="currentColor" size={19} />
-          Stop
+          {uiText(settings.lang, "Stop")}
         </TapButton>
         <TapButton
           className="secondary"
@@ -658,7 +724,7 @@ export function SpeakingPage({ help = false }: { help?: boolean }) {
           }
         >
           <RotateCcw />
-          Say again
+          {copy(settings.lang, "Say again", "மீண்டும் சொல்")}
         </TapButton>
       </div>
       {session.delivery && (
@@ -675,7 +741,7 @@ export function SpeakingPage({ help = false }: { help?: boolean }) {
             href={`sms:${sms}?body=${encodeURIComponent("I need help. Please come to me.")}`}
           >
             <Send />
-            Send SMS
+            {copy(settings.lang, "Send SMS", "குறுஞ்செய்தி அனுப்பு")}
           </a>
           <TapButton
             className="secondary full"
@@ -686,23 +752,51 @@ export function SpeakingPage({ help = false }: { help?: boolean }) {
             }}
           >
             <X />
-            It was a mistake
+            {copy(settings.lang, "It was a mistake", "தவறுதலாகத் தொட்டேன்")}
           </TapButton>
           <p className="help-disclaimer">
-            Sollu is not an emergency service. In an emergency call 112.
+            {copy(
+              settings.lang,
+              "Sollu is not an emergency service. In an emergency call 112.",
+              "சொல்லு அவசர சேவை அல்ல. அவசர உதவிக்கு 112 அழைக்கவும்.",
+            )}
           </p>
         </>
       ) : (
-        <TapButton
-          className="primary full"
-          onActivate={() => {
-            abandon();
-            navigate("/");
-          }}
-        >
-          <Check />
-          Done
-        </TapButton>
+        <>
+          <div className="support-grid">
+            <TapButton
+              onActivate={() => {
+                markCommunication("intended");
+                navigate("/repair");
+              }}
+            >
+              {copy(
+                settings.lang,
+                "Check they understood",
+                "புரிந்ததா என்று உறுதிசெய்",
+              )}
+            </TapButton>
+            <TapButton
+              onActivate={() => {
+                markCommunication("needs_repair");
+                navigate("/repair");
+              }}
+            >
+              {copy(settings.lang, "Change my message", "என் செய்தியை மாற்று")}
+            </TapButton>
+          </div>
+          <TapButton
+            className="primary full"
+            onActivate={() => {
+              abandon();
+              navigate("/");
+            }}
+          >
+            <Check />
+            {uiText(settings.lang, "Done")}
+          </TapButton>
+        </>
       )}
     </>
   );
@@ -717,10 +811,8 @@ export function PhrasesPage() {
   const memories =
     useLiveQuery(
       () =>
-        db.kv
-          .filter((row) =>
-            row.key.startsWith(`memory-candidate:${settings.lang}:`),
-          )
+        db.memories
+          .filter((row) => row.lang === settings.lang && row.confirmed === true)
           .limit(8)
           .toArray(),
       [settings.lang],
@@ -728,7 +820,7 @@ export function PhrasesPage() {
   const all = [
     ...defaultPhrases[settings.lang],
     ...phrases.map((p) => p.candidate),
-    ...memories.map((m) => m.value as Candidate),
+    ...memories.flatMap((m) => (m.candidate ? [m.candidate] : [])),
   ].filter((c, i, a) => a.findIndex((x) => x.text === c.text) === i);
   return (
     <>
@@ -873,10 +965,20 @@ type SpeechWindow = Window & {
   webkitSpeechRecognition?: new () => Recognition;
 };
 export function SpeakPage({ partner = false }: { partner?: boolean }) {
-  const { settings, session, begin, generate, setQuestion, online } = useApp();
+  const {
+    settings,
+    session,
+    begin,
+    generate,
+    setQuestion,
+    online,
+    updateDraft,
+  } = useApp();
+  const [recordingRun, setRecordingRun] = useState(0);
   const navigate = useNavigate();
   const recognition = useRef<Recognition | null>(null),
     transcript = useRef(""),
+    alternatives = useRef<string[]>([]),
     submitted = useRef(false);
   const [listening, setListening] = useState(false),
     [heard, setHeard] = useState(""),
@@ -889,7 +991,12 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
       setQuestion(text);
       navigate("/");
     } else {
-      void generate({ modality: "speech", raw: text });
+      void generate({
+        modality: "speech",
+        raw: text,
+        sttAlternatives:
+          text === transcript.current ? alternatives.current : [],
+      });
     }
   };
   useEffect(() => {
@@ -908,6 +1015,8 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
       return;
     }
     const rec = new Constructor();
+    const prefix = transcript.current;
+    submitted.current = false;
     recognition.current = rec;
     rec.lang = settings.lang === "ta" ? "ta-IN" : "en-IN";
     rec.continuous = true;
@@ -920,13 +1029,19 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
       if (transcript.current) submitRef.current(transcript.current);
     };
     rec.onresult = (e) => {
-      let text = "";
-      for (let i = 0; i < e.results.length; i++)
-        text += e.results[i][0].transcript + " ";
-      transcript.current = text.trim();
+      const result = extractTranscript(e.results, prefix);
+      transcript.current = result.text;
+      alternatives.current = result.alternatives;
       setHeard(transcript.current);
+      if (!partner)
+        updateDraft({
+          modality: "speech",
+          raw: transcript.current,
+          sttAlternatives: alternatives.current,
+        });
       clearTimeout(silence);
-      if (text.trim()) silence = setTimeout(finish, 3000);
+      if (transcript.current.trim())
+        silence = setTimeout(finish, settings.pauseSeconds * 1000);
     };
     rec.onerror = (e) => {
       setListening(false);
@@ -947,7 +1062,18 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
       setError("The microphone could not start. Try another input.");
     }
     const cap = setTimeout(finish, 15000);
+    const stopRecording = () => {
+      submitted.current = true;
+      clearTimeout(cap);
+      clearTimeout(silence);
+      rec.onend = null;
+      rec.onresult = null;
+      rec.abort();
+      setListening(false);
+    };
+    window.addEventListener("sollu:stop", stopRecording);
     return () => {
+      window.removeEventListener("sollu:stop", stopRecording);
       clearTimeout(cap);
       clearTimeout(silence);
       rec.onend = null;
@@ -955,7 +1081,7 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
       rec.abort();
     };
     // The recorder starts once on entering this screen, never on transcript updates.
-  }, []);
+  }, [recordingRun]);
   return (
     <>
       <Back />
@@ -996,6 +1122,9 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
         </div>
       )}
       <div className="speaking-actions">
+        <TapButton onActivate={() => setRecordingRun((v) => v + 1)}>
+          {copy(settings.lang, "Keep listening", "தொடர்ந்து கேள்")}
+        </TapButton>
         <TapButton
           className="primary"
           disabled={!heard}
@@ -1005,7 +1134,7 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
           }}
         >
           <Check />
-          Done
+          {uiText(settings.lang, "Done")}
         </TapButton>
         <TapButton
           className="secondary"
@@ -1015,7 +1144,7 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
           }}
         >
           <Keyboard />
-          Type instead
+          {copy(settings.lang, "Type instead", "எழுதுகிறேன்")}
         </TapButton>
       </div>
       {settings.demo && (
@@ -1053,23 +1182,23 @@ export function BaselinePage() {
     [result, setResult] = useState("");
   const text = words.join(" ");
   const keys = [
-    ["I", "🙋"],
-    ["want", "🤲"],
-    ["need", "🙏"],
-    ["go", "🚶"],
-    ["eat", "🍽️"],
-    ["drink", "🥤"],
-    ["water", "💧"],
-    ["tablet", "💊"],
-    ["toilet", "🚻"],
-    ["pain", "🤕"],
-    ["help", "🆘"],
-    ["yes", "👍"],
-    ["no", "✋"],
-    ["more", "➕"],
-    ["please", "🤝"],
-    ["night", "🌙"],
-  ];
+    ["I", "🙋", "எனக்கு"],
+    ["want", "🤲", "வேண்டும்"],
+    ["need", "🙏", "தேவை"],
+    ["go", "🚶", "போக"],
+    ["eat", "🍽️", "சாப்பிட"],
+    ["drink", "🥤", "குடிக்க"],
+    ["water", "💧", "தண்ணீர்"],
+    ["tablet", "💊", "மாத்திரை"],
+    ["toilet", "🚻", "கழிப்பறை"],
+    ["pain", "🤕", "வலி"],
+    ["help", "🆘", "உதவி"],
+    ["yes", "👍", "ஆம்"],
+    ["no", "✋", "இல்லை"],
+    ["more", "➕", "இன்னும்"],
+    ["please", "🤝", "தயவுசெய்து"],
+    ["night", "🌙", "இரவு"],
+  ].map(([en, icon, ta]) => [copy(settings.lang, en, ta), icon]);
   return (
     <>
       <Back />
@@ -1113,7 +1242,7 @@ export function BaselinePage() {
           void audio
             .speak({
               text,
-              lang: "en",
+              lang: settings.lang,
               ticket: t,
               channel: "baseline",
               onStart: () => {
@@ -1126,7 +1255,13 @@ export function BaselinePage() {
             })
             .then((r) => {
               if (r.status === "unavailable")
-                setResult("An English device voice is not installed.");
+                setResult(
+                  copy(
+                    settings.lang,
+                    "A voice for this language is not installed.",
+                    "இந்த மொழிக்கான குரல் நிறுவப்படவில்லை.",
+                  ),
+                );
             });
         }}
       >
@@ -1135,7 +1270,11 @@ export function BaselinePage() {
       </TapButton>
       {result && <div className="notice">{result} · Device voice</div>}
       <p className="privacy-inline">
-        An English core-word board for a live comparison.{" "}
+        {copy(
+          settings.lang,
+          "A word board in your selected language. Compare the same intended messages and access settings.",
+          "தேர்ந்தெடுத்த மொழியில் சொற்கள். ஒரே செய்திகளை ஒப்பிடுங்கள்.",
+        )}{" "}
         {settings.demo ? "Demo clock is on." : ""}
       </p>
     </>

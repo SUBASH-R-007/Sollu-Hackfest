@@ -1,585 +1,396 @@
-import { candidate, getPainCandidates, painParts } from "./phrases";
+import {
+  candidate,
+  getPainCandidates,
+  getPainFollowupCandidates,
+  painParts,
+  numberWords,
+} from "./phrases";
+import { getVocabularyCandidates } from "./vocabulary";
 import {
   ContextPacketSchema,
   type Candidate,
   type ContextInput,
+  type ContextPacket,
 } from "./schemas";
 
-type Row = [
+const norm = (text: string) => text.normalize("NFC").toLowerCase().trim();
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const mentions = (text: string, term: string) =>
+  !!term &&
+  new RegExp(
+    `(^|[^\\p{L}\\p{M}\\p{N}])${escape(norm(term))}(?=$|[^\\p{L}\\p{M}\\p{N}])`,
+    "u",
+  ).test(norm(text));
+const negative = (raw: string) =>
+  /\b(?:no|not|never|don['’]?t|without|venam|vendam|vendaam|illai)\b|வேணாம்|வேண்டாம்|இல்லை/u.test(
+    raw,
+  );
+
+function card(
+  c: ContextPacket,
+  id: string,
   ta: string,
   en: string,
-  intent: string,
+  speechAct: NonNullable<Candidate["speechAct"]>,
+  objectId: string,
   icon: string,
-  reading?: string,
-  urgency?: Candidate["urgency"],
-];
-/** Deterministic rehearsal sentences. This is a labelled fixture engine, not an LLM. */
+  reading: string,
+  extra: Partial<Candidate> = {},
+): Candidate {
+  return {
+    ...candidate(
+      c.outputLang === "ta" ? ta : en,
+      en,
+      id.replaceAll(".", " "),
+      icon,
+      reading,
+    ),
+    lang: c.outputLang,
+    intentId: id,
+    speechAct,
+    polarity: speechAct === "refuse" ? "negative" : "positive",
+    objectId,
+    timeScope: "now",
+    evidenceRefs: ["fragment"],
+    templateVersion: "2",
+    source: "catalog",
+    ...extra,
+  };
+}
+function contactCandidates(
+  c: ContextPacket,
+  raw: string,
+): Candidate[] | undefined {
+  const person = c.people?.find((p) =>
+    [p.name, ...p.aliases].some((n) => mentions(raw, n)),
+  );
+  if (!person) return undefined;
+  const direct = [pName(person.name), ...person.aliases.map(pName)].some(
+    (n) => n === norm(raw),
+  );
+  if (
+    !direct &&
+    c.fragment.topicPath?.[0] !== "people" &&
+    !/\b(?:phone|call|ph|school)\b|ஃபோன்|போன்|பேச|ஸ்கூல்/.test(raw)
+  )
+    return undefined;
+  if (negative(raw)) return [];
+  const ta =
+    person.aliases.find((n) => /\p{Script=Tamil}/u.test(n)) ?? person.name;
+  const extra = {
+    subject: person.name,
+    evidenceRefs: ["fragment", `person:${person.name}`],
+  };
+  if (/\bschool\b|ஸ்கூல்/.test(raw))
+    return [
+      card(
+        c,
+        "person.school.return",
+        `${ta} ஸ்கூல்ல இருந்து வந்தாச்சா?`,
+        `Has ${person.name} come back from school?`,
+        "question",
+        "person",
+        "🏫",
+        `${person.name} school`,
+        extra,
+      ),
+      card(
+        c,
+        "person.talk",
+        `${ta}கிட்ட பேசணும்.`,
+        `I want to talk to ${person.name}.`,
+        "request",
+        "person",
+        "💬",
+        person.name,
+        extra,
+      ),
+      card(
+        c,
+        "person.pickup",
+        `${ta}யை கூட்டிட்டு வாங்க.`,
+        `Please pick up ${person.name}.`,
+        "request",
+        "person",
+        "🚶",
+        person.name,
+        extra,
+      ),
+    ];
+  return [
+    card(
+      c,
+      "person.call",
+      `${ta}கிட்ட ஃபோன்ல பேசணும்.`,
+      `I want to call ${person.name}.`,
+      "request",
+      "person",
+      "📞",
+      `${person.name} phone`,
+      extra,
+    ),
+    card(
+      c,
+      "person.call.question",
+      `${ta} ஃபோன் பண்ணாங்களா?`,
+      `Has ${person.name} called?`,
+      "question",
+      "person",
+      "❓",
+      `${person.name} phone`,
+      extra,
+    ),
+    card(
+      c,
+      "person.callback",
+      `${ta}யை எனக்கு ஃபோன் பண்ண சொல்லுங்க.`,
+      `Please ask ${person.name} to call me.`,
+      "request",
+      "person",
+      "📲",
+      `${person.name} phone`,
+      extra,
+    ),
+  ];
+}
+const pName = norm;
+
+/** Controlled bilingual suggestions. Fixtures are proposals, never inferred patient facts. */
 export function getMockCandidates(input: ContextInput): Candidate[] {
   const c = ContextPacketSchema.parse(input);
-  const lang = c.lang ?? c.outputLang;
   const path = c.fragment.topicPath ?? [];
-  const raw = [c.fragment.raw, c.fragment.objectLabel, ...path]
-    .join(" ")
-    .toLowerCase();
-  const has = (r: RegExp) => r.test(raw);
-  const night =
-    has(/night|raathiri|ராத்திரி|ராத்/) ||
-    (c.routine?.dueNow ?? []).some((r) => /night/i.test(r.label));
-  let rows: Row[] = [];
-  const painPart = painParts.find(
+  let raw = norm(
+    [c.fragment.raw, c.fragment.objectLabel, ...path].filter(Boolean).join(" "),
+  );
+  let correction = "";
+  const mappings = (c.substitutions ?? []).filter(
+    (s) =>
+      s.confirmed === true &&
+      (!s.lang || s.lang === c.outputLang) &&
+      (!s.place || s.place === c.place) &&
+      (!s.addresseeId || s.addresseeId === c.addressee?.id) &&
+      mentions(raw, s.heard),
+  );
+  // Competing confirmed corrections are ambiguous, not a popularity contest.
+  if (new Set(mappings.map((s) => norm(s.means))).size > 1) return [];
+  if (mappings.length) {
+    const mapping = mappings[0];
+    raw = raw.replace(
+      new RegExp(escape(norm(mapping.heard)), "gu"),
+      norm(mapping.means),
+    );
+    correction = `${mapping.heard} → ${mapping.means}`;
+  }
+  const corrected = { ...c, fragment: { ...c.fragment, raw } };
+  let result: Candidate[] = [];
+  const part = painParts.find(
     (p) =>
       path.includes(p.id) ||
-      raw.includes(p.ta) ||
-      (c.fragment.modality === "topic" && raw.includes(p.en)),
+      mentions(raw, p.en) ||
+      p.ta.split(" / ").some((t) => mentions(raw, t)),
   );
-  if (has(/chest|நெஞ்சு/))
-    return filtered(getPainCandidates("chest", "", lang), c.exclude);
-  if ((path[0] === "pain" || has(/வலி|pain|hurts/)) && painPart) {
-    const side =
-      path.includes("left") || raw.includes("left")
-        ? "left"
-        : path.includes("right") || raw.includes("right")
-          ? "right"
-          : undefined;
-    if (c.round === 1)
-      return filtered(getPainCandidates(painPart.id, side, lang), c.exclude);
-    const body = side
-      ? `${side} ${painPart.id === "shoulder" ? "arm" : painPart.en}`
-      : painPart.en;
-    rows = [
-      [
-        "கையை அசைக்க கொஞ்சம் உதவி பண்ணுங்க.",
-        `Please help me move my ${body}.`,
-        "help moving arm",
-        "🤲",
-        `${body} pain`,
-        "elevated",
-      ],
-      [
-        "கைக்கு கீழ தலையணை வைங்க.",
-        `Can you put a pillow under my ${body}?`,
-        "ask for support",
-        "🛏️",
-        `${body} support`,
-      ],
-      [
-        "வலிக்கு ஏதாவது உதவி கிடைக்குமா?",
-        "Can I have some help with the pain?",
-        "ask pain relief",
-        "🤕",
-        "pain relief",
-        "elevated",
-      ],
-    ];
-  } else if (has(/table\b/) && c.round > 1) {
-    rows = [
-      [
-        "என் மாத்திரை எங்க? எடுத்து குடுங்க.",
-        "Where are my tablets? Please bring them.",
-        "request tablets",
-        "💊",
-        "table → tablet",
-      ],
-      [
-        "டிவி கேபிள் வேலை செய்யல.",
-        "The TV cable isn't working.",
-        "report cable problem",
-        "📺",
-        "table → cable",
-      ],
-      [
-        "டேப்லெட்ல வீடியோ போட்டு குடுங்க.",
-        "Please play a video on the tablet.",
-        "request tablet video",
-        "📱",
-        "table → tablet device",
-      ],
-    ];
-  } else if (
-    has(/tablet|medicine|மாத்திரை|மருந்து/) ||
-    (has(/table\b/) &&
-      (night ||
-        c.substitutions?.some((s) => s.heard.toLowerCase() === "table")))
-  ) {
-    const reading = has(/table\b/)
-      ? "table → tablet"
-      : night
-        ? "night tablet"
-        : "medicine";
-    rows = night
-      ? [
-          [
-            "ராத்திரி மாத்திரை போடணும், கொஞ்சம் எடுத்துட்டு வாங்க.",
-            "It's time for my night tablets — can you bring them?",
-            "request night tablets",
-            "💊",
-            reading,
-          ],
-          [
-            "நான் ராத்திரி மாத்திரை போட்டேனா?",
-            "Did I take my night tablets?",
-            "ask if medicine taken",
-            "❓",
-            reading,
-          ],
-          [
-            "ராத்திரி மாத்திரை தீர்ந்து போச்சு.",
-            "My night tablets have run out.",
-            "report medicine finished",
-            "📦",
-            reading,
-          ],
-        ]
-      : [
-          [
-            "என் மாத்திரை எங்க? எடுத்து குடுங்க.",
-            "Please bring me my tablets.",
-            "request tablets",
-            "💊",
-            reading,
-          ],
-          [
-            "நான் மாத்திரை போட்டேனா?",
-            "Did I take my tablets?",
-            "ask if medicine taken",
-            "❓",
-            reading,
-          ],
-          [
-            "மாத்திரை தீர்ந்து போச்சு.",
-            "My tablets have run out.",
-            "report medicine finished",
-            "📦",
-            reading,
-          ],
-        ];
-  } else if (has(/table\b/)) {
-    rows = [
-      [
-        "டேபிள துடைக்கணும்.",
-        "Please clean the table.",
-        "clean table",
-        "🧽",
-        "table",
-      ],
-      [
-        "டேபிள் இங்க கொண்டு வாங்க.",
-        "Please move the table here.",
-        "move table",
-        "🪑",
-        "table",
-      ],
-      [
-        "டேபிள் மேல என்ன இருக்கு?",
-        "What's on the table?",
-        "ask table contents",
-        "❓",
-        "table",
-      ],
-    ];
-  } else if (
-    has(/தண்ணி|தண்ணீர்|water|bottle|cup/) ||
-    raw.trim() === "drink" ||
-    (path[0] === "drink" && path.length === 1)
-  ) {
-    rows = [
-      [
-        "கொஞ்சம் தண்ணி குடுங்க.",
-        "Please give me some water.",
-        "request water",
-        "💧",
-        "water",
-      ],
-      [
-        "தண்ணி பாட்டில் காலியா இருக்கு, நிரப்பி வைங்க.",
-        "The water bottle is empty; please refill it.",
-        "refill bottle",
-        "🚰",
-        "water",
-      ],
-      [
-        "சுடு தண்ணி வேணும்.",
-        "I want some warm water.",
-        "want warm water",
-        "♨️",
-        "warm water",
-      ],
-    ];
-  } else if (has(/rasam|ரசம்/)) {
-    rows = [
-      [
-        "ரசம் சாதம் போதும்.",
-        "Rasam rice is enough for me.",
-        "choose rasam rice",
-        "🍲",
-        "rasam",
-      ],
-      [
-        "கொஞ்சம் ரசம் மட்டும் குடிக்கணும்.",
-        "I only want to drink some rasam.",
-        "drink rasam",
-        "🥣",
-        "rasam",
-      ],
-      [
-        "ரசம் வேணாம், வேற ஏதாவது குடுங்க.",
-        "I don't want rasam; please give me something else.",
-        "refuse rasam",
-        "🙅",
-        "rasam",
-      ],
-    ];
-  } else if (
-    has(/sugar|சக்கரை|சர்க்கரை/) &&
-    /coffee|காபி/.test(c.partnerQuestion?.text ?? raw)
-  ) {
-    rows = [
-      [
-        "ஆமா, சக்கரை போட்டு காபி குடுங்க.",
-        "Yes, please give me coffee with sugar.",
-        "yes with sugar",
-        "☕",
-        "coffee sugar",
-      ],
-      [
-        "ஆமா, சக்கரை கொஞ்சமா போடுங்க.",
-        "Yes, with less sugar please.",
-        "yes less sugar",
-        "☕",
-        "less sugar",
-      ],
-      [
-        "ஆமா, சக்கரை இல்லாம குடுங்க.",
-        "Yes, without sugar please.",
-        "yes no sugar",
-        "☕",
-        "no sugar",
-      ],
-    ];
-  } else if (has(/coffee|காபி|டீ|tea/)) {
-    const tea = has(/டீ|tea/),
-      ta = tea ? "டீ" : "காபி",
-      en = tea ? "tea" : "coffee";
-    rows = [
-      [
-        `கொஞ்சம் ${ta} குடுங்க.`,
-        `Please give me some ${en}.`,
-        `request ${en}`,
-        "☕",
-        en,
-      ],
-      [
-        `${ta} ரொம்ப சூடா இருக்கு.`,
-        `The ${en} is too hot.`,
-        `${en} too hot`,
-        "♨️",
-        en,
-      ],
-      [`${ta} வேணாம்.`, `I do not want ${en}.`, `refuse ${en}`, "✋", en],
-    ];
-  } else if (has(/milk|பால்|juice|ஜூஸ்/)) {
-    const juice = has(/juice|ஜூஸ்/),
-      ta = juice ? "ஜூஸ்" : "பால்",
-      en = juice ? "juice" : "milk";
-    rows = [
-      [
-        `கொஞ்சம் ${ta} குடுங்க.`,
-        `Please give me some ${en}.`,
-        `request ${en}`,
-        "🥛",
-        en,
-      ],
-      [`${ta} வேணாம்.`, `I do not want ${en}.`, `refuse ${en}`, "✋", en],
-      [
-        `${ta} இன்னும் கொஞ்சம் வேணும்.`,
-        `I would like some more ${en}.`,
-        `more ${en}`,
-        "🥛",
-        en,
-      ],
-    ];
-  } else if (has(/spectacles|glasses|கண்ணாடி/)) {
-    rows = [
-      [
-        "என் கண்ணாடி எடுத்து குடுங்க.",
-        "Please give me my glasses.",
-        "request glasses",
-        "👓",
-        "glasses",
-      ],
-      [
-        "என் கண்ணாடிய காணோம்.",
-        "I can't find my glasses.",
-        "find glasses",
-        "🔎",
-        "glasses",
-      ],
-      [
-        "கண்ணாடிய துடைச்சு குடுங்க.",
-        "Please clean my glasses.",
-        "clean glasses",
-        "🧽",
-        "glasses",
-      ],
-    ];
-  } else if (has(/fan|ஃபேன்/)) {
-    rows = [
-      [
-        "ஃபேன் போட்டு விடுங்க.",
-        "Please switch on the fan.",
-        "switch fan on",
-        "🌀",
-        "fan",
-      ],
-      [
-        "ஃபேனை நிறுத்துங்க.",
-        "Please switch off the fan.",
-        "switch fan off",
-        "✋",
-        "fan",
-      ],
-      [
-        "ஃபேன் வேகத்தை கொஞ்சம் மாத்துங்க.",
-        "Please change the fan speed.",
-        "change fan speed",
-        "🌀",
-        "fan",
-      ],
-    ];
-  } else if (has(/toilet|bathroom|பாத்ரூம்/)) {
-    rows = [
-      [
-        "பாத்ரூம் போகணும்.",
-        "I need to go to the toilet.",
-        "need toilet",
-        "🚻",
-        "toilet",
-      ],
-      [
-        "எழுந்திருக்க உதவி பண்ணுங்க.",
-        "Please help me get up.",
-        "help getting up",
-        "🤲",
-        "toilet",
-      ],
-      [
-        "முகம் கழுவணும்.",
-        "I want to wash my face.",
-        "want to wash",
-        "🚿",
-        "wash",
-      ],
-    ];
-  } else if (has(/food|சாப்பாடு|idli|இட்லி|dosa|தோசை|rice|சாதம்/)) {
-    const idli = has(/idli|இட்லி/),
-      dosa = has(/dosa|தோசை/),
-      rice = has(/rice|சாதம்/);
-    const ta = idli ? "இட்லி" : dosa ? "தோசை" : rice ? "சாதம்" : "சாப்பாடு",
-      en = idli ? "idli" : dosa ? "dosa" : rice ? "rice" : "food";
-    rows = [
-      [`${ta} வேணும்.`, `I would like some ${en}.`, "request food", "🍛", en],
-      [
-        `${ta} இப்ப வேணாம்.`,
-        `I do not want ${en} now.`,
-        "refuse food",
-        "✋",
-        en,
-      ],
-      [
-        `${ta} கொஞ்சம் சூடு பண்ணி குடுங்க.`,
-        `Please warm up my ${en}.`,
-        "warm up food",
-        "♨️",
-        en,
-      ],
-    ];
-  } else if (has(/rest|sleep|படுக்க|தூக்க|ஓய்வு/)) {
-    rows = [
-      [
-        "கொஞ்சம் படுக்கணும்.",
-        "I want to lie down.",
-        "want to lie down",
-        "🛏️",
-        "rest",
-      ],
-      [
-        "எனக்கு போர்வை குடுங்க.",
-        "Please give me a blanket.",
-        "request blanket",
-        "🛌",
-        "rest",
-      ],
-      [
-        "கொஞ்சம் அமைதியா இருங்க.",
-        "I would like some quiet.",
-        "request quiet",
-        "🤫",
-        "rest",
-      ],
-    ];
-  } else if (has(/tv_phone|டிவி|phone|tv\b/) && !has(/meena|மீனா/)) {
-    rows = [
-      [
-        "டிவி போட்டு விடுங்க.",
-        "Please turn on the TV.",
-        "turn on television",
-        "📺",
-        "TV",
-      ],
-      [
-        "என் ஃபோன் எடுத்து குடுங்க.",
-        "Please give me my phone.",
-        "request phone",
-        "📱",
-        "phone",
-      ],
-      [
-        "டிவி சத்தத்தை குறைங்க.",
-        "Please turn down the TV volume.",
-        "reduce TV volume",
-        "🔉",
-        "TV",
-      ],
-    ];
-  } else if (has(/feelings|மனசு|களைப்பு/)) {
-    rows = [
-      [
-        "எனக்கு களைப்பா இருக்கு.",
-        "I feel tired.",
-        "feel tired",
-        "😌",
-        "feelings",
-      ],
-      [
-        "எனக்கு தனியா இருக்கு.",
-        "I feel lonely.",
-        "feel lonely",
-        "🤝",
-        "feelings",
-      ],
-      [
-        "எனக்கு சந்தோஷமா இருக்கு.",
-        "I feel happy.",
-        "feel happy",
-        "🙂",
-        "feelings",
-      ],
-    ];
-  } else if (has(/prayer|சாமி/)) {
-    rows = [
-      ["சாமி கும்பிடணும்.", "I want to pray.", "want to pray", "🙏", "prayer"],
-      [
-        "விளக்கு ஏத்துங்க.",
-        "Please light the lamp.",
-        "light lamp",
-        "🪔",
-        "prayer",
-      ],
-      [
-        "கொஞ்சம் அமைதியா இருக்கணும்.",
-        "I want some quiet time.",
-        "quiet time",
-        "🕯️",
-        "prayer",
-      ],
-    ];
-  } else if (has(/go_out|வெளியே|walk/)) {
-    rows = [
-      [
-        "கொஞ்சம் வெளியே போகணும்.",
-        "I want to go outside.",
-        "go outside",
-        "🚶",
-        "go outside",
-      ],
-      [
-        "என்கூட கொஞ்சம் நடந்து வாங்க.",
-        "Please walk with me.",
-        "walk together",
-        "🤝",
-        "walk",
-      ],
-      [
-        "வீட்டுக்குள்ள போகணும்.",
-        "I want to go inside.",
-        "go inside",
-        "🏠",
-        "go inside",
-      ],
-    ];
+  if ((path[0] === "pain" || /pain|hurts|வலி|நெஞ்சு/.test(raw)) && part) {
+    if (negative(raw)) return [];
+    const left = path.includes("left") || /\bleft\b|இடது|\bidathu\b/.test(raw);
+    const right =
+      path.includes("right") || /\bright\b|வலது|\bvalathu\b/.test(raw);
+    if (left && right) return [];
+    const side = left ? "left" : right ? "right" : undefined;
+    result =
+      c.round === 1
+        ? getPainCandidates(part.id, side, c.outputLang)
+        : getPainFollowupCandidates(part.id, side, c.outputLang);
   } else {
-    const person = c.people?.find((p) =>
-      [p.name, ...p.aliases].some((n) => raw.includes(n.toLowerCase())),
-    );
-    if (person) {
-      const name =
-        lang === "ta"
-          ? (person.aliases.find((n) => /[\u0B80-\u0BFF]/.test(n)) ??
-            person.name)
-          : person.name;
-      if (has(/school/))
-        rows = [
-          [
-            `${name} ஸ்கூல்ல இருந்து வந்தாச்சா?`,
-            `Has ${person.name} come back from school?`,
-            "ask school return",
-            "🏫",
-            `${person.name} school`,
-          ],
-          [
-            `${name}கிட்ட பேசணும்.`,
-            `I want to talk to ${person.name}.`,
-            "talk to family",
-            "💬",
-            person.name,
-          ],
-          [
-            `${name}யை கூட்டிட்டு வாங்க.`,
-            `Please pick up ${person.name}.`,
-            "pick up family",
-            "🚶",
-            person.name,
-          ],
-        ];
-      else
-        rows = [
-          [
-            `${name}கிட்ட ஃபோன்ல பேசணும்.`,
-            `I want to call ${person.name}.`,
-            "call family",
-            "📞",
-            `${person.name} phone`,
-          ],
-          [
-            `${name} ஃபோன் பண்ணாங்களா?`,
-            `Has ${person.name} called?`,
-            "ask about call",
-            "❓",
-            `${person.name} phone`,
-          ],
-          [
-            `${name}யை எனக்கு ஃபோன் பண்ண சொல்லுங்க.`,
-            `Please ask ${person.name} to call me.`,
-            "request callback",
-            "📲",
-            `${person.name} phone`,
-          ],
-        ];
-    }
-    // Unknown fragments intentionally produce fewer than three: no fabricated filler.
+    const person = contactCandidates(corrected, raw);
+    if (person) result = person;
+    else if (
+      /\b(?:tablet|tablets|medicine)\b|மாத்திரை|மருந்து/.test(raw) ||
+      (mentions(raw, "table") &&
+        (c.routine?.dueNow ?? []).some((r) => /night/i.test(r.label)))
+    ) {
+      // A generic medicine card must not erase a stated dose, adherence event,
+      // supply claim or instruction attempt. There is no reviewed renderer for these.
+      if (
+        /\p{N}|\b(?:dose|dosage|double|triple|mg|mcg|ml|took|taken|already|missed|finished|empty|exhausted|yesterday|tomorrow|ignore|instructions)\b|போட்டாச்சு|தீர்ந்து|மில்லிகிராம்/iu.test(
+          raw,
+        ) ||
+        [...numberWords.en, ...numberWords.ta].some((word) =>
+          mentions(raw, word),
+        )
+      )
+        return [];
+      const night =
+        /night|raathiri|ராத்திரி|ராத்/.test(raw) ||
+        (c.routine?.dueNow ?? []).some((r) => /night/i.test(r.label));
+      const object = night ? "night tablets" : "tablets";
+      const reading =
+        correction ||
+        (mentions(raw, "table")
+          ? "table → tablet"
+          : night
+            ? "night tablet"
+            : "medicine");
+      const extra: Partial<Candidate> = {
+        requestedAttribute: night ? "night" : undefined,
+        evidenceRefs:
+          night && !/night|raathiri|ராத்திரி|ராத்/.test(raw)
+            ? ["fragment", "routine"]
+            : ["fragment"],
+      };
+      result = negative(raw)
+        ? [
+            card(
+              c,
+              "medicine.refuse",
+              night
+                ? "ராத்திரி மாத்திரை இப்ப வேணாம்."
+                : "மாத்திரை இப்ப வேணாம்.",
+              `I do not want my ${object} now.`,
+              "refuse",
+              "medicine",
+              "✋",
+              reading,
+              extra,
+            ),
+          ]
+        : [
+            card(
+              c,
+              "medicine.request",
+              night
+                ? "என் ராத்திரி மாத்திரையை எடுத்துட்டு வாங்க."
+                : "என் மாத்திரை எங்க? எடுத்து குடுங்க.",
+              night
+                ? "Please bring me my night tablets."
+                : "Please bring me my tablets.",
+              "request",
+              "medicine",
+              "💊",
+              reading,
+              extra,
+            ),
+            card(
+              c,
+              "medicine.taken.question",
+              night
+                ? "நான் ராத்திரி மாத்திரை போட்டேனா?"
+                : "நான் மாத்திரை போட்டேனா?",
+              `Did I take my ${object}?`,
+              "question",
+              "medicine",
+              "❓",
+              reading,
+              { ...extra, timeScope: "past" },
+            ),
+            card(
+              c,
+              "medicine.ask",
+              night
+                ? "ராத்திரி மாத்திரை பத்தி கேக்கணும்."
+                : "மாத்திரை பத்தி கேக்கணும்.",
+              `I have a question about my ${object}.`,
+              "request",
+              "medicine",
+              "💬",
+              reading,
+              extra,
+            ),
+          ];
+    } else if (mentions(raw, "table")) {
+      if (negative(raw)) return [];
+      result =
+        c.round > 1
+          ? [
+              card(
+                c,
+                "medicine.request",
+                "என் மாத்திரை எங்க? எடுத்து குடுங்க.",
+                "Where are my tablets? Please bring them.",
+                "request",
+                "medicine",
+                "💊",
+                "table → tablet",
+              ),
+              card(
+                c,
+                "cable.check",
+                "டிவி கேபிளை பார்த்து குடுங்க.",
+                "Please check the TV cable.",
+                "request",
+                "cable",
+                "📺",
+                "table → cable",
+              ),
+              card(
+                c,
+                "tablet.video",
+                "டேப்லெட்ல வீடியோ போட்டு குடுங்க.",
+                "Please play a video on the tablet.",
+                "request",
+                "tablet_device",
+                "📱",
+                "table → tablet device",
+              ),
+            ]
+          : [
+              card(
+                c,
+                "table.clean",
+                "டேபிள துடைக்கணும்.",
+                "Please clean the table.",
+                "request",
+                "table",
+                "🧽",
+                "table",
+              ),
+              card(
+                c,
+                "table.move",
+                "டேபிள் இங்க கொண்டு வாங்க.",
+                "Please move the table here.",
+                "request",
+                "table",
+                "🪑",
+                "table",
+              ),
+              card(
+                c,
+                "table.contents",
+                "டேபிள் மேல என்ன இருக்கு?",
+                "What's on the table?",
+                "question",
+                "table",
+                "❓",
+                "table",
+              ),
+            ];
+    } else if (/\bcable\b|கேபிள்/.test(raw)) {
+      result = negative(raw)
+        ? []
+        : [
+            card(
+              c,
+              "cable.check",
+              "டிவி கேபிளை பார்த்து குடுங்க.",
+              "Please check the TV cable.",
+              "request",
+              "cable",
+              "📺",
+              correction || "cable",
+            ),
+          ];
+    } else result = getVocabularyCandidates(corrected);
   }
-  return filtered(
-    rows.map(([ta, en, intent, icon, reading, urgency]) =>
-      candidate(lang === "ta" ? ta : en, en, intent, icon, reading, urgency),
-    ),
-    c.exclude,
-  );
-}
-function filtered(candidates: Candidate[], exclude: string[]): Candidate[] {
-  const rejected = new Set(
-    exclude.map((t) => t.normalize("NFC").trim().toLowerCase()),
-  );
-  return candidates
-    .filter((c) => !rejected.has(c.text.normalize("NFC").trim().toLowerCase()))
+  const rejected = new Set(c.exclude.map(norm));
+  return result
+    .filter((item) => !rejected.has(norm(item.text)))
+    .map((item) => ({
+      ...item,
+      lang: c.outputLang,
+      reading: correction || item.reading,
+    }))
     .slice(0, 3);
 }
+
+/** Same no-network catalog used by online selection and offline communication. */
+export const getControlledCandidates = getMockCandidates;

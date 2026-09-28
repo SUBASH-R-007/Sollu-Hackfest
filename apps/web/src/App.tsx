@@ -29,6 +29,32 @@ import { getKV, hashPin } from "./db";
 import { audio } from "./features/audio";
 import { Brand, FooterNote, TapButton } from "./ui";
 import { clockNow } from "./lib/context";
+import { uiText } from "./lib/copy";
+import {
+  CommunicationDock,
+  PausePage,
+  RepairPage,
+  ComfortPage,
+  SentencePage,
+} from "./pages/Communication";
+const ToolsPage = lazy(() =>
+  import("./pages/Support").then((m) => ({ default: m.ToolsPage })),
+);
+const WordsPage = lazy(() =>
+  import("./pages/Support").then((m) => ({ default: m.WordsPage })),
+);
+const ScenesPage = lazy(() =>
+  import("./pages/Support").then((m) => ({ default: m.ScenesPage })),
+);
+const StoriesPage = lazy(() =>
+  import("./pages/Support").then((m) => ({ default: m.StoriesPage })),
+);
+const PassportPage = lazy(() =>
+  import("./pages/Support").then((m) => ({ default: m.PassportPage })),
+);
+const DrawPage = lazy(() =>
+  import("./pages/Support").then((m) => ({ default: m.DrawPage })),
+);
 import {
   Home,
   QuickStrip,
@@ -120,8 +146,16 @@ function CaregiverGate({ children }: { children: ReactNode }) {
   );
 }
 function Shell() {
-  const { settings, session, online, ready, abandon, updateSettings, lock } =
-    useApp();
+  const {
+    settings,
+    session,
+    online,
+    ready,
+    abandon,
+    updateSettings,
+    lock,
+    paused,
+  } = useApp();
   const navigate = useNavigate(),
     location = useLocation();
   const [provider, setProvider] = useState("Demo phrases"),
@@ -174,12 +208,14 @@ function Shell() {
         <p>Getting your space ready…</p>
       </div>
     );
+  if (paused && !care && !family) return <PausePage />;
   const now = clockNow(settings),
     contact = settings.contacts.find((c) => c.id === settings.addressee);
   const nav = [
     { path: "/", label: "My space", icon: HomeIcon },
     { path: "/phrases", label: "My phrases", icon: BookHeart },
     { path: "/recent", label: "Recent words", icon: Clock3 },
+    { path: "/tools", label: "My tools", icon: BookHeart },
   ];
   function go(to: string) {
     abandon();
@@ -187,7 +223,7 @@ function Shell() {
   }
   return (
     <div
-      className={`app-shell ${care ? "care-shell" : ""} ${settings.keepLeft ? "keep-left" : ""}`}
+      className={`app-shell ${care ? "care-shell" : ""} ${settings.keepLeft ? "keep-left" : ""} ${settings.quietMode ? "quiet-mode" : ""}`}
     >
       {!care && (
         <aside className="sidebar">
@@ -208,7 +244,7 @@ function Shell() {
                 onActivate={() => go(n.path)}
               >
                 <n.icon size={23} />
-                <span>{n.label}</span>
+                <span>{uiText(settings.lang, n.label)}</span>
                 {path === n.path && <span className="active-dot" />}
               </TapButton>
             ))}
@@ -296,7 +332,7 @@ function Shell() {
                 onActivate={() => go(n.path)}
               >
                 <n.icon size={21} />
-                {n.label}
+                {uiText(settings.lang, n.label)}
               </TapButton>
             ))}
           </nav>
@@ -361,6 +397,15 @@ function Shell() {
               <Route path="/phrases" element={<PhrasesPage />} />
               <Route path="/recent" element={<RecentPage />} />
               <Route path="/people" element={<PeoplePage />} />
+              <Route path="/tools" element={<ToolsPage />} />
+              <Route path="/words" element={<WordsPage />} />
+              <Route path="/scenes" element={<ScenesPage />} />
+              <Route path="/stories" element={<StoriesPage />} />
+              <Route path="/passport" element={<PassportPage />} />
+              <Route path="/draw" element={<DrawPage />} />
+              <Route path="/repair" element={<RepairPage />} />
+              <Route path="/comfort" element={<ComfortPage />} />
+              <Route path="/sentence" element={<SentencePage />} />
               <Route
                 path="/settings"
                 element={
@@ -395,7 +440,7 @@ function Shell() {
             </Routes>
           </Suspense>
           {home && <QuickStrip />}
-          {session && (
+          {session && settings.stage && (
             <div
               data-testid="stage-overlay"
               className={`metrics-overlay ${settings.stage ? "stage" : ""}`}
@@ -442,6 +487,7 @@ function Shell() {
             </div>
           )}
           {!care && <FooterNote />}
+          {!care && !family && <CommunicationDock />}
         </main>
         <div className="workspace-bottom">
           <span>

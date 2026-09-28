@@ -2370,3 +2370,217 @@ pre {
     background: white;
   }
 }
+
+/* Patient support tools share one large-target, wrapping layout. */
+.support-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 16px 0;
+}
+.support-grid > .tap {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding: 16px;
+}
+.support-grid .support-tile {
+  min-height: 140px;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+}
+.support-tile > span:first-child {
+  font-size: 32px;
+}
+.support-card {
+  padding: 24px;
+  background: var(--surface, #fff);
+  border: 1px solid #cbbbd6;
+  border-radius: 22px;
+  margin: 24px 0;
+}
+.support-card h2 {
+  font-size: 1.35rem;
+  margin: 0 0 16px;
+}
+.support-card label {
+  display: block;
+  margin: 18px 0 8px;
+  font-weight: 650;
+}
+.support-card input:not([type="checkbox"]),
+.support-card textarea,
+.support-card select {
+  width: 100%;
+  min-height: 72px;
+  border: 1px solid #8d779e;
+  border-radius: 12px;
+  padding: 14px;
+  font: inherit;
+  color: var(--ink);
+  background: #fff;
+}
+.support-card .tap {
+  margin-top: 8px;
+}
+.support-card li {
+  margin: 12px 0;
+}
+.message-preview {
+  font-size: 1.5rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  border-left: 4px solid #7e4099;
+  padding: 16px;
+  margin: 18px 0;
+  background: #f5eef9;
+}
+.memory-row {
+  border-top: 1px solid #d8cbe0;
+  padding: 18px 0;
+  overflow-wrap: anywhere;
+}
+.communication-dock {
+  position: sticky;
+  bottom: 12px;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(72px, 1fr));
+  gap: 8px;
+  margin: 28px 0 0;
+  padding: 10px;
+  border: 1px solid #9a7cae;
+  border-radius: 20px;
+  background: #fffcff;
+  box-shadow: 0 4px 22px #48235824;
+}
+.communication-dock .tap {
+  min-width: 72px;
+  min-height: 72px;
+  padding: 8px 4px;
+  font-size: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  background: #f0e7f6;
+  color: #442157;
+}
+.communication-dock .dock-help {
+  background: #ffe9e5;
+  color: #802c1d;
+}
+.pause-space {
+  max-width: 720px;
+  margin: auto;
+  padding: 32px 20px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 22px;
+}
+.pause-space h1 {
+  font-size: 2.2rem;
+}
+.pause-symbol {
+  font-size: 70px;
+  color: #743596;
+}
+.keep-left .speaking-actions {
+  justify-content: flex-start;
+}
+.keep-left .back-button {
+  align-self: flex-start;
+}
+.quiet-mode .eyebrow,
+.quiet-mode .breadcrumb,
+.quiet-mode .page-meta > span,
+.quiet-mode .routine-chip,
+.quiet-mode .sidebar-tagline,
+.quiet-mode .footer-credit,
+.quiet-mode .voice-bars,
+.quiet-mode .tile-detail {
+  display: none;
+}
+.quiet-mode * {
+  animation: none !important;
+  transition: none !important;
+}
+.tap[aria-pressed="true"] {
+  outline: 3px solid #71338b;
+  background: #eadbf3;
+  color: #321147;
+}
+@media (max-width: 760px) {
+  .mobile-nav {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .mobile-nav .tap {
+    font-size: 12px;
+    padding: 6px 2px;
+    min-width: 72px;
+  }
+  .home-content .page-meta {
+    margin-bottom: 8px;
+  }
+  .home-content .meta-controls {
+    flex-direction: row;
+    width: 100%;
+    justify-content: space-between;
+  }
+  .home-content .context-row {
+    margin-top: 12px;
+    padding: 0 12px;
+  }
+  .home-content .page-title {
+    margin-bottom: 16px;
+  }
+  .home-content .page-title h1 {
+    font-size: 1.65rem;
+  }
+  .home-content .context-row {
+    margin-bottom: 16px;
+  }
+  .home-content .home-grid {
+    gap: 12px;
+  }
+  .home-content .big-tile {
+    min-height: 128px;
+    padding: 16px;
+  }
+  .home-content .tile-detail,
+  .home-content .routine-chip,
+  .home-content .page-title .eyebrow,
+  .home-content .page-meta > span {
+    display: none;
+  }
+  .communication-dock {
+    bottom: 4px;
+    gap: 4px;
+    padding: 6px;
+    margin-left: -6px;
+    margin-right: -6px;
+  }
+  .communication-dock .tap {
+    font-size: 13px;
+  }
+  .support-card {
+    padding: 18px;
+  }
+  .support-grid {
+    gap: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+@media print {
+  .communication-dock {
+    display: none !important;
+  }
+}

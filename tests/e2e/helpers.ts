@@ -253,6 +253,31 @@ export async function installSpeechHarness(
 export const test = base.extend({
   page: async ({ page, context }, use) => {
     await installSpeechHarness(context);
+    await page.goto("/");
+    await page.locator(".language-switch").waitFor();
+    // Existing flow assertions use English UI labels; speech still follows the Tamil contact.
+    await page.locator(".language-switch").click();
+    await page.evaluate(async () => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open("sollu");
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      await new Promise<void>((resolve, reject) => {
+        const transaction = database.transaction("kv", "readwrite");
+        const table = transaction.objectStore("kv");
+        const request = table.get("settings");
+        request.onsuccess = () =>
+          table.put({
+            key: "settings",
+            value: { ...request.result.value, stage: true },
+          });
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+      });
+      database.close();
+    });
+    await page.reload();
     await use(page);
   },
 });

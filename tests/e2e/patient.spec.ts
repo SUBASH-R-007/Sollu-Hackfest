@@ -67,7 +67,7 @@ test("Home has four inputs, no autoplay, accessible names, contrast and large to
     page.getByRole("heading", { name: "What would you like to say?" }),
   ).toBeVisible();
   await expect(page.locator(".home-grid .big-tile")).toHaveCount(4);
-  await expect(page.locator(".quick-help")).toHaveText(/உதவி/);
+  await expect(page.locator(".quick-help")).toHaveText(/I need help/);
   expect(await spokenCalls(page)).toEqual([]);
   await checkTargetSizes(page);
   const report = await new AxeBuilder({ page })
@@ -147,7 +147,7 @@ test("fewer valid candidates have no invented filler", async ({ page }) => {
 test("rejected candidates are excluded and saved as a struggle", async ({
   page,
 }) => {
-  await startTyped(page, "table");
+  await startTyped(page, "left shoulder pain");
   const firstRound = await page
     .locator(".candidate-sentence")
     .allTextContents();
@@ -204,6 +204,7 @@ test("speech starts on the input tile and simulated recognition reaches confirma
   const page = await context.newPage();
   try {
     await page.goto("/");
+    await page.locator(".language-switch").click();
     await page.getByRole("button", { name: /^Speak / }).click();
     await expect
       .poll(() => page.evaluate(() => window.__solluSpeech.recognitionStarts))
@@ -239,7 +240,7 @@ test("labelled speech and camera demo inputs never claim a real transcription or
     page.getByText(/The demo uses a sample bottle label/),
   ).toBeVisible();
   await page.getByRole("button", { name: "Try demo: water bottle" }).click();
-  await expect(candidates(page)).toHaveCount(3);
+  await expect(candidates(page)).toHaveCount(1);
   await expect(page.locator(".heard-row")).toContainText("bottle");
   expect(
     requestBodies.some((body) => /data:image|image\/jpeg|base64/.test(body)),
@@ -269,7 +270,7 @@ test("offline Help speaks a local device phrase without AI and offers SMS", asyn
     page.getByText(/Sollu is not an emergency service/),
   ).toBeVisible();
   expect(intentRequests).toBe(0);
-  expect((await spokenCalls(page))[0].text).toBe("உதவி வேணும்!");
+  expect((await spokenCalls(page))[0].text).toBe("I need help!");
   await assertTrustedPlayback(page);
 });
 
@@ -439,8 +440,8 @@ test("keyboard activation confirms one exact sentence once", async ({
   page,
 }) => {
   await startTyped(page, "water");
-  const selected = await sentenceAt(page, 1);
-  await candidates(page).nth(1).focus();
+  const selected = await sentenceAt(page, 0);
+  await candidates(page).first().focus();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/speaking$/);
   await expect.poll(async () => (await spokenCalls(page)).length).toBe(1);

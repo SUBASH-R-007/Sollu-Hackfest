@@ -1,10 +1,26 @@
 # Sollu progress and acceptance ledger
 
-Last updated: 2026-09-27. **Current state: local M0–M6 prototype implemented; automated checks pass, human acceptance pending.** User approved the plan with no paid keys and requested a free alternative; hosting is deferred. The complete specification is [docs/SPEC.md](docs/SPEC.md); approved changes are [docs/DECISIONS.md](docs/DECISIONS.md). This is not a claim that the original full-product or paid-clone milestones are complete.
+Last updated: 2026-09-28. **Current state: approved aphasia-support improvements implemented locally; final verification recorded below, human acceptance pending.** The user approved the improvement plan with “go.” No paid keys or hosting were added. The complete specification is [docs/SPEC.md](docs/SPEC.md); approved changes are [docs/DECISIONS.md](docs/DECISIONS.md). This is not a claim that the original full-product, clinical-validation or paid-clone milestones are complete.
+
+## Approved improvement release (v2)
+
+| Area | Implementation and evidence |
+| --- | --- |
+| Meaning accuracy | Shared grounding/deduplication/negation/body-side/language policy; bounded local selector with honest catalog fallback; every browser merge revalidated. Unsupported meanings can abstain. |
+| Vocabulary | 124 bilingual complete-message meanings with Tamil/English/Tanglish lookup; personalized aliases, descriptions, pin/hide/edit/delete and explicit approval. Catalog and UI language review remain pending. |
+| Patient access | Tamil patient controls, quieter Home, stable Help/repair/Pause/Stop, preference-based choice count/tap filtering/speech pace, two-step confirmation, draft recovery, recognition alternatives and Keep listening. |
+| Communication widgets | Repair and shared-meaning check, comfort phrases, request/refusal builder, photo scenes and equivalent lists, stories, printable passport, word finder and drawing. These are design hypotheses, not proven treatment effects. |
+| Offline and privacy | Shared controlled catalog offline, readiness checklist, passphrase-encrypted backup/preview/non-overwriting merge, fresh imported approval, encrypted durable queue/receipt/replay protection and Help expiry. |
+| Automated verification | 358 unit tests, 26 distinct browser checks, ESLint, all three workspace typechecks and both production builds pass. Compiled PWA offline reload, vocabulary and negative-input/rejection flow pass. Full evidence: [v2 verification](docs/evidence/v2/VERIFICATION.md). |
+| Controlled evaluation | [240/240 development executions](evals/intent/report.md): 120 authored scenarios × Tamil/English; not a held-out clinical measure. |
+| Actual installed model | [24-case selector benchmark](evals/intent/report-local-selector.md): 20 timeouts with labelled fallback, four clarification bypasses, zero model completions within 8 seconds. No paid call/download. |
+| Human acceptance | [12-check protocol](docs/IMPROVEMENTS_ACCEPTANCE.md), 6–8 formative patient/partner pairs; native Tamil, real voice/phone usability and SLP review all **pending**. |
+
+Scope limits: personal scene hotspots do not perform learned photo recognition; the sentence builder is a small reviewed-template surface, not a general inflection system; the bilingual token baseline needs personalization and human language matching before comparative claims. No supervised therapy, new language, paid clone or hosting work was added.
 
 Status vocabulary: **pending** = no completion evidence; **partial** = implementation exists with open checks; **passed** = dated execution evidence linked; **deferred** = explicitly outside the current cut. A milestone is not complete while its required checks remain pending. Evidence below must be replaced with actual output/paths, never an estimate. Human checks require the human's report.
 
-## Milestone ledger
+## Original milestone ledger (v1 evidence; v2 additions above supersede implemented deferrals)
 
 | Milestone / check | Status | Evidence / open work | Date |
 | --- | --- | --- | --- |

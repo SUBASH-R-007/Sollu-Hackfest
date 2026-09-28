@@ -15,7 +15,7 @@ export interface RehearsalEntry extends RehearsalResult {
   key: string;
   savedAt: number;
 }
-const storageKey = "sollu:rehearsal:v1";
+const storageKey = "sollu:rehearsal:v3";
 const MAX_ENTRIES = 100;
 
 /** Time of day matters; a new wall-clock timestamp must not invalidate a rehearsal. */
@@ -29,7 +29,15 @@ export function rehearsalKey(context: ContextPacket): string {
   ) =>
     stable(items.map((item) => [normalize(item.label), item.topic, item.time]));
   return JSON.stringify({
-    version: 2,
+    version: 3,
+    policyVersion: "meaning-1",
+    alternatives: context.fragment.sttAlternatives ?? [],
+    objectSource: context.fragment.objectSource,
+    speaker: context.speaker,
+    substitutions: context.substitutions ?? [],
+    ownExamples: context.ownExamples ?? [],
+    recentTurns: context.recentTurns ?? [],
+    rejectedMeaningKeys: context.rejectedMeaningKeys ?? [],
     fragment: {
       modality: context.fragment.modality,
       raw: normalize(context.fragment.raw),
@@ -87,7 +95,7 @@ function validEntry(entry: unknown): entry is RehearsalEntry {
 async function entries(): Promise<RehearsalEntry[]> {
   const stored = await getKV<unknown>(storageKey);
   return Array.isArray(stored)
-    ? stored.filter(validEntry).slice(0, MAX_ENTRIES)
+    ? stored.filter(validEntry).filter(e => Date.now() - e.savedAt < 7 * 86400000 && e.savedAt <= Date.now()).slice(0, MAX_ENTRIES)
     : [];
 }
 export async function saveRehearsal(

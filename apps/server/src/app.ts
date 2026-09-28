@@ -16,11 +16,9 @@ import {
   SignRequestSchema,
   TtsRequestSchema,
   canonicalText,
-  getMockCandidates,
 } from "@sollu/shared";
 import { Signer } from "./lib/signing.js";
-import { validateCandidates } from "./lib/validation.js";
-import { ollamaIntent } from "./providers/ollama.js";
+import { selectIntent } from "./lib/intent.js";
 import { mockWav } from "./providers/mock.js";
 import type { ServerConfig } from "./config.js";
 
@@ -172,7 +170,6 @@ export async function createApp(
     return { deviceId, token: signer.device(deviceId) };
   });
   app.post("/api/intent", { config: limited(30) }, async (request, reply) => {
-    const started = performance.now();
     const body = z
       .object({ context: z.unknown() })
       .strict()
@@ -183,35 +180,15 @@ export async function createApp(
         ? { ...input, outputLang: input.outputLang ?? input.lang }
         : input,
     );
+    const controller = new AbortController();
+    const cancelled = () => {
+      if (!reply.raw.writableEnded) controller.abort();
+    };
+    request.raw.once("aborted", cancelled);
+    reply.raw.once("close", cancelled);
     try {
-      let raw: unknown =
-        config.intentProvider === "ollama"
-          ? await ollamaIntent(context, {
-              url: config.ollamaUrl,
-              model: config.ollamaModel,
-              timeoutMs: config.timeoutMs,
-            })
-          : getMockCandidates(context);
-      let validated = validateCandidates(raw, context);
-      if (
-        config.intentProvider === "ollama" &&
-        validated.candidates.length < 3
-      ) {
-        const remaining = config.timeoutMs - (performance.now() - started);
-        if (remaining > 300) {
-          raw = await ollamaIntent(context, {
-            url: config.ollamaUrl,
-            model: config.ollamaModel,
-            timeoutMs: Math.floor(remaining),
-            correction:
-              "Your previous response failed validation. Return exactly three grounded short distinct intents. Do not add names, doses, numbers, or advice.",
-          });
-          const retry = validateCandidates(raw, context);
-          if (retry.candidates.length > validated.candidates.length)
-            validated = retry;
-        }
-      }
-      const candidates = validated.candidates.map((c) => ({
+      const result = await selectIntent(context, config, controller.signal);
+      const candidates = result.candidates.map((c) => ({
         ...c,
         sig: signer.signText(
           request.deviceId!,
@@ -222,22 +199,21 @@ export async function createApp(
       }));
       return {
         candidates,
-        model:
-          config.intentProvider === "ollama"
-            ? `ollama:${config.ollamaModel}`
-            : "mock-deterministic-v1",
+        model: result.model,
         provider: config.intentProvider,
         mock: config.intentProvider === "mock",
-        latencyMs: Math.round(performance.now() - started),
-        validationDrops: validated.dropped,
+        latencyMs: result.latencyMs,
+        validationDrops: result.validationDrops,
+        clarification: result.clarification,
       };
     } catch {
-      return reply
-        .code(503)
-        .send({
-          fallback: true,
-          error: "Intent unavailable. Use Topics or your saved phrases.",
-        });
+      return reply.code(503).send({
+        fallback: true,
+        error: "Intent unavailable. Use Topics or your saved phrases.",
+      });
+    } finally {
+      request.raw.off("aborted", cancelled);
+      reply.raw.off("close", cancelled);
     }
   });
   const caregiverCounts = new Map<string, { count: number; expires: number }>();
@@ -388,14 +364,12 @@ export async function createApp(
         })
         .safeParse(payload);
       if (!parsed.success)
-        return reply
-          .code(503)
-          .send({
-            fallback: true,
-            mock: true,
-            error:
-              "No speech provider configured. Use browser speech, Topics or Type. Demo fixtures must be explicitly selected.",
-          });
+        return reply.code(503).send({
+          fallback: true,
+          mock: true,
+          error:
+            "No speech provider configured. Use browser speech, Topics or Type. Demo fixtures must be explicitly selected.",
+        });
       const phrases = {
         tablet: "tablet raathiri",
         water: "தண்ணி",
@@ -420,19 +394,15 @@ export async function createApp(
     "/api/media/extract",
     { config: limited(10, 3600_000) },
     async (_request, reply) =>
-      reply
-        .code(501)
-        .send({
-          error:
-            "Server video extraction is not enabled. Record a phrase in the local Voice Studio.",
-        }),
+      reply.code(501).send({
+        error:
+          "Server video extraction is not enabled. Record a phrase in the local Voice Studio.",
+      }),
   );
   app.post("/api/voice/isolate", async (_request, reply) =>
-    reply
-      .code(501)
-      .send({
-        error: "Cloud voice isolation is not enabled in the no-key build.",
-      }),
+    reply.code(501).send({
+      error: "Cloud voice isolation is not enabled in the no-key build.",
+    }),
   );
 
   const rooms = new Map<

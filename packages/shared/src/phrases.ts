@@ -1,4 +1,5 @@
 import type { Candidate, Lang, TopicId } from "./schemas";
+import { getVocabularyCandidate, vocabularyCatalog } from "./vocabulary";
 
 export function candidate(
   text: string,
@@ -98,6 +99,25 @@ export const defaultPhrases: Record<Lang, Candidate[]> = {
     candidate("Thank you.", "Thank you.", "say thanks", "🙏"),
   ],
 };
+for (const lang of ["ta", "en"] as const) {
+  const added = [
+    "repair.repeat",
+    "repair.slower",
+    "repair.one_question",
+    "repair.wrong",
+    "repair.dont_understand",
+    "repair.changed_mind",
+    "repair.show",
+    "repair.finish",
+    "identity.my_choice",
+    "identity.include_me",
+    "core.unsure",
+    "social.news",
+    "social.like",
+    "social.dislike",
+  ].map((id) => getVocabularyCandidate(id, lang)!);
+  defaultPhrases[lang] = [...defaultPhrases[lang], ...added];
+}
 export const studioPhrases: Record<Lang, string[]> = {
   ta: ["வணக்கம், நான் பேசுறது கேக்குதா?"],
   en: ["Hello, can you hear me?"],
@@ -117,21 +137,26 @@ export const topics: { id: TopicId; icon: string; ta: string; en: string }[] = [
 ];
 export const painParts = [
   { id: "head", ta: "தலை", en: "head", paired: false },
-  { id: "mouth", ta: "வாய் / பல்", en: "mouth", paired: false },
+  { id: "mouth", ta: "வாய்", en: "mouth", paired: false },
+  { id: "tooth", ta: "பல்", en: "tooth", paired: false },
   { id: "throat", ta: "தொண்டை", en: "throat", paired: false },
   { id: "chest", ta: "நெஞ்சு", en: "chest", paired: false },
   { id: "stomach", ta: "வயிறு", en: "stomach", paired: false },
   { id: "back", ta: "முதுகு", en: "back", paired: false },
+  { id: "neck", ta: "கழுத்து", en: "neck", paired: false },
   { id: "eye", ta: "கண்", en: "eye", paired: true },
   { id: "ear", ta: "காது", en: "ear", paired: true },
   { id: "shoulder", ta: "தோள்", en: "shoulder", paired: true },
   { id: "arm", ta: "கை", en: "arm", paired: true },
+  { id: "hand", ta: "உள்ளங்கை", en: "hand", paired: true },
+  { id: "wrist", ta: "மணிக்கட்டு", en: "wrist", paired: true },
   { id: "hip", ta: "இடுப்பு", en: "hip", paired: true },
   { id: "knee", ta: "முட்டி", en: "knee", paired: true },
   { id: "leg", ta: "கால்", en: "leg", paired: true },
   { id: "foot", ta: "பாதம்", en: "foot", paired: true },
+  { id: "ankle", ta: "கணுக்கால்", en: "ankle", paired: true },
 ] as const;
-export function getPainCandidates(
+function painChoices(
   part: string,
   side: string | undefined,
   lang: Lang,
@@ -151,26 +176,6 @@ export function getPainCandidates(
         "chest pain help",
         "🚨",
         "chest pain",
-        "emergency",
-      ),
-      candidate(
-        lang === "ta"
-          ? "நெஞ்சு அடைக்குற மாதிரி இருக்கு."
-          : "My chest feels tight.",
-        "My chest feels tight.",
-        "report chest tightness",
-        "⚠️",
-        "chest tightness",
-        "emergency",
-      ),
-      candidate(
-        lang === "ta"
-          ? "மூச்சு விட கஷ்டமா இருக்கு."
-          : "I'm finding it hard to breathe.",
-        "I'm finding it hard to breathe.",
-        "report breathing difficulty",
-        "🫁",
-        "breathing difficulty",
         "emergency",
       ),
     ];
@@ -209,6 +214,98 @@ export function getPainCandidates(
     ),
   ];
 }
+export function getPainCandidates(
+  part: string,
+  side: string | undefined,
+  lang: Lang,
+): Candidate[] {
+  const p = painParts.find(
+    (p) => p.id === part || p.ta === part || p.en === part,
+  );
+  if (!p) return [];
+  return painChoices(part, side, lang).map((c, index) => ({
+    ...c,
+    lang,
+    intentId: `pain.${p.id}.${p.id === "chest" ? "help" : index === 0 ? "mild" : index === 1 ? "strong" : "help"}`,
+    speechAct: "report",
+    polarity: "positive",
+    bodyPart: p.id,
+    side: p.paired && (side === "left" || side === "right") ? side : undefined,
+    requestedAttribute:
+      p.id === "chest"
+        ? "help"
+        : index === 0
+          ? "mild"
+          : index === 1
+            ? "strong"
+            : "unbearable",
+    timeScope: "now",
+    evidenceRefs: [
+      `body:${p.id}`,
+      ...(p.paired && side ? [`side:${side}`] : []),
+    ],
+    source: "template",
+    templateVersion: "pain-2",
+  }));
+}
+/** Additional selectable help requests retain the exact body part and side. */
+export function getPainFollowupCandidates(
+  part: string,
+  side: string | undefined,
+  lang: Lang,
+): Candidate[] {
+  const p = painParts.find(
+    (p) => p.id === part || p.ta === part || p.en === part,
+  );
+  if (!p || (p.paired && side !== "left" && side !== "right")) return [];
+  const en = [p.paired ? side : "", p.en].filter(Boolean).join(" ");
+  const ta = [p.paired ? (side === "left" ? "இடது" : "வலது") : "", p.ta]
+    .filter(Boolean)
+    .join(" ");
+  const rows = [
+    {
+      id: "help",
+      ta: `${ta} வலிக்கு உதவி வேணும்.`,
+      en: `I'd like help with the pain in my ${en}.`,
+      icon: "🤲",
+    },
+    {
+      id: "discuss",
+      ta: `${ta} வலி பற்றி பேசணும்.`,
+      en: `I'd like to talk about the pain in my ${en}.`,
+      icon: "💬",
+    },
+    {
+      id: "show",
+      ta: `${ta} எங்க வலிக்குதுன்னு காட்டுறேன்.`,
+      en: `I'll show you where my ${en} hurts.`,
+      icon: "👆",
+    },
+  ];
+  return rows.map((row) => ({
+    ...candidate(
+      lang === "ta" ? row.ta : row.en,
+      row.en,
+      `pain ${row.id}`,
+      row.icon,
+      `${en} pain`,
+    ),
+    lang,
+    intentId: `pain.${p.id}.followup.${row.id}`,
+    speechAct: row.id === "show" ? "report" : "request",
+    polarity: "positive",
+    bodyPart: p.id,
+    side: p.paired ? (side as "left" | "right") : undefined,
+    requestedAttribute: row.id,
+    timeScope: "now",
+    evidenceRefs: [
+      `body:${p.id}`,
+      ...(p.paired && side ? [`side:${side}`] : []),
+    ],
+    source: "template",
+    templateVersion: "pain-2",
+  }));
+}
 export function canonicalText(
   source: string,
   text: string,
@@ -220,14 +317,21 @@ export function canonicalText(
       (c) => c.text.normalize("NFC") === t,
     );
   if (source === "default")
-    return defaultPhrases[lang].some((c) => c.text.normalize("NFC") === t);
+    return (
+      defaultPhrases[lang].some((c) => c.text.normalize("NFC") === t) ||
+      vocabularyCatalog.some(
+        (v) =>
+          (lang === "ta" ? v.taSentence : v.enSentence).normalize("NFC") === t,
+      )
+    );
   if (source === "studio") return studioPhrases[lang].includes(t);
   if (source === "template")
     return painParts.some((p) =>
       (p.paired ? ["left", "right"] : [""]).some((s) =>
-        getPainCandidates(p.id, s, lang).some(
-          (c) => c.text.normalize("NFC") === t,
-        ),
+        [
+          ...getPainCandidates(p.id, s, lang),
+          ...getPainFollowupCandidates(p.id, s, lang),
+        ].some((c) => c.text.normalize("NFC") === t),
       ),
     );
   return false;

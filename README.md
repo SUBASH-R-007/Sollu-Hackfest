@@ -6,6 +6,18 @@ Tamil-first communication aid prototype for BME Ignite Hackfest 2026, Team echo.
 
 **No paid API key is needed to run the default demo.** Mock output is deterministic and must stay visibly labelled. Free device speech and exact-phrase own-voice recordings are distinct from generative voice cloning. Tamil recognition and Tamil device voices depend on the browser/device. This is a prototype; real-phone, native-speaker and clinic acceptance are tracked in [PROGRESS.md](PROGRESS.md).
 
+## Communication tools added on 28 September
+
+Open **My tools** (`/tools`) for a bilingual word finder with 124 controlled message meanings, personal words with aliases and descriptions, familiar photos with selectable messages, prepared conversations, a printable communication passport, and drawing/writing. Personal cards are drafted behind the caregiver lock and appear for everyday use only after the person reviews the exact words. Editing or importing a card requires fresh approval. Pin, hide and delete controls keep the word collection personal.
+
+The persistent support strip offers Help, repair, Pause and Stop. Repair includes message editing and an explicit check of what the partner understood. Comfort phrases and a small request/refusal sentence builder work without an AI service. Pause preserves an unfinished message; drawings survive a pause in the current app session. Access settings include choice count, repeated-tap filtering, listening pauses, speech speed, two-step confirmation and a quiet screen.
+
+All suggestion paths share the same meaning policy: preserve negation/body side/output language, remove repeated or previously rejected meanings, and abstain when there is not enough supported content. Speaking a sentence alone never approves a learned mapping. Corrections and remembered phrasing require review and are scoped to the listener, place and language. The optional local model selects controlled meanings; it cannot author unverified medication details or names.
+
+Caregiver messages queue encrypted on the patient device and retry with the same message ID. Help expires after 60 seconds, ordinary messages after five minutes. “Delivered” means received by the companion page; “understood” requires the person's explicit confirmation. Both pages and the relay must eventually be available. Privacy settings include an offline-readiness panel and passphrase-encrypted backup with import preview; imports preserve existing entries and do not restore credentials, pairing keys or the caregiver PIN.
+
+Research, scope and verification: [approved improvement plan](docs/APHASIA_IMPROVEMENT_PLAN.md), [development challenge report](evals/intent/report.md), [installed local-model benchmark](evals/intent/report-local-selector.md), [pending human acceptance protocol](docs/IMPROVEMENTS_ACCEPTANCE.md). The 240 challenge executions are 120 authored scenarios in two output languages, not a clinical accuracy estimate. The installed `llama3:latest` did not complete any of 20 eligible requests within the eight-second budget, so the no-key controlled catalog remains the dependable default in this environment.
+
 ## Run locally
 
 Use Node.js 22.12 or later and pnpm 11.19.0 (the repository's pinned package-manager version). In this repository:
@@ -26,7 +38,7 @@ For a production bundle, run `pnpm build`, then `pnpm start`. The exact availabl
 
 | Need | Free route | Limit |
 | --- | --- | --- |
-| Candidate generation | Deterministic mock now; optional local Ollama model | Mock is a rehearsal tool. Ollama needs an installed model and sufficient local hardware; Tamil grounding and speed need evaluation. |
+| Candidate generation | Bundled controlled Tamil/English catalog; optional local Ollama selector | Unrecognized meanings require clarification or personal wording. The tested installed model timed out; this is not evidence of model accuracy. |
 | Speech input | Browser SpeechRecognition when supported | May send audio to browser-vendor servers; language/support/offline behaviour vary. Type and Topics always provide another input route. |
 | Speak a new sentence | Available device/browser speech voice | Generic voice; Tamil voice may be missing and remote voices may need internet. |
 | Speak in a consenting person's actual voice | Record an exact phrase in Voice Studio and replay it for that phrase | Genuine recording, not a generative clone; it cannot say new text or translate the recording. File upload is not implemented. |

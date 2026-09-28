@@ -117,7 +117,7 @@ describe("rehearsal context keys", () => {
       rehearsalKey({ ...two, vocabulary: [...two.vocabulary].reverse() }),
     ).toBe(rehearsalKey(two));
   });
-  it("keeps the same Type scene cached after its clock advances and memory grows", () => {
+  it("keeps elapsed clock time stable but invalidates changed memory meaning", () => {
     const anchor = new Date(2026, 8, 27, 15, 0).getTime();
     const settings = {
       ...defaultSettings,
@@ -128,6 +128,7 @@ describe("rehearsal context keys", () => {
     const fragment = { modality: "text" as const, raw: "tablet… night" };
     const warmed = buildContext(settings, fragment, { now: anchor });
     const repeated = buildContext(settings, fragment, { now: anchor + 1000 });
+    expect(rehearsalKey(repeated)).toBe(rehearsalKey(warmed));
     repeated.ownExamples = [
       {
         fragment: "tablet night",
@@ -135,12 +136,34 @@ describe("rehearsal context keys", () => {
         timeBucket: "night",
       },
     ];
-    expect(rehearsalKey(repeated)).toBe(rehearsalKey(warmed));
+    expect(rehearsalKey(repeated)).not.toBe(rehearsalKey(warmed));
     expect(rehearsalKey({ ...repeated, round: 2 })).not.toBe(
       rehearsalKey(warmed),
     );
     expect(rehearsalKey({ ...repeated, outputLang: "en" })).not.toBe(
       rehearsalKey(warmed),
     );
+  });
+  it("invalidates changed corrections, transcription alternatives and rejected meanings", () => {
+    const c = context(),
+      key = rehearsalKey(c);
+    for (const changed of [
+      {
+        ...c,
+        substitutions: [
+          { heard: "table", means: "cable", count: 2, confirmed: true },
+        ],
+      },
+      { ...c, fragment: { ...c.fragment, sttAlternatives: ["table"] } },
+      { ...c, rejectedMeaningKeys: ["medicine.request"] },
+      { ...c, speaker: { preferredName: "Me", gender: "male" as const } },
+      {
+        ...c,
+        recentTurns: [
+          { speaker: "person" as const, text: "No medicine", minutesAgo: 1 },
+        ],
+      },
+    ])
+      expect(rehearsalKey(changed)).not.toBe(key);
   });
 });

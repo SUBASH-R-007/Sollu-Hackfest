@@ -14,7 +14,12 @@ import type {
   Fragment,
   Lang,
 } from "@sollu/shared";
-import { getPainCandidates } from "@sollu/shared";
+import {
+  applyCandidatePolicy,
+  candidateMeaningKey,
+  getPainCandidates,
+  getControlledCandidates,
+} from "@sollu/shared";
 import {
   db,
   defaultSettings,
@@ -26,9 +31,12 @@ import {
 } from "./db";
 import { buildContext, memoryScore, normalize } from "./lib/context";
 import { getIntent } from "./lib/api";
-import { RelayClient } from "./lib/relay";
+import { RelayClient, type DeliveryStatus } from "./lib/relay";
+import { copy } from "./lib/copy";
 import { audio, type TapTicket } from "./features/audio";
 import { getRehearsal, saveRehearsal } from "./features/demo/service";
+import { parseStoredDraft } from "./lib/draft";
+import { memoryIdentity } from "./lib/memory";
 
 export interface Session {
   attempt: Attempt;
@@ -42,6 +50,7 @@ export interface Session {
   source: string;
   delivery: string;
   usual?: string;
+  returnTo?: string;
 }
 type AppState = {
   settings: Settings;
@@ -63,7 +72,7 @@ type AppState = {
   stop: () => void;
   abandon: () => void;
   retry: () => void;
-  question: { text: string; at: number } | null;
+  question: { text: string; at: number; lang?: Lang } | null;
   setQuestion: (text: string) => void;
   caregiverUnlocked: boolean;
   unlock: () => void;
@@ -75,6 +84,14 @@ type AppState = {
   cancelHelp: () => void;
   online: boolean;
   finishBaseline: (text: string) => Attempt | undefined;
+  pause: () => void;
+  resume: () => void;
+  paused: boolean;
+  updateDraft: (fragment: Fragment) => void;
+  markCommunication: (
+    outcome: "intended" | "understood" | "needs_repair" | "declined",
+    partnerUnderstanding?: string,
+  ) => void;
 };
 const AppContext = createContext<AppState | null>(null);
 export const useApp = () => {
@@ -84,12 +101,14 @@ export const useApp = () => {
 };
 export function AppProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
+  const [paused, setPaused] = useState(false);
   const [settings, setSettings] = useState(defaultSettings),
     [ready, setReady] = useState(false),
     [session, setSessionState] = useState<Session | null>(null);
   const [question, setQuestionState] = useState<{
       text: string;
       at: number;
+      lang?: Lang;
     } | null>(null),
     [caregiverUnlocked, setUnlocked] = useState(false);
   const [connected, setConnected] = useState(false),
@@ -98,6 +117,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [online, setOnline] = useState(navigator.onLine);
   const settingsRef = useRef(settings);
   const speechEpoch = useRef(0);
+  const draftWrites = useRef(Promise.resolve());
   const sessionRef = useRef<Session | null>(null),
     abort = useRef<AbortController | null>(null),
     relay = useRef<RelayClient | null>(null),
@@ -110,24 +130,105 @@ export function AppProvider({ children }: { children: ReactNode }) {
   function changeSession(update: (s: Session) => Session) {
     if (sessionRef.current) setSession(update(sessionRef.current));
   }
+  function deliveryText(
+    status: DeliveryStatus | undefined,
+    help: boolean,
+    name = "your caregiver",
+  ) {
+    const l = settingsRef.current.lang;
+    if (status === "queued")
+      return copy(
+        l,
+        help
+          ? "Help queued on this device for up to 60 seconds. No receipt yet."
+          : "Message queued on this device for up to 5 minutes. No receipt yet.",
+        help
+          ? "உதவி செய்தி 60 வினாடிகள் வரை காத்திருக்கும். இன்னும் சேரவில்லை."
+          : "செய்தி 5 நிமிடங்கள் வரை காத்திருக்கும். இன்னும் சேரவில்லை.",
+      );
+    if (status === "delivered")
+      return copy(
+        l,
+        `Shown on ${name}’s phone ✓`,
+        `${name} சாதனத்தில் காட்டப்பட்டது ✓`,
+      );
+    if (status === "expired")
+      return copy(
+        l,
+        "Message expired without a receipt. Tap the sentence to send again if needed.",
+        "செய்தியின் நேரம் முடிந்தது. தேவைப்பட்டால் வாக்கியத்தை மீண்டும் தொடுங்கள்.",
+      );
+    if (status === "cancelled")
+      return copy(
+        l,
+        "Queued message cancelled.",
+        "காத்திருந்த செய்தி ரத்து செய்யப்பட்டது.",
+      );
+    if (status === "sent")
+      return copy(
+        l,
+        help
+          ? "Help sent — waiting for a reply"
+          : "Waiting for delivery receipt…",
+        help
+          ? "உதவி செய்தி அனுப்பப்பட்டது. பதிலுக்குக் காத்திருக்கிறது."
+          : "செய்தி சேர்ந்ததா என்று காத்திருக்கிறது…",
+      );
+    return copy(
+      l,
+      "Not sent — no caregiver connection. You can send an SMS.",
+      "செய்தி அனுப்பப்படவில்லை. குறுஞ்செய்தி அனுப்பலாம்.",
+    );
+  }
   useEffect(() => {
-    void getKV<Settings>("settings").then((s) => {
-      if (s) {
-        const next = { ...defaultSettings, ...s };
-        settingsRef.current = next;
-        setSettings(next);
-      }
-      setReady(true);
-    });
+    let active = true;
+    const initialGeneration = generation.current;
+    void Promise.all([getKV<Settings>("settings"), getKV<unknown>("draft:v1")])
+      .then(([s, storedDraft]) => {
+        if (!active) return;
+        if (s) {
+          const next = { ...defaultSettings, ...s };
+          settingsRef.current = next;
+          setSettings(next);
+        }
+        const draft = parseStoredDraft(storedDraft);
+        if (
+          draft &&
+          generation.current === initialGeneration &&
+          !sessionRef.current
+        ) {
+          setSession(draft);
+          setPaused(true);
+        }
+        setReady(true);
+      })
+      .catch(() => {
+        if (active) setReady(true);
+      });
     const on = () => setOnline(navigator.onLine);
     window.addEventListener("online", on);
     window.addEventListener("offline", on);
     return () => {
+      active = false;
       window.removeEventListener("online", on);
       window.removeEventListener("offline", on);
       audio.stop();
     };
   }, []);
+  useEffect(() => {
+    audio.setRate(settings.speechRate);
+  }, [settings.speechRate]);
+  useEffect(() => {
+    if (!ready) return;
+    const draft =
+      session && !session.attempt.endedAt
+        ? { ...session, loading: false, audioStatus: "", delivery: "" }
+        : null;
+    draftWrites.current = draftWrites.current
+      .catch(() => {})
+      .then(() => (draft ? setKV("draft:v1", draft) : db.kv.delete("draft:v1")))
+      .catch(() => {});
+  }, [session, ready]);
   useEffect(() => {
     const tap = () => {
       const s = sessionRef.current;
@@ -161,9 +262,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
           )
             setHelpAck(`${pair.name} is coming ✓`);
           if (message.type === "ask" && message.text)
-            setQuestionState({ text: message.text, at: message.at });
+            setQuestionState({
+              text: message.text,
+              at: message.at,
+              lang: message.lang,
+            });
         },
         setConnected,
+        (event) => {
+          if (!active || event.id !== pendingReceipt.current) return;
+          changeSession((s) => ({
+            ...s,
+            delivery: deliveryText(
+              event.status,
+              event.type === "help",
+              pair.name,
+            ),
+          }));
+        },
       );
       relay.current = client;
       client.connect();
@@ -181,6 +297,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await setKV("settings", next);
   }
   function begin(fragment: Fragment, preserveAudio = false) {
+    pendingReceipt.current = null;
+    setPaused(false);
     abort.current?.abort();
     generation.current++;
     if (!preserveAudio) {
@@ -207,14 +325,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       objectLabel: fragment.objectLabel,
       objectSource: fragment.objectSource,
       outputLang: context.outputLang,
-      place: settings.place,
+      place: settingsRef.current.place,
       timeBucket: context.now!.timeBucket,
-      demoClock: settings.demo,
+      demoClock: settingsRef.current.demo,
       rounds: [],
       taps: 1,
       offline: !navigator.onLine,
       demoCached: false,
       addresseeRelation: context.addressee?.relation,
+      addresseeId: context.addressee?.id,
     };
     setSession({
       attempt,
@@ -237,7 +356,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     speechEpoch.current++;
     audio.stop();
     abort.current?.abort();
-    abort.current = new AbortController();
+    const requestController = new AbortController();
+    abort.current = requestController;
     const run = ++generation.current;
     const current = sessionRef.current!;
     const input = fragment ?? current.context.fragment;
@@ -252,6 +372,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       question: question ?? undefined,
     });
     if (override) context.outputLang = override;
+    context.rejectedMeaningKeys =
+      round > 1
+        ? [
+            ...new Set(
+              current.attempt.rounds.flatMap((r) =>
+                r.candidates.map(candidateMeaningKey),
+              ),
+            ),
+          ].slice(-30)
+        : [];
     setSession({
       ...current,
       context,
@@ -263,6 +393,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attempt: {
         ...current.attempt,
         fragmentRaw: input.raw,
+        place: context.place ?? settingsRef.current.place,
+        timeBucket: context.now!.timeBucket,
+        addresseeId: context.addressee?.id,
+        addresseeRelation: context.addressee?.relation,
         outputLang: context.outputLang,
         modality: input.modality,
         topicPath: input.topicPath,
@@ -276,24 +410,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
         db.memories.toArray(),
         db.substitutions.toArray(),
       ]);
+      if (run !== generation.current || requestController.signal.aborted)
+        return;
       const ranked = memories
-        .filter((m) => m.lang === context.outputLang)
+        .filter(
+          (m) =>
+            m.confirmed === true &&
+            m.lang === context.outputLang &&
+            m.placeLabel === context.place &&
+            m.addresseeId === settingsRef.current.addressee,
+        )
         .map((m) => ({
           m,
           score: memoryScore(m, input.raw, context.now!.timeBucket),
         }))
+        .filter((r) => r.score > 0)
         .sort((a, b) => b.score - a.score);
-      context.ownExamples = ranked
-        .slice(0, 5)
-        .map(({ m }) => ({
-          fragment: m.fragmentRaw.slice(0, 120),
-          sentence: m.sentence,
-          timeBucket: m.timeBucket,
-        }));
+      context.ownExamples = ranked.slice(0, 5).map(({ m }) => ({
+        fragment: m.fragmentRaw.slice(0, 120),
+        sentence: m.sentence,
+        timeBucket: m.timeBucket,
+      }));
       context.substitutions = substitutions
         .filter(
           (s) =>
-            s.count >= 2 &&
+            s.confirmed === true &&
+            (!s.lang || s.lang === context.outputLang) &&
+            (!s.place || s.place === context.place) &&
+            (!s.addresseeId ||
+              s.addresseeId === settingsRef.current.addressee) &&
             input.raw.toLowerCase().includes(s.heard.toLowerCase()),
         )
         .slice(0, 10);
@@ -306,6 +451,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         model: string,
         latencyMs = 0,
         demoCached = false;
+      const savedPhrases = await db.phrases
+        .where("lang")
+        .equals(context.outputLang)
+        .toArray();
+      if (run !== generation.current || requestController.signal.aborted)
+        return;
+      const trustedCandidates = savedPhrases.map((p) => p.candidate);
       if (pain.length) {
         candidates = pain;
         model = "Pain templates";
@@ -318,36 +470,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
           model = `${cached.model} · CACHED`;
           demoCached = true;
         } else {
-          const phrases = await db.phrases
-            .where("lang")
-            .equals(context.outputLang)
-            .toArray();
-          candidates = phrases
-            .filter((p) =>
-              normalize(`${p.candidate.reading} ${p.candidate.text}`).includes(
-                normalize(input.raw),
-              ),
-            )
-            .slice(0, 3)
-            .map((p) => p.candidate);
-          model = "Saved phrases";
+          candidates = [
+            ...getControlledCandidates(context),
+            ...savedPhrases
+              .filter((p) =>
+                normalize(
+                  `${p.candidate.reading} ${p.candidate.text}`,
+                ).includes(normalize(input.raw)),
+              )
+              .slice(0, 3)
+              .map((p) => p.candidate),
+          ];
+          model = "Offline vocabulary";
         }
       } else {
         try {
-          const result = await getIntent(context, abort.current.signal);
+          const result = await getIntent(context, requestController.signal);
+          if (run !== generation.current || requestController.signal.aborted)
+            return;
           candidates = result.candidates;
           model = result.model;
           latencyMs = result.latencyMs;
           if (settingsRef.current.demo) await saveRehearsal(context, result);
         } catch (error) {
           const cached =
-            settingsRef.current.demo && !abort.current.signal.aborted
+            settingsRef.current.demo && !requestController.signal.aborted
               ? await getRehearsal(context)
               : undefined;
-          if (!cached) throw error;
-          candidates = cached.candidates;
-          model = `${cached.model} · CACHED`;
-          demoCached = true;
+          if (requestController.signal.aborted) throw error;
+          candidates = cached?.candidates ?? getControlledCandidates(context);
+          model = cached ? `${cached.model} · CACHED` : "Offline vocabulary";
+          demoCached = Boolean(cached);
         }
       }
       if (run !== generation.current) return;
@@ -360,26 +513,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
       );
       if (usual && round === 1) {
         const m = usual.m;
-        const stored = await getKV<Candidate>(`memory-candidate:${m.id}`);
-        if (stored)
+        const stored =
+          m.candidate ?? (await getKV<Candidate>(`memory-candidate:${m.id}`));
+        if (stored) {
+          trustedCandidates.push(stored);
           candidates = [
             { ...stored, sig: m.sig },
             ...candidates.filter(
               (c) => normalize(c.text) !== normalize(m.sentence),
             ),
-          ].slice(0, 3);
+          ];
+        }
       }
       if (run !== generation.current) return;
+      const checked = applyCandidatePolicy(candidates, context, {
+        trustedCandidates,
+      });
+      candidates = checked.candidates.slice(0, settingsRef.current.choiceCount);
+      const usualShown = Boolean(
+        usual &&
+        candidates.some(
+          (c) => normalize(c.text) === normalize(usual.m.sentence),
+        ),
+      );
       changeSession((s) => ({
         ...s,
         context,
         candidates,
         model,
-        usual: usual?.m.sentence,
+        usual: usualShown ? usual?.m.sentence : undefined,
         loading: false,
         error: candidates.length
           ? ""
-          : "No saved match yet. Try Topics or My phrases.",
+          : settingsRef.current.lang === "ta"
+            ? "வேறு வார்த்தை அல்லது தலைப்பைத் தேர்ந்தெடுக்கவும்."
+            : "Please add a word, choose a topic, or use My words.",
         attempt: {
           ...s.attempt,
           demoCached,
@@ -391,19 +559,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 ? "template"
                 : model.toLowerCase().includes("mock")
                   ? "mock"
-                  : "llm",
+                  : model.startsWith("ollama:")
+                    ? "local"
+                    : "template",
               model,
               latencyMs,
               candidates,
               noneOfThese: false,
-              usualShown: Boolean(usual),
+              usualShown,
               usualChosen: false,
             },
           ],
         },
       }));
     } catch (error) {
-      if (run !== generation.current || abort.current?.signal.aborted) return;
+      if (run !== generation.current || requestController.signal.aborted)
+        return;
       changeSession((s) => ({
         ...s,
         loading: false,
@@ -431,13 +602,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } else void generate(undefined, (s.context.round + 1) as 2 | 3);
   }
   async function remember(c: Candidate, attempt: Attempt) {
-    const id = `${attempt.outputLang}:${normalize(attempt.fragmentRaw)}:${normalize(c.text)}`;
+    const id = await memoryIdentity(attempt, c);
     await setKV(`memory-candidate:${id}`, c);
     const existing = await db.memories.get(id);
     await db.memories.put({
       id,
       fragmentRaw: attempt.fragmentRaw || c.reading,
-      fragmentKey: normalize(attempt.fragmentRaw),
+      fragmentKey: normalize(attempt.fragmentRaw).slice(0, 120),
       reading: c.reading,
       sentence: c.text,
       lang: attempt.outputLang,
@@ -447,19 +618,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       firstAt: existing?.firstAt ?? Date.now(),
       lastAt: Date.now(),
       sig: c.sig,
+      candidate: c,
+      confirmed:
+        existing?.confirmed === true &&
+        existing.lang === attempt.outputLang &&
+        existing.placeLabel === attempt.place &&
+        existing.addresseeId === attempt.addresseeId &&
+        existing.timeBucket === attempt.timeBucket,
+      addresseeId: attempt.addresseeId,
     });
-    if (c.reading.includes("→")) {
-      const [heard, means] = c.reading.split("→").map((s) => s.trim());
-      const subid = `${normalize(heard)}:${normalize(means)}`;
-      const old = await db.substitutions.get(subid);
-      await db.substitutions.put({
-        id: subid,
-        heard,
-        means,
-        count: (old?.count ?? 0) + 1,
-        lastAt: Date.now(),
-      });
-    }
   }
   function speak(
     c: Candidate,
@@ -468,6 +635,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     langOverride?: Lang,
   ) {
     if (!ticket) return;
+    if (!preview) setPaused(false);
     const utteranceRun = ++speechEpoch.current;
     if (
       !sessionRef.current ||
@@ -482,12 +650,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...s,
         context: { ...s.context, outputLang: lang },
         chosen: c,
+        returnTo:
+          /^\/(words|scenes|stories|passport|draw|sentence|comfort)(\/|$)/.test(
+            location.pathname,
+          )
+            ? `${location.pathname}${location.search}`
+            : s.returnTo,
         audioStatus: "Getting your voice ready…",
         source: "",
         delivery: "",
         attempt: {
           ...s.attempt,
           outputLang: lang,
+          addresseeId: s.context.addressee?.id,
           rounds: s.attempt.rounds.map((r, i) =>
             i === s.attempt.rounds.length - 1
               ? {
@@ -556,23 +731,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           });
           void db.attempts.put(attempt);
           if (source !== "tone") void remember(c, attempt);
-          if (c.urgency !== "emergency")
-            void relay.current
-              ?.send("spoken", {
-                text: c.text,
-                gloss_en: c.gloss_en,
-                lang,
-                urgency: c.urgency,
-              })
-              .then((id) => {
-                pendingReceipt.current = id;
-                changeSession((v) => ({
-                  ...v,
-                  delivery: id
-                    ? "Waiting for delivery receipt…"
-                    : "Not sent — caregiver phone disconnected",
-                }));
-              });
+          if (c.urgency !== "emergency") void sendChosen("spoken");
         },
         onEnd: () => {
           if (!preview && utteranceRun === speechEpoch.current)
@@ -614,22 +773,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     if (c.urgency === "emergency" && !preview) {
       setHelpAck("");
-      void relay.current
-        ?.send("help", {
-          text: c.text,
-          gloss_en: c.gloss_en,
-          lang,
-          urgency: c.urgency,
-        })
-        .then((id) => {
-          pendingReceipt.current = id;
-          changeSession((v) => ({
-            ...v,
-            delivery: id
-              ? "Help sent — waiting for a reply"
-              : "Not sent — no caregiver connection. You can send an SMS.",
-          }));
-        });
+      void sendChosen("help");
+    }
+    async function sendChosen(type: "spoken" | "help") {
+      const client = relay.current;
+      let id: string | null = null;
+      try {
+        id =
+          (await client?.send(type, {
+            text: c.text,
+            gloss_en: c.gloss_en,
+            lang,
+            urgency: c.urgency,
+          })) ?? null;
+      } catch {
+        /* Show an honest local send failure. */
+      }
+      if (utteranceRun !== speechEpoch.current) return;
+      pendingReceipt.current = id;
+      changeSession((v) => ({
+        ...v,
+        delivery: deliveryText(
+          id ? client?.getDeliveryStatus(id) : undefined,
+          type === "help",
+        ),
+      }));
     }
   }
   function finishBaseline(text: string) {
@@ -637,7 +805,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!current) return;
     const attempt: Attempt = {
       ...current.attempt,
-      outputLang: "en",
+      outputLang: settingsRef.current.lang,
       chosenText: text,
       outcome: "spoken",
       endedAt: Date.now(),
@@ -648,6 +816,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return attempt;
   }
   function stop() {
+    window.dispatchEvent(new Event("sollu:stop"));
     speechEpoch.current++;
     audio.stop();
     abort.current?.abort();
@@ -655,6 +824,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     changeSession((s) => ({ ...s, loading: false, audioStatus: "Stopped." }));
   }
   function abandon() {
+    pendingReceipt.current = null;
+    setPaused(false);
     stop();
     const s = sessionRef.current;
     if (s && !s.attempt.endedAt)
@@ -682,11 +853,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
         generate,
         speak,
         finishBaseline,
+        paused,
+        pause: () => {
+          stop();
+          setPaused(true);
+        },
+        resume: () => {
+          setPaused(false);
+          if (sessionRef.current)
+            navigate(
+              sessionRef.current.candidates.length ? "/confirm" : "/type",
+            );
+        },
+        updateDraft: (fragment) => {
+          changeSession((s) => ({
+            ...s,
+            context: { ...s.context, fragment },
+            attempt: { ...s.attempt, fragmentRaw: fragment.raw },
+          }));
+        },
+        markCommunication: (communicationOutcome, partnerUnderstanding) => {
+          const current = sessionRef.current;
+          if (!current) return;
+          const attempt = {
+            ...current.attempt,
+            communicationOutcome,
+            ...(partnerUnderstanding?.trim()
+              ? {
+                  partnerUnderstanding: partnerUnderstanding
+                    .trim()
+                    .slice(0, 500),
+                }
+              : {}),
+          };
+          setSession({ ...current, attempt });
+          void db.attempts.put(attempt);
+        },
         stop,
         abandon,
         retry,
         question,
-        setQuestion: (text) => setQuestionState({ text, at: Date.now() }),
+        setQuestion: (text) =>
+          setQuestionState({
+            text,
+            at: Date.now(),
+            lang: settingsRef.current.lang,
+          }),
         caregiverUnlocked,
         unlock: () => setUnlocked(true),
         lock: () => setUnlocked(false),
@@ -696,7 +908,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         helpAck,
         cancelHelp: () => {
           stop();
-          void relay.current?.send("help_cancel");
+          // The relay serializes this after Help and resolves its own last Help ID, even if encryption is still pending.
+          void relay.current?.send("help_cancel").catch(() => {});
           setHelpAck("Help cancelled.");
         },
         online,

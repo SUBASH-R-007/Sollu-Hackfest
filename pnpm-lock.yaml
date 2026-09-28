@@ -135,6 +135,9 @@ importers:
       react-router-dom:
         specifier: ^7.13.0
         version: 7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      zod:
+        specifier: ^3.24.2
+        version: 3.25.76
     devDependencies:
       '@types/qrcode':
         specifier: ^1.5.6

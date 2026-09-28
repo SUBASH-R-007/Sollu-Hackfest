@@ -18,6 +18,13 @@ export interface Settings {
   highContrast: boolean;
   showGloss: boolean;
   twoStep: boolean;
+  choiceCount: 1 | 2 | 3;
+  tapFilterMs: number;
+  pauseSeconds: number;
+  speechRate: number;
+  quietMode: boolean;
+  speakerGender: "female" | "male" | "unspecified";
+  dialectNote: string;
   stage: boolean;
   demo: boolean;
   demoTime: string;
@@ -91,6 +98,13 @@ export const defaultSettings: Settings = {
   highContrast: false,
   showGloss: true,
   twoStep: false,
+  choiceCount: 3,
+  tapFilterMs: 400,
+  pauseSeconds: 3,
+  speechRate: 0.9,
+  quietMode: false,
+  speakerGender: "unspecified",
+  dialectNote: "",
   stage: false,
   demo: true,
   demoTime: "20:58",

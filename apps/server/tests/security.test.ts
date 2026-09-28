@@ -211,6 +211,8 @@ describe("I-8 cryptographic capabilities", () => {
 });
 
 describe("I-3 / I-4 candidate grounding", () => {
+  const approved = (items: Candidate[], c: typeof context) =>
+    validateCandidates(items, c, { trustedCandidates: items });
   it("returns 3 distinct fixture intents and signs exact text", async () => {
     const { app, headers, device } = await setup();
     const res = await app.inject({
@@ -243,8 +245,10 @@ describe("I-3 / I-4 candidate grounding", () => {
     ];
     for (const t of texts)
       expect(
-        validateCandidates([candidate(t, t, "request", "💊")], context)
-          .candidates,
+        approved([candidate(t, t, "request", "💊")], {
+          ...context,
+          outputLang: /\p{Script=Tamil}/u.test(t) ? "ta" : "en",
+        }).candidates,
       ).toHaveLength(0);
   });
   it("allows a supported number, but never doses", () => {
@@ -253,7 +257,7 @@ describe("I-3 / I-4 candidate grounding", () => {
       outputLang: "en",
     });
     expect(
-      validateCandidates(
+      approved(
         [
           candidate(
             "Please bring two pillows.",
@@ -266,7 +270,7 @@ describe("I-3 / I-4 candidate grounding", () => {
       ).candidates,
     ).toHaveLength(1);
     expect(
-      validateCandidates(
+      approved(
         [
           candidate(
             "Take two Fakeomycin mg.",
@@ -291,7 +295,7 @@ describe("I-3 / I-4 candidate grounding", () => {
     });
     for (const quantity of ["3", "4", "17", "8", "21", "00"])
       expect(
-        validateCandidates(
+        approved(
           [
             candidate(
               `Please bring ${quantity} tablets.`,
@@ -304,11 +308,11 @@ describe("I-3 / I-4 candidate grounding", () => {
         ).candidates,
       ).toHaveLength(0);
     expect(
-      validateCandidates(
+      approved(
         [candidate("Is it 21:00 now?", "Ask current time", "ask time", "🕘")],
         c,
       ).candidates,
-    ).toHaveLength(1);
+    ).toHaveLength(0);
   });
   it("rejects unsupported teens, tens and fractional number words in both enabled languages", () => {
     for (const quantity of [
@@ -330,7 +334,7 @@ describe("I-3 / I-4 candidate grounding", () => {
       "அறுபது",
     ])
       expect(
-        validateCandidates(
+        approved(
           [
             candidate(
               `${quantity} pillows please.`,
@@ -339,7 +343,10 @@ describe("I-3 / I-4 candidate grounding", () => {
               "🛏️",
             ),
           ],
-          context,
+          {
+            ...context,
+            outputLang: /\p{Script=Tamil}/u.test(quantity) ? "ta" : "en",
+          },
         ).candidates,
       ).toHaveLength(0);
     const supported = ContextPacketSchema.parse({
@@ -347,7 +354,7 @@ describe("I-3 / I-4 candidate grounding", () => {
       outputLang: "en",
     });
     expect(
-      validateCandidates(
+      approved(
         [
           candidate(
             "Please bring thirteen pillows.",
@@ -372,21 +379,28 @@ describe("I-3 / I-4 candidate grounding", () => {
       ...context,
       fragment: { modality: "text" as const, raw: "மீனா ph" },
     };
-    expect(validateCandidates([bad], grounded).candidates).toHaveLength(1);
+    const supported = getMockCandidates(grounded);
+    expect(
+      validateCandidates(supported, grounded).candidates.length,
+    ).toBeGreaterThan(0);
+    expect(
+      validateCandidates(supported, grounded).candidates.every(
+        (c) => c.subject === "Meena",
+      ),
+    ).toBe(true);
   });
-  it("does not pad unknown fragments; rejects duplicates, overlong text and malformed reading", () => {
+  it("does not pad unknown fragments; deduplicates and uses canonical reading metadata", () => {
     expect(
       getMockCandidates({
         fragment: { modality: "text", raw: "zzqx" },
         outputLang: "en",
       }),
     ).toEqual([]);
-    const a = candidate(
-      "Bring water please.",
-      "Bring water",
-      "request water",
-      "💧",
-    );
+    const water = ContextPacketSchema.parse({
+      fragment: { modality: "text", raw: "water" },
+      outputLang: "en",
+    });
+    const a = getMockCandidates(water)[0];
     expect(
       validateCandidates(
         [
@@ -394,34 +408,34 @@ describe("I-3 / I-4 candidate grounding", () => {
           a,
           { ...a, text: "Could you bring water?", intent: "request water now" },
         ],
-        context,
+        water,
       ).candidates,
     ).toHaveLength(1);
-    expect(
-      validateCandidates(
-        [
-          { ...a, text: "x".repeat(91) },
-          { ...a, reading: "table → " },
-          { ...a, reading: "→ tablet" },
-        ],
-        context,
-      ).candidates,
-    ).toHaveLength(0);
+    const cleaned = approved(
+      [
+        { ...a, text: "x".repeat(91) },
+        { ...a, reading: "table → " },
+        { ...a, reading: "→ tablet" },
+      ],
+      water,
+    ).candidates;
+    expect(cleaned).toHaveLength(1);
+    expect(cleaned[0].reading).toBe(a.reading);
+    expect(cleaned[0].text).toBe(a.text);
   });
-  it("fixes missing keywords and normalizes urgency and punctuation", () => {
-    const c = candidate(
-      '"Water please" 💧',
-      "Water please",
-      "request water",
-      "💧",
-    );
+  it("uses canonical keyword, urgency and wording instead of trusting model metadata", () => {
+    const water = ContextPacketSchema.parse({
+      fragment: { modality: "text", raw: "water" },
+      outputLang: "en",
+    });
+    const c = getMockCandidates(water)[0];
     const result = validateCandidates(
-      [{ ...c, keyword: "missing", urgency: "ELEVATED" }],
-      context,
+      [{ ...c, keyword: "missing", urgency: "emergency" }],
+      water,
     ).candidates[0]!;
-    expect(result.text).toBe("Water please");
+    expect(result.text).toBe(c.text);
     expect(result.text).toContain(result.keyword);
-    expect(result.urgency).toBe("elevated");
+    expect(result.urgency).toBe(c.urgency);
   });
   it("offers reinterpretation after rejected table candidates without repeating", () => {
     const first = getMockCandidates({
@@ -463,7 +477,8 @@ describe("I-3 / I-4 candidate grounding", () => {
         fragment: { modality: "topic", raw: item, topicPath: ["drink", item] },
         outputLang: "en",
       });
-      expect(c).toHaveLength(3);
+      expect(c.length).toBeGreaterThan(0);
+      expect(c.length).toBeLessThanOrEqual(3);
       expect(c[0]?.text.toLowerCase()).toContain(item);
     }
     expect(
@@ -479,9 +494,9 @@ describe("I-3 / I-4 candidate grounding", () => {
   });
   it("prompt includes language, trust boundary and rejected-round constraints", () => {
     expect(buildPrompt(context)).toContain("untrusted data");
-    expect(buildPrompt(context)).toContain("Tamil script");
+    expect(buildPrompt(context)).toContain("Output language: Tamil");
     expect(buildPrompt({ ...context, outputLang: "en", round: 2 })).toContain(
-      "do not repeat",
+      "must not repeat",
     );
   });
 });

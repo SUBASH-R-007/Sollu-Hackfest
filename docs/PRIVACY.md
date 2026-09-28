@@ -1,12 +1,16 @@
 # Privacy and consent implementation notes
 
-Updated 2026-09-27. This is an engineering data-flow record and a pilot review checklist, not a statement of legal compliance. No clinic pilot, legal review or provider retention audit has been completed. Current implementation and acceptance evidence are in [../PROGRESS.md](../PROGRESS.md); provider facts are in [PROVIDERS.md](PROVIDERS.md).
+Updated 2026-09-28. This is an engineering data-flow record and a pilot review checklist, not a statement of legal compliance. No clinic pilot, legal review or provider retention audit has been completed. Current implementation and acceptance evidence are in [../PROGRESS.md](../PROGRESS.md); provider facts are in [PROVIDERS.md](PROVIDERS.md).
 
 ## Plain-language notice
 
 Sollu helps a person choose words to communicate. The person decides which sentence is spoken. It is not a diagnosis, treatment tool or emergency service.
 
 Your profile, people, routine, phrases, consent records, recorded phrases, rehearsal suggestions and communication history are saved in this browser's IndexedDB storage. Clearing site data can remove them. Anyone who can use the unlocked browser may be able to read this information. The caregiver PIN prevents accidental changes; it is not disk encryption or a separate user account.
+
+Personal word cards, aliases, descriptions, photos, conversations and communication passports also stay in IndexedDB. Photos are decoded and resampled locally before storage; selecting a scene does not send the photo to a model. Drawings remain in memory across Pause and clear on reload. Draft message recovery is limited to 24 hours and never restores playback authorization or old suggested sentences. The encrypted backup covers personal cards/photos, consented recordings, phrases, history and unapproved imported mappings; it excludes settings, PIN, device credentials, pairing keys and relay queues. A passphrase is required to decrypt, preview and import. Import adds new IDs without overwriting existing entries.
+
+The patient outbox stores encrypted frames scoped to its pairing. Help expires after 60 seconds and ordinary messages after five minutes. Retries keep the same ID, and repeated receipt handling does not replay alarms. A cancelled queued Help is removed and a referenced cancellation is queued. Both pages and the local relay still need to be available; no background push delivery is promised. A person may explicitly record whether their partner understood; an optional partner interpretation stays in local history and is excluded from study-mode CSV.
 
 The statement “only the fragment and context packet leave the device” is incomplete. What leaves depends on the selected mode:
 

@@ -40,6 +40,7 @@ export class AudioController {
   private pending: AbortController | undefined;
   private alertsEnabled = false;
   private volume = 1;
+  private rate = 0.9;
   private cancelPendingWork = new Set<() => void>();
 
   constructor(
@@ -64,6 +65,9 @@ export class AudioController {
 
   setVolume(value: number): void {
     this.volume = Math.max(0.1, Math.min(1, value));
+  }
+  setRate(value: number): void {
+    this.rate = Math.max(0.6, Math.min(1.2, value));
   }
 
   /** Register synthesis/prefetch queues so Stop and a newer tap cancel their pending work too. */
@@ -115,6 +119,7 @@ export class AudioController {
       signal: controller.signal,
       deadline: ticket.issuedAt + TAP_WINDOW_MS,
       volume: channel === "preview" ? this.volume * 0.65 : this.volume,
+      rate: this.rate,
       onStart: (source) => {
         start = { source, atMs: this.output.now() };
         options.onStart?.(start);

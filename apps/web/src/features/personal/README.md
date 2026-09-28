@@ -1,0 +1,15 @@
+# Local personal communication tools
+
+`pages/Support.tsx` exports `ToolsPage`, `WordsPage`, `ScenesPage`, `StoriesPage`, `PassportPage`, `DrawPage`, and `BackupPanel`. Patient routes are `/tools`, `/words`, `/scenes`, `/stories`, `/passport`, and `/draw`. The hub also links to the separate repair, comfort and sentence-builder pages.
+
+Personal cards use `db.kv["personal:v1"]`. Card edits require the unlocked caregiver session and produce a pending revision. The person reviews the exact content and approves that revision before it appears in the speaking picker. A later edit clears approval; stale review and editor revisions are rejected. Pinning and caregiver hide/show change placement only. Alternative names and description hints help find a saved word; they never silently substitute another spoken sentence. Hidden words remain local and can be managed while settings are unlocked.
+
+Scenes contain local JPEG/PNG/WebP blobs, manually labelled choices and manually placed numbered targets. The same choices always have large list buttons. Uploaded images are decoded and resampled locally to remove metadata; no image is sent to a provider. A scene selection only displays a full sentence. The separate final speech button includes that exact sentence and uses the central audio gate. Personal phrases can use existing consented exact-sentence recordings through app state. They are not generative voice clones.
+
+Story and scene selection, public vocabulary entry IDs and story line positions are encoded in route query parameters so the speaking page can return to the same choice. Typed search text is not put in the URL. Drawings are not interpreted. They survive in memory during the current visit, including Pause; reloading clears them. Drawing has a typing/word-picker alternative. Printed stories and communication passports use only approved content.
+
+`exportEncryptedBackup(passphrase)` creates a local AES-256-GCM file with a random 96-bit IV and a PBKDF2-SHA-256 derived key (310,000 iterations, random 128-bit salt). `inspectEncryptedBackup(blob, passphrase)` decrypts and validates without importing, and returns the preview required by `mergeEncryptedBackup(preview, caregiverUnlocked)`.
+
+Backups cover personal cards/photos, saved phrases, recorded audio with its consent, attempts, memories and substitutions. They intentionally exclude PIN, app settings, device credentials, phone pairing keys and relay queues. Imports add new IDs, skip existing IDs, require recording/consent agreement, remove old proof signatures, reset imported memories/corrections to unapproved, and return personal cards to patient review. The UI lists collections and allows inspecting card text and recording consent before import. Limits: 25 MB decoded JSON and 40 MB encrypted file; personal images at most 2 MB each and recordings at most 10 MB each. A lost passphrase cannot be recovered.
+
+Tamil wording and the usefulness of these layouts still require native-speaker and aphasia-user/SLP review. The tools make no clinical improvement claim.

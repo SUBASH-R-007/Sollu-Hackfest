@@ -30,6 +30,7 @@ export default function Care() {
   const [error, setError] = useState("");
   const [feed, setFeed] = useState<RelayMessage[]>([]);
   const [help, setHelp] = useState<RelayMessage | null>(null);
+  const activeHelp = useRef<string | null>(null);
   const [alerts, setAlerts] = useState(false);
   const [alertStatus, setAlertStatus] = useState("");
   const [replyStatus, setReplyStatus] = useState("");
@@ -60,10 +61,10 @@ export default function Care() {
             if (!active || message.from.role !== "patient") return;
             if (message.type === "spoken" || message.type === "help") {
               setFeed((items) => [message, ...items].slice(0, 100));
-              // A delivered receipt confirms this page received and accepted the message, not an acknowledgement.
-              void client?.send("delivered", { refId: message.id });
+              // RelayClient acknowledges accepted messages, including duplicates after reconnect.
             }
             if (message.type === "help") {
+              activeHelp.current = message.id;
               setHelp(message);
               setReplyStatus("");
               if (alertsReady.current) {
@@ -81,7 +82,11 @@ export default function Care() {
                 });
               }
             }
-            if (message.type === "help_cancel") {
+            if (
+              message.type === "help_cancel" &&
+              message.refId === activeHelp.current
+            ) {
+              activeHelp.current = null;
               audio.stop();
               navigator.vibrate?.(0);
               setHelp(null);
@@ -309,6 +314,16 @@ export default function Care() {
                   <ShieldCheck size={16} aria-hidden="true" />
                   Received on this device
                 </span>
+                {Date.now() - latest.at > 10000 && (
+                  <p className="notice">
+                    Delayed message · chosen at {formatTime(latest.at)}. Check
+                    with the person that it is still relevant.
+                  </p>
+                )}
+                <p className="muted">
+                  Receiving a message does not confirm understanding. Say back
+                  the meaning and let the person confirm or correct it.
+                </p>
               </>
             ) : (
               <Empty icon="💬" title="Their words will appear here">

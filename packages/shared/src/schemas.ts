@@ -30,6 +30,31 @@ export const CandidateSchema = z.object({
   icon: z.string().max(24),
   urgency: UrgencySchema,
   sig: z.string().max(2048).optional(),
+  lang: LangSchema.optional(),
+  intentId: z.string().min(1).max(120).optional(),
+  speechAct: z
+    .enum(["request", "refuse", "question", "report", "repair", "social"])
+    .optional(),
+  polarity: z.enum(["positive", "negative", "uncertain"]).optional(),
+  subject: short.optional(),
+  objectId: short.optional(),
+  bodyPart: short.optional(),
+  side: z.enum(["left", "right"]).optional(),
+  timeScope: z.enum(["now", "past", "future", "unspecified"]).optional(),
+  requestedAttribute: short.optional(),
+  evidenceRefs: z.array(z.string().max(160)).max(20).optional(),
+  templateVersion: z.string().max(40).optional(),
+  source: z
+    .enum([
+      "catalog",
+      "template",
+      "mock",
+      "local",
+      "memory",
+      "personal",
+      "cache",
+    ])
+    .optional(),
 });
 export type Candidate = z.infer<typeof CandidateSchema>;
 export const FragmentSchema = z.object({
@@ -78,6 +103,7 @@ export const ContextPacketSchema = z.object({
     .optional(),
   addressee: z
     .object({
+      id: short.optional(),
       name: short,
       relation: short,
       register: z.enum(["respectful", "familiar"]),
@@ -123,7 +149,17 @@ export const ContextPacketSchema = z.object({
     .optional(),
   substitutions: z
     .array(
-      z.object({ heard: short, means: short, count: z.number().int().min(2) }),
+      z.object({
+        heard: short,
+        means: short,
+        count: z.number().int().min(0),
+        confirmed: z.boolean().optional(),
+        lang: LangSchema.optional(),
+        place: z
+          .enum(["home", "hospital", "clinic", "outside", "other"])
+          .optional(),
+        addresseeId: short.optional(),
+      }),
     )
     .max(10)
     .optional(),
@@ -135,6 +171,7 @@ export const ContextPacketSchema = z.object({
     .optional(),
   round: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(1),
   exclude: z.array(sentence).max(9).default([]),
+  rejectedMeaningKeys: z.array(z.string().max(800)).max(30).optional(),
 });
 export type ContextPacket = z.infer<typeof ContextPacketSchema>;
 export type ContextInput = z.input<typeof ContextPacketSchema>;
@@ -284,6 +321,7 @@ export const AttemptSchema = z.object({
   objectLabel: z.string().optional(),
   objectSource: FragmentSchema.shape.objectSource,
   addresseeRelation: z.string().optional(),
+  addresseeId: short.optional(),
   outputLang: LangSchema,
   place: z.string(),
   timeBucket: TimeBucketSchema,
@@ -293,11 +331,15 @@ export const AttemptSchema = z.object({
   chosenGloss: z.string().optional(),
   chosenIntent: z.string().optional(),
   chosenReading: z.string().optional(),
+  partnerUnderstanding: sentence.optional(),
   taps: z.number(),
   timeToSpeechMs: z.number().optional(),
   firstAudioMs: z.number().optional(),
   offline: z.boolean(),
   demoCached: z.boolean(),
+  communicationOutcome: z
+    .enum(["intended", "understood", "needs_repair", "declined", "unconfirmed"])
+    .optional(),
 });
 export type Attempt = z.infer<typeof AttemptSchema>;
 export const MemoryEntrySchema = z.object({
@@ -314,6 +356,8 @@ export const MemoryEntrySchema = z.object({
   firstAt: z.number(),
   lastAt: z.number(),
   sig: z.string().optional(),
+  confirmed: z.boolean().optional(),
+  candidate: CandidateSchema.optional(),
 });
 export type MemoryEntry = z.infer<typeof MemoryEntrySchema>;
 export const WordSubstitutionSchema = z.object({
@@ -322,6 +366,10 @@ export const WordSubstitutionSchema = z.object({
   means: short,
   count: z.number(),
   lastAt: z.number(),
+  confirmed: z.boolean().optional(),
+  lang: LangSchema.optional(),
+  place: z.enum(["home", "hospital", "clinic", "outside", "other"]).optional(),
+  addresseeId: short.optional(),
 });
 export type WordSubstitution = z.infer<typeof WordSubstitutionSchema>;
 export const RelayEnvelopeSchema = z

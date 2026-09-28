@@ -22,7 +22,7 @@ Updated 2026-09-27. Hosting is deferred by the user. Run on a laptop with the lo
 | 2:10–2:45 | Camera points at bottle | Show “bottle” label and water candidates. Never imply generic detector can recognise the tablet box. |
 | 2:45–3:25 | Select Dr. Rao; Topics → Pain → shoulder → left | English templates; choose intensity. Amber is urgency styling, not a diagnosis. With free device speech, state that the voice is generic. |
 | 3:25–4:05 | Partner question “மதியம் என்ன சாப்பிடணும்?”; fragment “ரசம்” | Show active question and answer candidates. If microphone unavailable, type the question and describe the fallback. |
-| 4:05–4:45 | “table” → None of these → reinterpretation | Choose only if it matches the intended meaning. Show the rejected set in the communication log. Do not claim learned substitutions unless the full learning feature is active. |
+| 4:05–4:45 | “table” → None of these → clarify | Explain that rejecting the table meaning does not authorize an invented medicine meaning. Add a clearer word or use the repair tool. Demonstrate a substitution only after explicitly reviewing and approving that exact mapping in Privacy settings. |
 | 4:45–5:30 | Tap exact Help phrase; caregiver chooses “I'm coming” | The patient speaks only after their own tap; caregiver acknowledgement updates text, never remotely starts patient speech. Receipt/ack status must be real. Cancel with “It was a mistake”. |
 | 5:30–6:00 | Therapist-lite and privacy | Show today's actual attempts and CSV export. Explain what stays in the browser and which enabled services receive data. |
 

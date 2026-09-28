@@ -86,9 +86,53 @@ describe("context timing and grounding", () => {
         now,
         question: { text: "What would you like?", at: now - 60_000 },
         substitutions: [
-          { id: "a", heard: "table", means: "tablet", count: 2, lastAt: now },
-          { id: "b", heard: "fan", means: "phone", count: 5, lastAt: now },
+          {
+            id: "a",
+            heard: "table",
+            means: "tablet",
+            count: 2,
+            lastAt: now,
+            confirmed: true,
+            lang: "en",
+            addresseeId: "rao",
+            place: "home",
+          },
+          {
+            id: "b",
+            heard: "fan",
+            means: "phone",
+            count: 5,
+            lastAt: now,
+            confirmed: true,
+          },
           { id: "c", heard: "table", means: "cable", count: 1, lastAt: now },
+          {
+            id: "d",
+            heard: "table",
+            means: "cable",
+            count: 5,
+            lastAt: now,
+            confirmed: true,
+            lang: "ta",
+          },
+          {
+            id: "e",
+            heard: "table",
+            means: "cable",
+            count: 5,
+            lastAt: now,
+            confirmed: true,
+            place: "clinic",
+          },
+          {
+            id: "f",
+            heard: "table",
+            means: "cable",
+            count: 5,
+            lastAt: now,
+            confirmed: true,
+            addresseeId: "priya",
+          },
         ],
       },
     );
@@ -132,5 +176,45 @@ describe("context timing and grounding", () => {
         now,
       ),
     ).toBeCloseTo(6.5 + 0.5 * Math.log(4));
+  });
+  it("includes only confirmed, relevant memories in the current language, place and contact", () => {
+    const now = new Date(2026, 8, 27, 20, 58).getTime();
+    const approved: MemoryEntry = {
+      id: "approved",
+      fragmentRaw: "water",
+      fragmentKey: "water",
+      reading: "water",
+      sentence: "Please give me water.",
+      lang: "en",
+      timeBucket: "night",
+      placeLabel: "home",
+      addresseeId: "rao",
+      confirmed: true,
+      count: 3,
+      firstAt: now,
+      lastAt: now,
+    };
+    const memories: MemoryEntry[] = [
+      { ...approved, id: "unapproved", confirmed: undefined },
+      {
+        ...approved,
+        id: "unrelated",
+        fragmentRaw: "fan",
+        fragmentKey: "fan",
+        reading: "fan",
+      },
+      { ...approved, id: "other-language", lang: "ta" },
+      { ...approved, id: "other-place", placeLabel: "clinic" },
+      { ...approved, id: "other-contact", addresseeId: "priya" },
+      approved,
+    ];
+    const packet = buildContext(
+      { ...settings, addressee: "rao" },
+      { modality: "text", raw: "water" },
+      { now, memories },
+    );
+    expect(packet.ownExamples).toEqual([
+      { fragment: "water", sentence: approved.sentence, timeBucket: "night" },
+    ]);
   });
 });

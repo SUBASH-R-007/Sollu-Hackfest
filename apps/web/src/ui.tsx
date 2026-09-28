@@ -9,6 +9,7 @@ import {
 import { ArrowLeft, ArrowUpRight, Heart, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "./state";
+import { uiText, copy } from "./lib/copy";
 type Activation =
   globalThis.PointerEvent | globalThis.KeyboardEvent | globalThis.MouseEvent;
 export function TapButton({
@@ -21,13 +22,18 @@ export function TapButton({
   children: ReactNode;
 }) {
   const last = useRef(Number.NEGATIVE_INFINITY);
+  const { settings } = useApp();
   function activate(
     e:
       | PointerEvent<HTMLButtonElement>
       | KeyboardEvent<HTMLButtonElement>
       | MouseEvent<HTMLButtonElement>,
   ) {
-    if (props.disabled || performance.now() - last.current < 400) return;
+    if (
+      props.disabled ||
+      performance.now() - last.current < settings.tapFilterMs
+    )
+      return;
     last.current = performance.now();
     window.dispatchEvent(new Event("sollu:tap"));
     onActivate?.(e.nativeEvent);
@@ -67,7 +73,7 @@ export function Back({
   label?: string;
 }) {
   const navigate = useNavigate();
-  const { abandon } = useApp();
+  const { abandon, settings } = useApp();
   return (
     <TapButton
       className="back-button"
@@ -77,7 +83,7 @@ export function Back({
       }}
     >
       <ArrowLeft size={22} />
-      <span>{label}</span>
+      <span>{uiText(settings.lang, label)}</span>
     </TapButton>
   );
 }
@@ -92,12 +98,15 @@ export function PageTitle({
   subtitle?: string;
   action?: ReactNode;
 }) {
+  const { settings } = useApp();
   return (
     <div className="page-title">
       <div>
-        {eyebrow && <div className="eyebrow">{eyebrow}</div>}
-        <h1>{title}</h1>
-        {subtitle && <p>{subtitle}</p>}
+        {eyebrow && settings.lang !== "ta" && (
+          <div className="eyebrow">{eyebrow}</div>
+        )}
+        <h1>{uiText(settings.lang, title)}</h1>
+        {subtitle && <p>{uiText(settings.lang, subtitle)}</p>}
       </div>
       {action}
     </div>
@@ -112,11 +121,16 @@ export function Empty({
   title: string;
   children: ReactNode;
 }) {
+  const { settings } = useApp();
   return (
     <div className="empty-state">
       <span>{icon}</span>
-      <h2>{title}</h2>
-      <p>{children}</p>
+      <h2>{uiText(settings.lang, title)}</h2>
+      <p>
+        {typeof children === "string"
+          ? uiText(settings.lang, children)
+          : children}
+      </p>
     </div>
   );
 }
@@ -135,19 +149,25 @@ export function Brand() {
   );
 }
 export function FooterNote() {
+  const { settings } = useApp();
   return (
     <div className="footer-note">
       <Heart size={15} />
-      <span>Your words. At your pace.</span>
+      <span>{uiText(settings.lang, "Your words. At your pace.")}</span>
       <span className="footer-credit">Made with care, by team echo</span>
     </div>
   );
 }
 export function Hint({ children }: { children: ReactNode }) {
+  const { settings } = useApp();
   return (
     <div className="hint">
       <Sparkles size={19} />
-      <span>{children}</span>
+      <span>
+        {typeof children === "string"
+          ? uiText(settings.lang, children)
+          : children}
+      </span>
     </div>
   );
 }
@@ -166,6 +186,7 @@ export function Tile({
   tone: string;
   onActivate: (event: Activation) => void;
 }) {
+  const { settings } = useApp();
   return (
     <TapButton className={`big-tile ${tone}`} onActivate={onActivate}>
       <span className="tile-top">
@@ -173,9 +194,12 @@ export function Tile({
         <ArrowUpRight size={25} className="tile-arrow" />
       </span>
       <span className="tile-title">
-        {title} {tamil && <span lang="ta">{tamil}</span>}
+        {copy(settings.lang, title, tamil ?? title)}{" "}
+        {tamil && settings.lang === "en" && <span lang="ta">{tamil}</span>}
       </span>
-      {detail && <span className="tile-detail">{detail}</span>}
+      {detail && !settings.quietMode && (
+        <span className="tile-detail">{uiText(settings.lang, detail)}</span>
+      )}
     </TapButton>
   );
 }

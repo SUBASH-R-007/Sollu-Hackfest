@@ -38,6 +38,19 @@ Date: 2026-09-27. [SPEC.md](SPEC.md) remains unchanged. This document records th
 - ElevenLabs currently lists Starter at US$6 monthly before taxes with Instant Voice Cloning. Its free tier is not an own-voice cloning substitute. History deletion is not equivalent to an enterprise zero-retention arrangement.
 - Browser speech synthesis may use a remote voice (`localService: false`). Only downloaded/local voices or cached recordings support a reliable offline claim.
 
-## Deferred acceptance
+## Approved improvements — 28 September 2026
+
+The user's “go” approved phases 1–5 of [APHASIA_IMPROVEMENT_PLAN.md](APHASIA_IMPROVEMENT_PLAN.md), including vocabulary expansion. These decisions supersede the initial MVP limits where explicitly implemented:
+
+- Shared catalog/policy controls all generated, offline, cache and memory suggestions. Local Ollama selects allowed meaning IDs; unsupported input can produce zero choices. No mandatory three-card padding.
+- Tamil patient controls and 124 bilingual message meanings; personal words support aliases, descriptions, pin/hide/edit/delete. All Tamil wording remains pending native review. The builder deliberately covers six everyday objects with request/refusal; it is not a general Tamil grammar engine.
+- Patient approval is required for personal cards and word mappings. Imported mappings return to unapproved state; memory approval cannot move across listener/place/time scopes. No model-written reading automatically creates a substitution.
+- Optional access preferences, stable support controls, pause/resume, repair and partner-understanding recording. Speaking, receipt and verified shared meaning are separate observations.
+- Personal photos use authored hotspots and equivalent list choices. They do not claim learned object recognition. Drawing is a communication surface without AI interpretation.
+- Encrypted local backup and a bounded, expiring ciphertext outbox are implemented. They are not remote storage, background push, or an emergency service. Pairing credentials/PIN are excluded from backup.
+- Baseline can use Tamil or English. Its token concatenation is not grammar-matched or clinically validated; meaningful comparison requires a personalized same-language board and counterbalanced tasks in the human protocol.
+- The installed-model benchmark verifies honest fallback, not model quality. Human/SLP/native-language acceptance and supervised therapy remain separate.
+
+## Remaining acceptance
 
 Real cloud generation, paid cloning, actual provider deletion, native-speaker sign-off, phone accessibility, real STT recordings and phone performance remain separate checks. All full M7–M11 work and any unimplemented M0–M6 item remain visible in [../PROGRESS.md](../PROGRESS.md).
