@@ -29,6 +29,10 @@ export interface Settings {
   sentenceLength: 8 | 12 | 18;
   shareRecentContext: boolean;
   sharePersonalContext: boolean;
+  useTimeContext: boolean;
+  usePlaceContext: boolean;
+  useRoutineContext: boolean;
+  routineWindowMinutes: 15 | 45 | 90;
   communicationPreferences: string;
   reducedMotion: boolean;
   preferredInput: "speech" | "type" | "topics" | "camera";
@@ -116,6 +120,10 @@ export const defaultSettings: Settings = {
   sentenceLength: 12,
   shareRecentContext: false,
   sharePersonalContext: false,
+  useTimeContext: true,
+  usePlaceContext: true,
+  useRoutineContext: true,
+  routineWindowMinutes: 45,
   communicationPreferences: "",
   reducedMotion: false,
   preferredInput: "speech",
@@ -181,6 +189,7 @@ export const defaultSettings: Settings = {
     days: [0, 1, 2, 3, 4, 5, 6],
     source: "caregiver",
     confirmed: true,
+    isSample: true,
   })) as RoutineItem[],
   vocabulary: [
     "filter coffee",

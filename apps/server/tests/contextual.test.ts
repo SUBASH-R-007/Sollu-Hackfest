@@ -6,6 +6,7 @@ import {
   getMockCandidates,
   modelContextKey,
   resolveGeneratedSentences,
+  modelEvidenceSources,
   type ContextPacket,
   type GeneratedSentence,
 } from "@sollu/shared";
@@ -59,6 +60,416 @@ const run = (c: ContextPacket, value: unknown) =>
   resolveGeneratedSentences(value, c);
 
 describe("contextual sentence generation", () => {
+  const routineContext = (
+    raw = "want usual drink",
+    extra: Partial<ContextPacket> = {},
+  ) =>
+    context(raw, {
+      now: { localTime: "08:00", weekday: 1, timeBucket: "morning" },
+      place: "home",
+      routine: {
+        dueNow: [
+          {
+            label: "Morning coffee",
+            topic: "drink",
+            time: "08:05",
+            place: "home",
+          },
+        ],
+        justPassed: [],
+      },
+      ...extra,
+    });
+  const routineDraft = (
+    c: ContextPacket,
+    text = "I want to drink my usual coffee.",
+  ) =>
+    sentence(c, {
+      text,
+      gloss_en: text,
+      evidence: [
+        { path: "fragment.raw", quote: c.fragment.raw, translation_en: "" },
+        { path: "routine.dueNow.0.label", quote: "coffee", translation_en: "" },
+      ],
+    });
+
+  it("blocks mislabeled clinical and unfamiliar routine words without breaking recognized full labels", () => {
+    for (const [label, quote] of [
+      ["Night tablets", "tablets"],
+      ["FictionalRemedy", "FictionalRemedy"],
+      ["Coffee FictionalRemedy", "FictionalRemedy"],
+      ["Coffee FictionalRemedy", "Coffee FictionalRemedy"],
+    ]) {
+      const c = routineContext("want drink", {
+        routine: {
+          dueNow: [{ label, topic: "drink", time: "08:00" }],
+          justPassed: [],
+        },
+      });
+      const draft = routineDraft(c, `I want ${quote}.`);
+      draft.evidence[1].quote = quote;
+      expect(run(c, response(draft)).candidates).toEqual([]);
+    }
+    const c = routineContext("want usual drink"),
+      draft = routineDraft(c, "I want my usual morning coffee.");
+    draft.evidence[1].quote = "Morning coffee";
+    expect(run(c, response(draft)).candidates).toHaveLength(1);
+  });
+
+  it("rejects borrowing an evening or home routine when the patient explicitly says morning or clinic", () => {
+    const morning = routineContext("want usual morning drink", {
+      now: { localTime: "20:00", weekday: 1, timeBucket: "night" },
+      routine: {
+        dueNow: [
+          {
+            label: "Evening coffee",
+            topic: "drink",
+            time: "20:00",
+            place: "home",
+          },
+        ],
+        justPassed: [],
+      },
+    });
+    expect(
+      run(
+        morning,
+        response(routineDraft(morning, "I want my usual morning coffee.")),
+      ).candidates,
+    ).toEqual([]);
+    const clinic = routineContext("want usual drink at clinic");
+    expect(
+      run(
+        clinic,
+        response(routineDraft(clinic, "I want my usual coffee at clinic.")),
+      ).candidates,
+    ).toEqual([]);
+  });
+
+  it.each(["drink", "want drink", "I would like a drink"])(
+    "frames a context-derived draft from an underspecified category: %s",
+    async (raw) => {
+      const c = routineContext(raw),
+        text = "I would like coffee.";
+      const adapter = vi
+        .fn()
+        .mockResolvedValue(response(routineDraft(c, text)));
+      const result = await selectIntent(
+        c,
+        config,
+        undefined,
+        undefined,
+        adapter,
+      );
+      expect(result.fallback).toBe(false);
+      expect(result.candidates.map((candidate) => candidate.text)).toEqual([
+        text,
+      ]);
+      expect(
+        JSON.parse(adapter.mock.calls[0][1].user).currentSituation
+          .genericReference,
+      ).toBe(true);
+    },
+  );
+
+  it("resolves a generic food category to a single specific meal routine", () => {
+    const c = routineContext("want food", {
+      routine: {
+        dueNow: [
+          {
+            label: "Morning idli",
+            topic: "food",
+            time: "08:00",
+            place: "home",
+          },
+        ],
+        justPassed: [],
+      },
+    });
+    const text = "I want idli.",
+      draft = sentence(c, {
+        text,
+        gloss_en: text,
+        evidence: [
+          { path: "fragment.raw", quote: "want food", translation_en: "" },
+          { path: "routine.dueNow.0.label", quote: "idli", translation_en: "" },
+        ],
+      });
+    expect(run(c, response(draft)).candidates).toHaveLength(1);
+    expect(
+      run({ ...c, routine: undefined }, response(draft)).candidates,
+    ).toEqual([]);
+  });
+
+  it("preserves generic refusal scope and uncertainty rather than inventing a specific positive request", () => {
+    const no = routineContext("no drink"),
+      maybe = routineContext("might want drink");
+    expect(
+      run(no, response(routineDraft(no, "I want coffee."))).candidates,
+    ).toEqual([]);
+    expect(
+      run(
+        no,
+        response({
+          ...routineDraft(no, "I do not want coffee."),
+          polarity: "negative",
+          speechAct: "refuse",
+        }),
+      ).candidates,
+    ).toEqual([]);
+    expect(
+      run(maybe, response(routineDraft(maybe, "I want coffee."))).candidates,
+    ).toEqual([]);
+    expect(
+      run(
+        maybe,
+        response({
+          ...routineDraft(maybe, "I might want coffee."),
+          polarity: "uncertain",
+        }),
+      ).candidates,
+    ).toHaveLength(1);
+  });
+
+  it("does not resolve a generic category when matching routines are ambiguous", () => {
+    const c = routineContext("drink", {
+      routine: {
+        dueNow: [
+          { label: "Coffee", topic: "drink", time: "08:00" },
+          { label: "Tea", topic: "drink", time: "08:05" },
+        ],
+        justPassed: [],
+      },
+    });
+    const draft = routineDraft(c, "I want coffee.");
+    draft.evidence[1].quote = "Coffee";
+    expect(run(c, response(draft)).candidates).toEqual([]);
+  });
+
+  it("uses current time, selected place and a relevant routine to frame a grounded usual-drink request", async () => {
+    const c = routineContext();
+    const adapter = vi.fn().mockResolvedValue(response(routineDraft(c)));
+    const result = await selectIntent(c, config, undefined, undefined, adapter);
+    expect(result.fallback).toBe(false);
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0].text).toBe("I want to drink my usual coffee.");
+    const prompt = JSON.parse(adapter.mock.calls[0][1].user);
+    expect(prompt.currentSituation).toMatchObject({
+      clock: { localTime: "08:00" },
+      place: "home",
+      routineResolution: "single",
+      routines: [
+        { label: "Morning coffee", minutesAway: 5, mayResolveReference: true },
+      ],
+    });
+    expect(prompt.evidenceSources["routine.dueNow.0.label"]).toBe(
+      "Morning coffee",
+    );
+    expect(prompt.evidenceSources["routine.dueNow.0.time"]).toBeUndefined();
+  });
+
+  it("rejects contextual additions when routines are absent, conflicting, irrelevant or in the wrong place", () => {
+    const alternatives: Partial<ContextPacket>[] = [
+      { routine: undefined },
+      {
+        routine: {
+          dueNow: [
+            { label: "Morning coffee", topic: "drink", time: "08:05" },
+            { label: "Tea break", topic: "drink", time: "08:05" },
+          ],
+          justPassed: [],
+        },
+      },
+      { place: "hospital" },
+      { now: { localTime: "18:00", weekday: 1, timeBucket: "evening" } },
+      { fragment: { modality: "text", raw: "want water" } },
+    ];
+    for (const extra of alternatives) {
+      const c = routineContext(undefined, extra);
+      expect(run(c, response(routineDraft(c))).candidates).toEqual([]);
+    }
+  });
+
+  it("allows a uniquely resolved specific drink to satisfy the generic drink word without dropping usual", () => {
+    const c = routineContext();
+    expect(
+      run(c, response(routineDraft(c, "I want my usual coffee."))).candidates,
+    ).toHaveLength(1);
+    expect(
+      run(c, response(routineDraft(c, "I want coffee."))).candidates,
+    ).toEqual([]);
+    const raw = "வழக்கமான பானம் வேண்டும்",
+      tamil = routineContext(raw, { outputLang: "ta" });
+    expect(
+      run(
+        tamil,
+        response({
+          ...routineDraft(tamil, "எனக்கு வழக்கமான காபி வேண்டும்."),
+          gloss_en: "I want my usual coffee.",
+          evidence: [
+            {
+              path: "fragment.raw",
+              quote: raw,
+              translation_en: "I want my usual drink.",
+            },
+            {
+              path: "routine.dueNow.0.label",
+              quote: "coffee",
+              translation_en: "",
+            },
+          ],
+        }),
+      ).candidates,
+    ).toHaveLength(1);
+  });
+
+  it("preserves refusal and uncertainty when resolving a routine reference", () => {
+    const refusal = routineContext("no usual drink"),
+      uncertain = routineContext("might want usual drink");
+    expect(run(refusal, response(routineDraft(refusal))).candidates).toEqual(
+      [],
+    );
+    expect(
+      run(uncertain, response(routineDraft(uncertain))).candidates,
+    ).toEqual([]);
+    expect(
+      run(
+        refusal,
+        response({
+          ...routineDraft(refusal, "I do not want to drink my usual coffee."),
+          polarity: "negative",
+          speechAct: "refuse",
+        }),
+      ).candidates,
+    ).toHaveLength(1);
+    expect(
+      run(
+        uncertain,
+        response({
+          ...routineDraft(uncertain, "I might want to drink my usual coffee."),
+          polarity: "uncertain",
+        }),
+      ).candidates,
+    ).toHaveLength(1);
+  });
+
+  it("does not turn a routine into a completed event, a dose or an unsolicited need", () => {
+    const c = routineContext("had usual drink");
+    expect(
+      run(
+        c,
+        response({
+          ...routineDraft(c, "I had my usual coffee drink."),
+          speechAct: "report",
+        }),
+      ).reasons[0].code,
+    ).toBe("context");
+    const medical = routineContext("want usual medicine", {
+      routine: {
+        dueNow: [
+          { label: "Fictional tablets", topic: "medicine", time: "08:00" },
+        ],
+        justPassed: [],
+      },
+    });
+    expect(
+      modelEvidenceSources(medical)["routine.dueNow.0.label"],
+    ).toBeUndefined();
+    const schedule = routineContext();
+    expect(
+      run(
+        schedule,
+        response({
+          ...routineDraft(schedule),
+          evidence: [
+            ...routineDraft(schedule).evidence,
+            {
+              path: "routine.dueNow.0.time",
+              quote: "08:05",
+              translation_en: "",
+            },
+          ],
+        }),
+      ).reasons[0].code,
+    ).toBe("evidence");
+  });
+
+  it("uses caregiver-selected place only to clarify an explicit here reference", () => {
+    const c = context("need help here", { place: "home" }),
+      text = "I need help here at home.";
+    const draft = sentence(c, {
+      text,
+      gloss_en: text,
+      evidence: [
+        { path: "fragment.raw", quote: c.fragment.raw, translation_en: "" },
+        { path: "place", quote: "home", translation_en: "" },
+      ],
+    });
+    expect(run(c, response(draft)).candidates).toHaveLength(1);
+    expect(run({ ...c, place: "clinic" }, response(draft)).candidates).toEqual(
+      [],
+    );
+    const noReference = context("need help", { place: "home" });
+    expect(
+      run(
+        noReference,
+        response({
+          ...draft,
+          evidence: [
+            { ...draft.evidence[0], quote: noReference.fragment.raw },
+            draft.evidence[1],
+          ],
+        }),
+      ).candidates,
+    ).toEqual([]);
+  });
+
+  it("binds drafts to all used context and validates against the exact privacy-filtered packet", () => {
+    const shared = routineContext(),
+      [draft] = run(shared, response(routineDraft(shared))).candidates;
+    const local = {
+      ...shared,
+      people: [{ name: "Private person", relation: "friend", aliases: [] }],
+    };
+    expect(
+      applyCandidatePolicy([draft], local, {
+        serverGeneratedCandidates: [draft],
+      }).candidates,
+    ).toEqual([]);
+    expect(
+      applyCandidatePolicy([draft], local, {
+        serverGeneratedCandidates: [draft],
+        modelContext: shared,
+      }).candidates,
+    ).toHaveLength(1);
+    for (const changed of [
+      { ...shared, place: "clinic" as const },
+      { ...shared, now: { ...shared.now!, localTime: "08:01" } },
+      { ...shared, routine: undefined },
+      {
+        ...shared,
+        partnerQuestion: {
+          text: "Would you like tea?",
+          lang: "en" as const,
+          minutesAgo: 0,
+        },
+      },
+    ]) {
+      expect(modelContextKey(changed)).not.toBe(modelContextKey(shared));
+      expect(
+        applyCandidatePolicy([draft], changed, {
+          serverGeneratedCandidates: [draft],
+        }).candidates,
+      ).toEqual([]);
+    }
+    expect(
+      applyCandidatePolicy([draft], context("no drink"), {
+        serverGeneratedCandidates: [draft],
+        modelContext: shared,
+      }).candidates,
+    ).toEqual([]);
+  });
+
   for (const lang of ["en", "ta"] as const) {
     for (const timeBucket of ["morning", "midday", "night"] as const) {
       it(`retains the Medicine topic in ${lang} during ${timeBucket}`, () => {

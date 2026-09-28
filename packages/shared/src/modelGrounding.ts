@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { numberWords, painParts } from "./phrases";
 import { vocabularyCatalog } from "./vocabulary";
+import { deriveContextSignals } from "./contextEngine";
 import {
   CandidateSchema,
   ModelEvidenceSchema,
@@ -308,13 +309,21 @@ export const generatedSentencesJsonSchema: Record<string, unknown> = {
   },
 };
 
-/** Explicit allowlist: preferences, clock, routines and previous examples are never current fact evidence. */
+/** Explicit allowlist. A selected place can resolve 'here', and a single relevant nonclinical
+ * routine can resolve 'usual' or a generic food/drink cue. Schedules never prove current events. */
 export function modelEvidenceSources(
   context: ContextPacket,
 ): Record<string, string> {
   const result: Record<string, string> = {
     "fragment.raw": context.fragment.raw,
   };
+  const situation = deriveContextSignals(context);
+  if (situation.placeReference && context.place) result.place = context.place;
+  for (const routine of situation.routines) {
+    if (!routine.mayResolveReference) continue;
+    result[`${routine.path}.label`] = routine.label;
+    result[`${routine.path}.topic`] = routine.topic;
+  }
   if (context.fragment.objectLabel)
     result["fragment.objectLabel"] = context.fragment.objectLabel;
   context.fragment.topicPath?.forEach((item, i) => {
@@ -370,6 +379,41 @@ export function modelContextKey(context: ContextPacket): string {
     communication?.sentenceStyle ?? "natural",
     communication?.maxWords ?? 12,
     communication?.preferences ?? "",
+    context.now
+      ? [
+          context.now.localTime,
+          context.now.weekday,
+          context.now.timeBucket,
+          context.now.isDemo ?? false,
+        ]
+      : [],
+    context.place ?? "",
+    ["dueNow", "justPassed"].map(
+      (group) =>
+        context.routine?.[group as "dueNow" | "justPassed"].map((routine) => [
+          routine.label,
+          routine.topic,
+          routine.time,
+          routine.place ?? "",
+          routine.minutesAway ?? null,
+          routine.learned ?? false,
+        ]) ?? [],
+    ),
+    context.partnerQuestion
+      ? [
+          context.partnerQuestion.text,
+          context.partnerQuestion.lang,
+          context.partnerQuestion.minutesAgo,
+        ]
+      : [],
+    (context.recentTurns ?? []).map((turn) => [
+      turn.speaker,
+      turn.text,
+      turn.minutesAgo,
+    ]),
+    Object.entries(modelEvidenceSources(context)).sort(([a], [b]) =>
+      a.localeCompare(b),
+    ),
   ]);
   let hash = 2166136261;
   for (const char of data)
@@ -415,6 +459,28 @@ function checkSentence(
     )
   )
     return "evidence";
+  const contextualRoutines = deriveContextSignals(context).routines;
+  if (
+    item.evidence.some((entry) => {
+      const routine = contextualRoutines.find(
+        (hint) => entry.path === `${hint.path}.label`,
+      );
+      return (
+        routine &&
+        !routine.referenceTerms.some(
+          (term) => normalize(term) === normalize(entry.quote),
+        )
+      );
+    })
+  )
+    return "evidence";
+  // Routine descriptions are hypotheses for requests/questions, never evidence that the patient
+  // already did, experienced or needs something. Clinical routine labels are never eligible.
+  if (
+    item.evidence.some((entry) => entry.path.startsWith("routine.")) &&
+    !["request", "refuse", "question"].includes(item.speechAct)
+  )
+    return "context";
   if (
     item.evidence.some(
       (e) =>
@@ -545,13 +611,40 @@ function checkSentence(
   if (contentWords(item.gloss_en).some((word) => !known.has(word)))
     return "unsupported_words";
   const proposedConcepts = new Set(contentWords(item.gloss_en));
+  const situation = deriveContextSignals(context);
+  const resolvedTopics = new Set(
+    situation.routines
+      .filter(
+        (routine) =>
+          routine.mayResolveReference &&
+          item.evidence.some(
+            (entry) =>
+              entry.path === `${routine.path}.label` &&
+              contentWords(`${entry.quote} ${entry.translation_en}`).some(
+                (word) => proposedConcepts.has(word),
+              ),
+          ),
+      )
+      .map((routine) => routine.topic),
+  );
+  const resolvedCategory = (word: string) => {
+    // A generic refusal is broad: 'no food' must not shrink to refusing only one food.
+    if (situation.genericReference && expectedNegative) return false;
+    return (
+      (resolvedTopics.has("drink") && ["drink", "beverage"].includes(word)) ||
+      (resolvedTopics.has("food") && ["food", "meal"].includes(word))
+    );
+  };
   const currentEnglish = current.match(/[A-Za-z][A-Za-z'-]*/g)?.join(" ") ?? "";
   // Do not silently omit a named person, place, body part, time or other explicit English qualifier.
   // Known Tanglish words are translation input; their equivalents were added to englishEvidence.
   const tanglish = tanglishWords;
   if (
     contentWords(currentEnglish).some(
-      (word) => !tanglish.has(word) && !proposedConcepts.has(word),
+      (word) =>
+        !tanglish.has(word) &&
+        !proposedConcepts.has(word) &&
+        !resolvedCategory(word),
     )
   )
     return "unsupported_words";
@@ -560,7 +653,7 @@ function checkSentence(
       .filter((e) => e.path.startsWith("fragment."))
       .some((e) =>
         contentWords(e.translation_en).some(
-          (word) => !proposedConcepts.has(word),
+          (word) => !proposedConcepts.has(word) && !resolvedCategory(word),
         ),
       )
   )

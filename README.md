@@ -18,6 +18,14 @@ Models can now compose sentences beyond the prepared vocabulary, using the curre
 
 Provider request formats, retention caveats and model defaults are recorded in the dated [provider ledger](docs/PROVIDERS.md).
 
+### Time, place and routine context
+
+Open **Caregiver settings → Context engine** (`/settings?tab=context`). Choose the current place manually, use the real device clock or an explicitly labelled demo clock, and enable the context sources you want. Add activities with a time, weekdays and optional place; review each with the person before it can influence suggestions. Edit, remove and undo removal are supported. A 15/45/90-minute window bounds nearby routines, including the correct weekday across midnight. Fictional seed routines remain sample data and are excluded from real-clock use until explicitly reviewed.
+
+The shared context engine ranks relevant routines by the person's words, time proximity and matching place. A fragment such as “want my usual drink” can become “I want my usual morning coffee” when a matching reviewed coffee routine is available. Specific words and refusals take precedence; conflicting routines lead to clarification. Schedules never prove an event happened, and medication routines cannot supply a drug or dose. The confirmation screen has an expandable view of context clues. This is contextual suggestion, not mind-reading or measured clinical accuracy.
+
+Personal-context sharing must be enabled for the selected model to receive place/routines; it remains off by default and is separate from provider cloud permission. Recent explicitly confirmed messages use the existing separate switch. Local vocabulary remains available without an API key. [Context design and checks](docs/CONTEXT_ENGINE.md).
+
 ### Vocabulary and other communication tools
 
 Open **My tools** (`/tools`) for a bilingual word finder with 124 controlled message meanings, personal words with aliases and descriptions, familiar photos with selectable messages, prepared conversations, a printable communication passport, and drawing/writing. Personal cards are drafted behind the caregiver lock and appear for everyday use only after the person reviews the exact words. Editing or importing a card requires fresh approval. Pin, hide and delete controls keep the word collection personal.

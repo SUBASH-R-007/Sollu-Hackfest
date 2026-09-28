@@ -34,6 +34,9 @@ import {
   memoryScore,
   normalize,
   recentConfirmedTurns,
+  inferenceContext,
+  clockNow,
+  timeBucket,
 } from "./lib/context";
 import { getIntent } from "./lib/api";
 import { RelayClient, type DeliveryStatus } from "./lib/relay";
@@ -387,7 +390,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       objectSource: fragment.objectSource,
       outputLang: context.outputLang,
       place: settingsRef.current.place,
-      timeBucket: context.now!.timeBucket,
+      timeBucket: timeBucket(clockNow(settingsRef.current).getHours()),
       demoClock: settingsRef.current.demo,
       rounds: [],
       taps: 1,
@@ -455,7 +458,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...current.attempt,
         fragmentRaw: input.raw,
         place: context.place ?? settingsRef.current.place,
-        timeBucket: context.now!.timeBucket,
+        timeBucket: timeBucket(clockNow(settingsRef.current).getHours()),
         addresseeId: context.addressee?.id,
         addresseeRelation: context.addressee?.relation,
         outputLang: context.outputLang,
@@ -489,7 +492,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         )
         .map((m) => ({
           m,
-          score: memoryScore(m, input.raw, context.now!.timeBucket),
+          score: memoryScore(m, input.raw, context.now?.timeBucket),
         }))
         .filter((r) => r.score > 0)
         .sort((a, b) => b.score - a.score);
@@ -590,7 +593,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         (r) =>
           r.score >= 5 &&
           r.m.count >= 2 &&
-          r.m.timeBucket === context.now!.timeBucket &&
+          r.m.timeBucket === context.now?.timeBucket &&
           !context.exclude.includes(r.m.sentence),
       );
       if (usual && round === 1) {
@@ -611,6 +614,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const checked = applyCandidatePolicy(candidates, context, {
         trustedCandidates,
         serverGeneratedCandidates,
+        modelContext: serverGeneratedCandidates.length
+          ? inferenceContext(context, settingsRef.current)
+          : undefined,
       });
       candidates = checked.candidates.slice(0, settingsRef.current.choiceCount);
       const usualShown = Boolean(

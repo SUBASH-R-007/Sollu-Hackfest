@@ -4,6 +4,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import {
   Check,
   BrainCircuit,
+  CalendarClock,
   Copy,
   Link2,
   Mic,
@@ -45,11 +46,13 @@ import {
   type LlmConfiguration,
 } from "../features/settings/LlmSettings";
 import { PersonalizationSettings } from "../features/settings/Personalization";
+import { ContextSettings } from "../features/settings/ContextSettings";
 
 const sections = [
   { id: "general", label: "General", icon: Settings2 },
   { id: "personalize", label: "Personalize", icon: SlidersHorizontal },
   { id: "llm", label: "Sentence engine", icon: BrainCircuit },
+  { id: "context", label: "Context engine", icon: CalendarClock },
   { id: "voice", label: "Voice Studio", icon: Mic },
   { id: "link", label: "Link phones", icon: Link2 },
   { id: "privacy", label: "Privacy", icon: ShieldCheck },
@@ -1437,6 +1440,8 @@ export default function Settings() {
           <PersonalizationSettings />
         ) : active === "llm" ? (
           <LlmSettings onChanged={refreshHealth} />
+        ) : active === "context" ? (
+          <ContextSettings />
         ) : active === "voice" ? (
           <VoiceStudio />
         ) : active === "link" ? (

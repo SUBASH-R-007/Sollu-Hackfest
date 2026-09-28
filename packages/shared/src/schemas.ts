@@ -21,6 +21,8 @@ export const UrgencySchema = z.enum(["none", "elevated", "emergency"]);
 export type Urgency = z.infer<typeof UrgencySchema>;
 const short = z.string().trim().max(120);
 const sentence = z.string().trim().min(1).max(500);
+const localTime = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
+const PlaceSchema = z.enum(["home", "hospital", "clinic", "outside", "other"]);
 export const CommunicationPreferencesSchema = z.object({
   sentenceStyle: z.enum(["brief", "natural", "polite"]),
   maxWords: z.union([z.literal(8), z.literal(12), z.literal(18)]),
@@ -101,7 +103,9 @@ export type TimeBucket = z.infer<typeof TimeBucketSchema>;
 const RoutineContextSchema = z.object({
   label: short,
   topic: TopicIdSchema,
-  time: z.string().regex(/^\d{2}:\d{2}$/),
+  time: localTime,
+  place: PlaceSchema.optional(),
+  minutesAway: z.number().min(-180).max(180).optional(),
   learned: z.boolean().optional(),
 });
 export const ContextPacketSchema = z.object({
@@ -111,12 +115,13 @@ export const ContextPacketSchema = z.object({
   communication: CommunicationPreferencesSchema.optional(),
   now: z
     .object({
-      localTime: z.string().regex(/^\d{2}:\d{2}$/),
+      localTime,
       weekday: z.number().int().min(0).max(6),
       timeBucket: TimeBucketSchema,
+      isDemo: z.boolean().optional(),
     })
     .optional(),
-  place: z.enum(["home", "hospital", "clinic", "outside", "other"]).optional(),
+  place: PlaceSchema.optional(),
   speaker: z
     .object({
       preferredName: short,
@@ -290,12 +295,14 @@ export const ContactSchema = z.object({
 export type Contact = z.infer<typeof ContactSchema>;
 export const RoutineItemSchema = z.object({
   id: short,
-  label: short,
+  label: short.min(1),
   topic: TopicIdSchema,
-  time: z.string().regex(/^\d{2}:\d{2}$/),
-  days: z.array(z.number().int().min(0).max(6)),
+  time: localTime,
+  days: z.array(z.number().int().min(0).max(6)).min(1).max(7),
+  place: PlaceSchema.optional(),
   source: z.enum(["caregiver", "learned"]),
   confirmed: z.boolean(),
+  isSample: z.boolean().optional(),
 });
 export type RoutineItem = z.infer<typeof RoutineItemSchema>;
 export const VocabItemSchema = z.object({

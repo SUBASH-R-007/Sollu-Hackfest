@@ -61,6 +61,10 @@ The user's “go” approved phases 1–5 of [APHASIA_IMPROVEMENT_PLAN.md](APHAS
 - Baseline can use Tamil or English. Its token concatenation is not grammar-matched or clinically validated; meaningful comparison requires a personalized same-language board and counterbalanced tasks in the human protocol.
 - The installed-model benchmark verifies honest fallback, not model quality. Human/SLP/native-language acceptance and supervised therapy remain separate.
 
+## Context engine expansion — 28 September 2026
+
+The user explicitly requested time, location and routine reasoning. Added the caregiver Context engine tab, reviewed weekly routine editing and a shared source-aware situation ranker. Location remains manually selected, not tracked. Nonclinical routines can resolve bounded underspecified references in LLM drafts; explicit input takes priority. Equal competing routines or incompatible temporal/object cues require clarification. Seed schedules remain fictional and are excluded from real-clock use until reviewed. Context hashes now bind the permitted request snapshot; patient confirmation remains the speech authority. See [CONTEXT_ENGINE.md](CONTEXT_ENGINE.md) for data flow and limitations.
+
 ## Remaining acceptance
 
 Real cloud generation, paid cloning, actual provider deletion, native-speaker sign-off, phone accessibility, real STT recordings and phone performance remain separate checks. All full M7–M11 work and any unimplemented M0–M6 item remain visible in [../PROGRESS.md](../PROGRESS.md).

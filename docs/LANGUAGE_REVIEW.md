@@ -5802,23 +5802,109 @@ Patient label in `apps/web/src/pages/Patient.tsx`: **AI வரைவு · ப�
 ### packages/shared/src/modelGrounding.ts
 
 ```text
-35:   /\b(?:no|not|never|don['’]?t|doesn['’]?t|didn['’]?t|can['’]?t|cannot|won['’]?t|without|venam|vendam|vendaam|illai|illa)\b|வேணாம்|வேண்டாம்|இல்லை|இல்ல|முடியாது|மாட்டேன்/u.test(
-39:   left: /\bleft\b|இடது|\bidathu\b/iu.test(text),
-40:   right: /\bright\b|வலது|\bvalathu\b/iu.test(text),
-44:   /\b(?:mg|mcg|ml|milligrams?|micrograms?|millilit(?:er|re)s?|dosage|you should|you must|diagnos(?:is|ed)|prescri(?:be|ption)|take .{0,30}(?:daily|every)|stop taking|double .{0,20}dose)\b|மில்லிகிராம்|மி\.கி|மருந்தளவு|மருந்து எடுத்துக்கொள்ள/iu;
-576:     !/\b(?:yes|hello|thanks|thank)\b|ஆமா|நன்றி|வணக்கம்/iu.test(current)
-623:         (context.outputLang === "ta" ? "வாக்கியம்" : "Sentence"),
+36:   /\b(?:no|not|never|don['’]?t|doesn['’]?t|didn['’]?t|can['’]?t|cannot|won['’]?t|without|venam|vendam|vendaam|illai|illa)\b|வேணாம்|வேண்டாம்|இல்லை|இல்ல|முடியாது|மாட்டேன்/u.test(
+40:   left: /\bleft\b|இடது|\bidathu\b/iu.test(text),
+41:   right: /\bright\b|வலது|\bvalathu\b/iu.test(text),
+45:   /\b(?:mg|mcg|ml|milligrams?|micrograms?|millilit(?:er|re)s?|dosage|you should|you must|diagnos(?:is|ed)|prescri(?:be|ption)|take .{0,30}(?:daily|every)|stop taking|double .{0,20}dose)\b|மில்லிகிராம்|மி\.கி|மருந்தளவு|மருந்து எடுத்துக்கொள்ள/iu;
+669:     !/\b(?:yes|hello|thanks|thank)\b|ஆமா|நன்றி|வணக்கம்/iu.test(current)
+716:         (context.outputLang === "ta" ? "வாக்கியம்" : "Sentence"),
 ```
 
 ### apps/server/tests/contextual.test.ts
 
 ```text
-152:     const raw = "நாளை தோட்டத்தில் என் சகோதரியை பார்க்க விரும்புகிறேன்",
-155:       text: "நாளை தோட்டத்தில் என் சகோதரியை பார்க்க விரும்புகிறேன்.",
-170:           evidence: [{ ...item.evidence[0], quote: "நாளை" }],
-183:             text: "நாளை தோட்டத்தில் என் சகோதரியை பார்க்க விரும்புகிறேன்.",
-321:         response({ ...item, text: "எனக்கு சூப் வேண்டும்." }),
-327:         response({ ...item, text: "எனக்கு சூப் வேண்டாம்." }),
-355:         response({ ...item, text: "வலது கால் வலிக்கிறது." }),
-361:         response({ ...item, text: "இடது கால் வலிக்கிறது." }),
+301:     const raw = "வழக்கமான பானம் வேண்டும்",
+307:           ...routineDraft(tamil, "எனக்கு வழக்கமான காபி வேண்டும்."),
+563:     const raw = "நாளை தோட்டத்தில் என் சகோதரியை பார்க்க விரும்புகிறேன்",
+566:       text: "நாளை தோட்டத்தில் என் சகோதரியை பார்க்க விரும்புகிறேன்.",
+581:           evidence: [{ ...item.evidence[0], quote: "நாளை" }],
+594:             text: "நாளை தோட்டத்தில் என் சகோதரியை பார்க்க விரும்புகிறேன்.",
+732:         response({ ...item, text: "எனக்கு சூப் வேண்டும்." }),
+738:         response({ ...item, text: "எனக்கு சூப் வேண்டாம்." }),
+766:         response({ ...item, text: "வலது கால் வலிக்கிறது." }),
+772:         response({ ...item, text: "இடது கால் வலிக்கிறது." }),
+```
+
+
+## 28 September — time, place and routine context (pending native review)
+
+Authored patient controls, context-matching cues and fictional tests below require native-speaker review. Model-authored sentences and their translations are not preapproved by this inventory.
+
+### apps/web/src/features/context/ContextSummary.tsx
+
+```text
+10:   home: ["Home", "வீடு"],
+11:   clinic: ["Clinic", "மருத்துவமனை"],
+12:   hospital: ["Hospital", "மருத்துவமனை"],
+13:   outside: ["Outside", "வெளியே"],
+14:   other: ["Other place", "வேறு இடம்"],
+32:           "இந்த வாக்கியங்களுக்கான சூழல்",
+39:           "இவை குறிப்புகள் மட்டுமே. உங்கள் வார்த்தையும் தேர்வும் முக்கியம்.",
+48:               signals.clock.isDemo ? "மாதிரி நேரம்" : "நேரம்",
+55:             {copy(lang, "Selected place", "தேர்ந்தெடுத்த இடம்")}:{" "}
+61:             {copy(lang, "Current question", "தற்போதைய கேள்வி")}:{" "}
+67:             {copy(lang, "Routine clue", "வழக்கக் குறிப்பு")}:{" "}
+76:               "சமீபத்தில் உறுதிசெய்த செய்திகள்",
+87:             "ஒன்றுக்கு மேற்பட்ட வழக்கங்கள் பொருந்துகின்றன. எது என்று ஒரு வார்த்தை சேருங்கள்.",
+```
+
+### packages/shared/src/contextEngine.ts
+
+```text
+21:     "மருந்து",
+22:     "மாத்திரை",
+31:     "உணவு",
+32:     "சாப்பாடு",
+42:     "தண்ணீர்",
+43:     "தேநீர்",
+44:     "காபி",
+45:     "பால்",
+46:     "பானம்",
+47:     "குடிக்க",
+49:   toilet: ["toilet", "bathroom", "கழிப்பறை"],
+50:   pain: ["pain", "hurt", "hurts", "வலி"],
+51:   people: ["people", "call", "visit", "family", "பேச", "அழைக்க"],
+52:   feelings: ["feelings", "happy", "sad", "worried", "மகிழ்ச்சி", "கவலை"],
+53:   rest: ["rest", "sleep", "nap", "bed", "ஓய்வு", "தூக்கம்"],
+54:   tv_phone: ["tv", "television", "phone", "music", "டிவி", "தொலைபேசி", "இசை"],
+55:   prayer: ["prayer", "pray", "worship", "பிரார்த்தனை", "வழிபாடு"],
+56:   go_out: ["outside", "walk", "garden", "out", "வெளியே", "நடை", "தோட்டம்"],
+59:   ["water", "தண்ணீர்", "thanni", "tanni"],
+60:   ["tea", "தேநீர்", "டீ"],
+61:   ["coffee", "காபி", "kaapi"],
+62:   ["juice", "சாறு"],
+63:   ["milk", "பால்", "paal"],
+70:   "பானம்",
+71:   "உணவு",
+72:   "சாப்பாடு",
+73:   "குடிக்க",
+104:   "எனக்கு",
+105:   "வேண்டும்",
+106:   "வேண்டாம்",
+107:   "இல்லை",
+108:   "கொஞ்சம்",
+118:     aliases: ["morning", "காலை"],
+122:     aliases: ["midday", "noon", "மதியம்"],
+126:     aliases: ["afternoon", "பிற்பகல்"],
+130:     aliases: ["evening", "மாலை"],
+134:     aliases: ["night", "இரவு"],
+139:   ["home", ["home", "வீடு", "வீட்டில்"]],
+140:   ["hospital", ["hospital", "மருத்துவமனை", "மருத்துவமனையில்"]],
+141:   ["clinic", ["clinic", "கிளினிக்"]],
+142:   ["outside", ["outside", "outdoors", "வெளியே"]],
+145:   /\b(?:medicin(?:e|es|al)|medications?|drugs?|tablets?|pills?|dos(?:e|es|age)|prescriptions?|injections?|therapy|treatment|mg|mcg|ml)\b|மருந்து|மாத்திரை|மருந்தளவு|சிகிச்சை|ஊசி/iu;
+166:     : ["drink", "beverage", "juice", "சாறு", "பானம்"]),
+241:     /\b(?:usual|routine|normally|regular)\b|வழக்கமான|வழக்கம்|வழக்கம்போல்/iu.test(
+259:     /\bhere\b|இங்கே|இங்கு/iu.test(current) &&
+267:     /\b(?:tomorrow|yesterday|later|tonight|last|next|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|நாளை|நேற்று|\b\d{1,2}:\d{2}\b|\b(?:at|around|before|after)\s+(?:\d|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/iu.test(
+```
+
+### packages/shared/src/contextEngine.test.ts
+
+```text
+35:     "இரவு மாத்திரை",
+73:   it.each(["Morning idli", "Rice", "Meal", "காலை இட்லி"])(
+132:   it.each(["drink", "want drink", "I would like a drink", "பானம் வேண்டும்"])(
+336:         context({ fragment: { modality: "text", raw: "இங்கே உதவி வேண்டும்" } }),
+341:   it.each(["want usual water", "no usual tea", "usual பால்"])(
 ```

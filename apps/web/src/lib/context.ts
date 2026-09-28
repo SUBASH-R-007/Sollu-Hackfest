@@ -5,7 +5,14 @@ import type {
   MemoryEntry,
   TimeBucket,
   WordSubstitution,
+  RoutineItem,
 } from "@sollu/shared";
+import {
+  RoutineItemSchema,
+  ContextPacketSchema,
+  demoSeed,
+} from "@sollu/shared";
+import { defaultSettings } from "../db";
 import type { Settings } from "../db";
 export function timeBucket(hour: number): TimeBucket {
   if (hour < 4 || hour >= 23) return "late_night";
@@ -29,6 +36,64 @@ export function minuteDistance(time: string, now: Date): number {
   const delta = h * 60 + m - (now.getHours() * 60 + now.getMinutes());
   return ((delta + 2160) % 1440) - 720;
 }
+/** Legacy demo records predate the explicit sample flag. A reviewed save sets false. */
+export function isSampleRoutine(routine: RoutineItem): boolean {
+  if (routine.isSample !== undefined) return routine.isSample;
+  return [...defaultSettings.routines, ...demoSeed.routine].some(
+    (seed) =>
+      seed.id === routine.id &&
+      seed.label === routine.label &&
+      seed.topic === routine.topic &&
+      seed.time === routine.time &&
+      !routine.place &&
+      JSON.stringify([...seed.days].sort()) ===
+        JSON.stringify([...routine.days].sort()),
+  );
+}
+
+/** Match the actual occurrence day, including yesterday/tomorrow across midnight. */
+export function getNearbyRoutines(
+  settings: Settings,
+  now = clockNow(settings),
+): Array<{ routine: RoutineItem; minutesAway: number }> {
+  if (settings.useRoutineContext === false || settings.useTimeContext === false)
+    return [];
+  const windowMinutes = [15, 45, 90].includes(settings.routineWindowMinutes)
+    ? settings.routineWindowMinutes
+    : 45;
+  return settings.routines
+    .slice(0, 32)
+    .flatMap((stored) => {
+      const parsed = RoutineItemSchema.safeParse(stored);
+      if (!parsed.success || !parsed.data.confirmed) return [];
+      const routine = parsed.data;
+      if (!settings.demo && isSampleRoutine(routine)) return [];
+      if (
+        routine.place &&
+        (settings.usePlaceContext === false || routine.place !== settings.place)
+      )
+        return [];
+      const [hours, minutes] = routine.time.split(":").map(Number);
+      const occurrences = [-1, 0, 1].flatMap((dayOffset) => {
+        const at = new Date(now);
+        at.setDate(at.getDate() + dayOffset);
+        at.setHours(hours, minutes, 0, 0);
+        const minutesAway = (at.getTime() - now.getTime()) / 60_000;
+        return routine.days.includes(at.getDay()) &&
+          Math.abs(minutesAway) <= windowMinutes
+          ? [{ routine, minutesAway }]
+          : [];
+      });
+      return occurrences
+        .sort((a, b) => Math.abs(a.minutesAway) - Math.abs(b.minutesAway))
+        .slice(0, 1);
+    })
+    .sort(
+      (a, b) =>
+        Math.abs(a.minutesAway) - Math.abs(b.minutesAway) ||
+        a.routine.id.localeCompare(b.routine.id),
+    );
+}
 export function buildContext(
   settings: Settings,
   fragment: Fragment,
@@ -44,21 +109,18 @@ export function buildContext(
   const realNow = opts.now ?? Date.now(),
     now = clockNow(settings, realNow);
   const contact = settings.contacts.find((c) => c.id === settings.addressee);
-  const relevant = settings.routines.filter(
-    (r) =>
-      r.confirmed &&
-      r.days.includes(now.getDay()) &&
-      Math.abs(minuteDistance(r.time, now)) <= 45,
-  );
+  const relevant = getNearbyRoutines(settings, now);
   const routine = (passed: boolean) =>
     relevant
-      .filter((r) => minuteDistance(r.time, now) < 0 === passed)
+      .filter((r) => r.minutesAway < 0 === passed)
       .slice(0, 8)
-      .map((r) => ({
+      .map(({ routine: r, minutesAway }) => ({
         label: r.label,
         topic: r.topic,
         time: r.time,
         learned: r.source === "learned",
+        place: r.place,
+        minutesAway: Math.round(minutesAway),
       }));
   const question =
     opts.question && realNow - opts.question.at < 300000
@@ -73,12 +135,16 @@ export function buildContext(
     outputLang: contact?.lang ?? settings.lang,
     round: opts.round ?? 1,
     exclude: opts.exclude ?? [],
-    now: {
-      localTime: `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`,
-      weekday: now.getDay(),
-      timeBucket: timeBucket(now.getHours()),
-    },
-    place: settings.place,
+    now:
+      settings.useTimeContext === false
+        ? undefined
+        : {
+            localTime: `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`,
+            weekday: now.getDay(),
+            timeBucket: timeBucket(now.getHours()),
+            isDemo: settings.demo,
+          },
+    place: settings.usePlaceContext === false ? undefined : settings.place,
     speaker: {
       preferredName: settings.name,
       gender: settings.speakerGender ?? "unspecified",
@@ -142,14 +208,14 @@ export function inferenceContext(
   context: ContextPacket,
   settings: Settings,
 ): ContextPacket {
-  return {
+  return ContextPacketSchema.parse({
     fragment: context.fragment,
     outputLang: context.outputLang,
     inputLangHints: context.inputLangHints,
     round: context.round,
     exclude: context.exclude,
     rejectedMeaningKeys: context.rejectedMeaningKeys,
-    now: context.now,
+    now: settings.useTimeContext === false ? undefined : context.now,
     partnerQuestion: context.partnerQuestion,
     communication: {
       sentenceStyle: context.communication?.sentenceStyle ?? "natural",
@@ -160,18 +226,22 @@ export function inferenceContext(
     },
     ...(settings.sharePersonalContext
       ? {
-          place: context.place,
+          place: settings.usePlaceContext === false ? undefined : context.place,
           speaker: context.speaker,
           addressee: context.addressee,
           people: context.people,
           vocabulary: context.vocabulary,
-          routine: context.routine,
+          routine:
+            settings.useRoutineContext === false ||
+            settings.useTimeContext === false
+              ? undefined
+              : context.routine,
           substitutions: context.substitutions,
           ownExamples: context.ownExamples,
         }
       : {}),
     recentTurns: settings.shareRecentContext ? (context.recentTurns ?? []) : [],
-  };
+  });
 }
 
 export function recentConfirmedTurns(
@@ -212,7 +282,7 @@ export const normalize = (s: string) =>
 export function memoryScore(
   memory: MemoryEntry,
   fragment: string,
-  bucket: TimeBucket,
+  bucket: TimeBucket | undefined,
   now = Date.now(),
 ): number {
   const key = normalize(fragment),

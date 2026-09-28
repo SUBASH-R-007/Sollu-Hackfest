@@ -14,15 +14,149 @@ import {
   timeBucket,
   inferenceContext,
   recentConfirmedTurns,
+  getNearbyRoutines,
 } from "./context";
 
 const settings: Settings = {
   ...defaultSettings,
   contacts: demoSeed.contacts,
-  routines: demoSeed.routine,
+  routines: demoSeed.routine.map((routine) => ({
+    ...routine,
+    isSample: false,
+  })),
   demo: false,
 };
 describe("context timing and grounding", () => {
+  it("keeps fictional seed routines out of real mode until explicitly reviewed", () => {
+    const now = new Date(2026, 8, 28, 20, 58);
+    expect(
+      getNearbyRoutines({ ...settings, routines: demoSeed.routine }, now),
+    ).toEqual([]);
+    const legacy = demoSeed.routine.map(
+      ({ isSample: _sample, ...routine }) => routine,
+    );
+    expect(getNearbyRoutines({ ...settings, routines: legacy }, now)).toEqual(
+      [],
+    );
+    expect(
+      getNearbyRoutines({ ...settings, routines: legacy, demo: true }, now)
+        .length,
+    ).toBeGreaterThan(0);
+    expect(getNearbyRoutines(settings, now).length).toBeGreaterThan(0);
+  });
+  it("matches the scheduled weekday across midnight, not the viewing weekday", () => {
+    const sundayNight = new Date(2026, 8, 27, 23, 50);
+    const weekly: Settings = {
+      ...settings,
+      routines: [
+        {
+          id: "monday",
+          label: "Monday music",
+          topic: "tv_phone",
+          time: "00:10",
+          days: [1],
+          source: "caregiver",
+          confirmed: true,
+        },
+        {
+          id: "sunday",
+          label: "Sunday music",
+          topic: "tv_phone",
+          time: "00:10",
+          days: [0],
+          source: "caregiver",
+          confirmed: true,
+        },
+        {
+          id: "previous",
+          label: "Sunday reading",
+          topic: "rest",
+          time: "23:50",
+          days: [0],
+          source: "caregiver",
+          confirmed: true,
+        },
+      ],
+    };
+    expect(
+      getNearbyRoutines(weekly, sundayNight).map(({ routine }) => routine.id),
+    ).toEqual(["previous", "monday"]);
+    const monday = new Date(2026, 8, 28, 0, 5);
+    expect(
+      getNearbyRoutines(weekly, monday).map(({ routine, minutesAway }) => [
+        routine.id,
+        minutesAway,
+      ]),
+    ).toEqual([
+      ["monday", 5],
+      ["previous", -15],
+    ]);
+  });
+  it("excludes unreviewed, wrong-place, invalid-time and out-of-window routines", () => {
+    const routine = {
+      id: "a",
+      label: "Coffee",
+      topic: "drink" as const,
+      time: "07:00",
+      days: [1],
+      source: "caregiver" as const,
+      confirmed: true,
+    };
+    const weekly: Settings = {
+      ...settings,
+      place: "home",
+      routineWindowMinutes: 15,
+      routines: [
+        routine,
+        { ...routine, id: "pending", confirmed: false },
+        { ...routine, id: "clinic", place: "clinic" },
+        { ...routine, id: "late", time: "07:30" },
+        { ...routine, id: "invalid", time: "25:99" },
+      ],
+    };
+    const monday = new Date(2026, 8, 28, 6, 55);
+    expect(
+      getNearbyRoutines(weekly, monday).map(({ routine }) => routine.id),
+    ).toEqual(["a"]);
+    expect(
+      getNearbyRoutines({ ...weekly, useRoutineContext: false }, monday),
+    ).toEqual([]);
+    expect(
+      getNearbyRoutines({ ...weekly, useTimeContext: false }, monday),
+    ).toEqual([]);
+    expect(
+      getNearbyRoutines(
+        {
+          ...weekly,
+          usePlaceContext: false,
+          routines: [{ ...routine, place: "home" }],
+        },
+        monday,
+      ),
+    ).toEqual([]);
+  });
+  it("honors source switches even when a caller passes a previously built packet", () => {
+    const full = buildContext(settings, {
+      modality: "text",
+      raw: "want usual drink",
+    });
+    const disabled = {
+      ...settings,
+      sharePersonalContext: true,
+      useTimeContext: false,
+      usePlaceContext: false,
+      useRoutineContext: false,
+    };
+    const packet = inferenceContext(full, disabled);
+    expect(packet.now).toBeUndefined();
+    expect(packet.place).toBeUndefined();
+    expect(packet.routine).toBeUndefined();
+    const local = buildContext(disabled, full.fragment);
+    expect(local.now).toBeUndefined();
+    expect(local.place).toBeUndefined();
+    expect(local.routine).toEqual({ dueNow: [], justPassed: [] });
+    expect(ContextPacketSchema.safeParse(local).success).toBe(true);
+  });
   it("has the specified bucket boundaries", () => {
     expect(
       [0, 3, 4, 6, 7, 10, 11, 13, 14, 16, 17, 19, 20, 22, 23].map(timeBucket),
@@ -227,6 +361,24 @@ describe("context timing and grounding", () => {
 });
 
 describe("inference context sharing", () => {
+  it("canonicalizes the transmitted packet exactly like server validation", () => {
+    const context = buildContext(
+      { ...settings, name: " Amma " },
+      { modality: "text", raw: "want usual drink" },
+    );
+    context.addressee = {
+      name: " Priya ",
+      relation: " daughter ",
+      register: "familiar",
+    };
+    const packet = inferenceContext(context, {
+      ...settings,
+      sharePersonalContext: true,
+    });
+    expect(packet.speaker?.preferredName).toBe("Amma");
+    expect(packet.addressee?.name).toBe("Priya");
+    expect(packet).toEqual(ContextPacketSchema.parse(packet));
+  });
   it("keeps personal context private by default and retains the current question", () => {
     const context = buildContext(
       settings,

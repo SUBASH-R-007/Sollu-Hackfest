@@ -72,6 +72,8 @@ export interface CandidatePolicyOptions {
   /** Fresh authenticated server results only. The browser also requires a nonempty proof signature.
    * A source label, imported record or arbitrary model response is not provenance. */
   serverGeneratedCandidates?: Candidate[];
+  /** The privacy-filtered packet actually sent to the model. Local catalog context can be richer. */
+  modelContext?: ContextPacket;
 }
 
 /** Every displayed path uses this policy; model prose requires explicit server provenance and revalidation. */
@@ -97,8 +99,21 @@ export function applyCandidatePolicy(
     return p.success ? [p.data] : [];
   });
   const allowed = [...current, ...personal];
+  const modelContext = options.modelContext ?? context;
+  const fragmentKey = (packet: ContextPacket) =>
+    JSON.stringify([
+      packet.fragment.modality,
+      packet.fragment.raw,
+      packet.fragment.topicPath ?? [],
+      packet.fragment.objectLabel ?? "",
+      packet.fragment.objectSource ?? "",
+      packet.outputLang,
+      packet.communication?.sentenceStyle ?? "natural",
+      packet.communication?.maxWords ?? 12,
+    ]);
   const generated = (options.serverGeneratedCandidates ?? []).flatMap((c) => {
-    const checked = validateModelCandidate(c, context);
+    if (fragmentKey(modelContext) !== fragmentKey(context)) return [];
+    const checked = validateModelCandidate(c, modelContext);
     return checked ? [checked] : [];
   });
   // Historic candidates are useful only for rejection identity, never current grounding.

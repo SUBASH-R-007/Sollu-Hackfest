@@ -103,6 +103,7 @@ export const demoSeed: {
     days: allDays,
     source: "caregiver",
     confirmed: true,
+    isSample: true,
   })),
   vocabulary: [
     ["coffee", "filter coffee", "drink"],

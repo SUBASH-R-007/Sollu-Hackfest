@@ -1,0 +1,28 @@
+[
+  {
+    "device": "mobile",
+    "viewport": 390,
+    "document": 390,
+    "speechCalls": 0,
+    "unlabeledControls": 0,
+    "previousTab": "true",
+    "returnedTab": "true",
+    "homeTab": "true",
+    "lastTab": "true",
+    "intentRequests": 0,
+    "errors": []
+  },
+  {
+    "device": "desktop",
+    "viewport": 1440,
+    "document": 1440,
+    "speechCalls": 0,
+    "unlabeledControls": 0,
+    "previousTab": "true",
+    "returnedTab": "true",
+    "homeTab": "true",
+    "lastTab": "true",
+    "intentRequests": 0,
+    "errors": []
+  }
+]

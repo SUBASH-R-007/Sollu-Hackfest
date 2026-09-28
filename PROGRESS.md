@@ -1,6 +1,18 @@
 # Sollu progress and acceptance ledger
 
-Last updated: 2026-09-28. **Current state: contextual sentence engine and caregiver personalization implemented locally; automated verification passed, live-provider and human acceptance pending.** The user approved the improvement plan with “go,” then requested OpenAI and alternative provider settings. No real credentials or paid requests were used; hosting remains deferred. The complete specification is [docs/SPEC.md](docs/SPEC.md); approved changes are [docs/DECISIONS.md](docs/DECISIONS.md). This is not a claim that the original full-product, clinical-validation or paid-clone milestones are complete.
+Last updated: 2026-09-28. **Current state: time/place/routine context engine and caregiver editing implemented locally; automated verification passed, live-provider and human acceptance pending.** The user approved the improvement plan with “go,” then requested OpenAI/alternative providers and a context engine. No real credentials or paid requests were used; hosting remains deferred. The complete specification is [docs/SPEC.md](docs/SPEC.md); approved changes are [docs/DECISIONS.md](docs/DECISIONS.md). This is not a claim that the original full-product, clinical-validation or paid-clone milestones are complete.
+
+## Time, place and routine context (v4)
+
+| Area | Implementation and evidence |
+| --- | --- |
+| Context engine | Shared bounded routine ranking uses fragment/topic, time proximity and selected place. Unique nonclinical routines may resolve a generic food/drink cue or “usual” reference; competing or explicitly conflicting context asks for clarification. No automatic speech, medication inference or routine-event assertions. [Design](docs/CONTEXT_ENGINE.md). |
+| Caregiver controls | New Context engine tab: device/demo clock, manually selected place, source switches, 15/45/90-minute window, weekly routine add/edit/review/delete/undo, live draft preview and existing personal-context sharing permission. No GPS. |
+| Data quality | Actual occurrence weekday handles midnight; unreviewed, wrong-place and invalid routines are excluded. Fictional sample routines are excluded from real-clock use until reviewed. Source switches also apply to old packets. Context is canonicalized and bound to the transmitted request. |
+| Patient visibility | Expandable context clues on confirmation. Home and Topics use the same day/place/review matching. Explicit refusal, object, uncertainty, time and place outrank ambient clues. |
+| Verification | **538 unit tests / 18 files; 36 browser checks plus 7 targeted rechecks after the final guard; 240/240 controlled fixtures; ESLint; three TypeScript projects; both production builds and compiled offline smoke passed.** [v4 evidence](docs/evidence/v4/VERIFICATION.md). |
+| Visual/keyboard | Context controls, preview and editor checked at 390×844 and 1440×1000; no horizontal overflow, unlabelled controls, console/page errors, unexpected inference or audio. Arrow/Home/End tab navigation passed. |
+| Still pending | Live LLM quality/latency with a real key or local model, native Tamil review, SLP and supported patient/partner phone acceptance. Weights are uncalibrated heuristics; evidence checks cannot prove all meanings. |
 
 ## Contextual engine and caregiver settings (v3)
 

@@ -30,7 +30,8 @@ import {
 } from "@sollu/shared";
 import { useApp } from "../state";
 import { db } from "../db";
-import { clockNow, minuteDistance } from "../lib/context";
+import { clockNow, getNearbyRoutines, inferenceContext } from "../lib/context";
+import { ContextSummary } from "../features/context/ContextSummary";
 import { audio } from "../features/audio";
 import { Back, Empty, Hint, PageTitle, TapButton, Tile } from "../ui";
 import { copy, uiText } from "../lib/copy";
@@ -42,13 +43,7 @@ export function Home() {
   const { settings, begin, question, online } = useApp();
   const navigate = useNavigate();
   const now = clockNow(settings);
-  const due = settings.routines
-    .filter((r) => Math.abs(minuteDistance(r.time, now)) <= 45)
-    .sort(
-      (a, b) =>
-        Math.abs(minuteDistance(a.time, now)) -
-        Math.abs(minuteDistance(b.time, now)),
-    )[0];
+  const due = getNearbyRoutines(settings, now)[0]?.routine;
   const contact = settings.contacts.find((c) => c.id === settings.addressee);
   const inputs = [
     {
@@ -308,9 +303,7 @@ export function TopicsPage() {
     [page, setPage] = useState(0);
   const now = clockNow(settings);
   const due = new Set(
-    settings.routines
-      .filter((r) => Math.abs(minuteDistance(r.time, now)) <= 45)
-      .map((r) => r.topic),
+    getNearbyRoutines(settings, now).map(({ routine }) => routine.topic),
   );
   const ordered = [...topics].sort(
     (a, b) => Number(due.has(b.id)) - Number(due.has(a.id)),
@@ -557,6 +550,14 @@ export function ConfirmPage() {
           </TapButton>
         )}
       </div>
+      <ContextSummary
+        context={
+          candidates.some((candidate) => candidate.source === "model")
+            ? inferenceContext(context, settings)
+            : context
+        }
+        lang={settings.lang}
+      />
       <div className="candidate-list" aria-live="polite" aria-busy={loading}>
         {loading ? (
           <div className="loading-cards">

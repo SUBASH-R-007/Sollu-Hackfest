@@ -5,3 +5,4 @@ export * from "./seed";
 export * from "./candidatePolicy";
 export * from "./vocabulary";
 export * from "./modelGrounding";
+export * from "./contextEngine";
