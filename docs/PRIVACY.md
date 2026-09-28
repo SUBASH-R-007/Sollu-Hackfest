@@ -4,7 +4,13 @@ Updated 2026-09-28. This is an engineering data-flow record and a pilot review c
 
 ## Plain-language notice
 
-Sollu helps a person choose words to communicate. The person decides which sentence is spoken. It is not a diagnosis, treatment tool or emergency service.
+Current default: the server blocks cloud sentence providers unless an operator deliberately opts in with `ALLOW_CLOUD_AI=1`. Device local-only protection also defaults on, including migrated settings. It allows only supported on-device recognition and browser voices marked local, and blocks external vision-model downloads. A synchronous same-origin privacy latch and cancellation guards propagate revocation across open tabs. Sentence requests still reach the Sollu server: localhost is the same computer; a remote deployment is another processor needing review. [Research, threat boundaries and clinical-use gaps](PRIVACY_AND_VALIDATION.md).
+
+Therapist JSON reports now have an authenticated passphrase-encrypted transfer option. Plain JSON/CSV and individually consented clips remain unencrypted downloads. Encryption does not authenticate a clinician, encrypt the active browser database, or include recordings in the report. The existing encrypted personal backup still excludes therapy data.
+
+References below to enabling cloud sharing require all three permissions: server cloud policy, explicitly relaxed device protection, and device/provider sharing consent. Online speech recognition additionally requires the separate Google / browser online selection. Relaxing device protection alone leaves recognition local; remote browser voices may then be permitted. The vendor and its retention cannot be verified by Sollu.
+
+Sollu helps a person choose words to communicate and supports individual communication practice. The person decides which sentence is spoken. It does not diagnose, prescribe treatment, measure clinical recovery or provide emergency services. [Jury guidance and intended-use boundaries](JURY_READINESS.md).
 
 Your profile, people, routine, phrases, consent records, recorded phrases, rehearsal suggestions and communication history are saved in this browser's IndexedDB storage. Clearing site data can remove them. Anyone who can use the unlocked browser may be able to read this information. The caregiver PIN prevents accidental changes; it is not disk encryption or a separate user account.
 
@@ -20,10 +26,12 @@ The patient outbox stores encrypted frames scoped to its pairing. Help expires a
 
 The statement “only the fragment and context packet leave the device” is incomplete. What leaves depends on the selected mode:
 
+Recognized health/help input now uses prepared local wording or clarification before the intent request or rehearsal cache. The server independently enforces the same model bypass for direct requests. Optional personal-context transfer filters people/vocabulary to explicit fragment/question/listener relevance. This is minimization, not anonymization; unknown health expressions can miss the bounded rule.
+
 | Action | Destination and purpose | Local/default mode |
 | --- | --- | --- |
 | Ask for candidate sentences | Sollu server; selected LLM receives bounded fragment/context after device cloud permission | Free vocabulary uses prepared meanings. Local Ollama runs on the server computer. OpenAI/Anthropic/Gemini/Groq receive the permitted text context when selected; provider account retention/training terms apply. |
-| Browser speech recognition | Browser/vendor recognition service may receive microphone audio | Not guaranteed private or offline. Disclose this before enabling it; Topics and Type need no recognition service. |
+| Browser speech recognition | Local recognizer by default; optional browser/vendor service may receive microphone audio | Online mode requires relaxed privacy protection and an explicit Google / browser online selection. No silent online fallback. Vendor/retention cannot be verified. Type/Topics remain available. |
 | Cloud transcription | Future route: Sollu server and selected STT provider receive a short clip | No paid STT adapter is connected. The test endpoint returns an explicitly selected fixture or unavailable response. |
 | Device/browser speech | Operating-system or browser speech service receives the selected text | A voice may be local or remote. A generic device voice is not the person's clone. |
 | Recorded phrase playback | No provider; exact phrase recording is read from local storage | A consented recording can be replayed only for its associated text. Deleting it removes the local replay asset. |

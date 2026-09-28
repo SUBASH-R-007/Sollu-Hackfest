@@ -4,8 +4,9 @@ import {
   getPainFollowupCandidates,
   painParts,
   numberWords,
+  quickPhrases,
 } from "./phrases";
-import { getVocabularyCandidates } from "./vocabulary";
+import { getVocabularyCandidates, prepareCatalogFragment } from "./vocabulary";
 import {
   ContextPacketSchema,
   type Candidate,
@@ -158,30 +159,19 @@ const pName = norm;
 /** Controlled bilingual suggestions. Fixtures are proposals, never inferred patient facts. */
 export function getMockCandidates(input: ContextInput): Candidate[] {
   const c = ContextPacketSchema.parse(input);
+  const prepared = prepareCatalogFragment(c);
+  if (prepared.ambiguous) return [];
   const path = c.fragment.topicPath ?? [];
-  let raw = norm(
-    [c.fragment.raw, c.fragment.objectLabel, ...path].filter(Boolean).join(" "),
+  const raw = norm(
+    [prepared.text, c.fragment.objectLabel, ...path].filter(Boolean).join(" "),
   );
-  let correction = "";
-  const mappings = (c.substitutions ?? []).filter(
-    (s) =>
-      s.confirmed === true &&
-      (!s.lang || s.lang === c.outputLang) &&
-      (!s.place || s.place === c.place) &&
-      (!s.addresseeId || s.addresseeId === c.addressee?.id) &&
-      mentions(raw, s.heard),
-  );
-  // Competing confirmed corrections are ambiguous, not a popularity contest.
-  if (new Set(mappings.map((s) => norm(s.means))).size > 1) return [];
-  if (mappings.length) {
-    const mapping = mappings[0];
-    raw = raw.replace(
-      new RegExp(escape(norm(mapping.heard)), "gu"),
-      norm(mapping.means),
-    );
-    correction = `${mapping.heard} → ${mapping.means}`;
-  }
-  const corrected = { ...c, fragment: { ...c.fragment, raw } };
+  const correction = prepared.reading ?? "";
+  // Corrections have already been applied once; they must never form a chain.
+  const corrected = {
+    ...c,
+    substitutions: [],
+    fragment: { ...c.fragment, raw },
+  };
   let result: Candidate[] = [];
   const part = painParts.find(
     (p) =>
@@ -189,7 +179,28 @@ export function getMockCandidates(input: ContextInput): Candidate[] {
       mentions(raw, p.en) ||
       p.ta.split(" / ").some((t) => mentions(raw, t)),
   );
-  if ((path[0] === "pain" || /pain|hurts|வலி|நெஞ்சு/.test(raw)) && part) {
+  // Reuse the existing authored Help message only for an exact request. Negation,
+  // uncertainty, names, time or other qualifiers must not disappear into generic help.
+  if (
+    /^(?:help|i need help|need help|help please|please help|உதவி|உதவி வேணும்)[.!?\s]*$/u.test(
+      raw,
+    )
+  )
+    result = [
+      {
+        ...quickPhrases[c.outputLang].help,
+        lang: c.outputLang,
+        intentId: "communication.help",
+        speechAct: "request",
+        polarity: "positive",
+        objectId: "help",
+        timeScope: "now",
+        evidenceRefs: ["fragment"],
+        source: "catalog",
+        templateVersion: "help-1",
+      },
+    ];
+  else if ((path[0] === "pain" || /pain|hurts|வலி|நெஞ்சு/.test(raw)) && part) {
     if (negative(raw)) return [];
     const left = path.includes("left") || /\bleft\b|இடது|\bidathu\b/.test(raw);
     const right =

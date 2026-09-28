@@ -1,41 +1,42 @@
 # Local rehearsal script
 
-Updated 2026-09-27. Hosting is deferred by the user. Run on a laptop with the local app and, for the caregiver relay, a separate browser profile/context. A local two-tab run is not the required two-phone acceptance. Before a public demo, use real HTTPS on the phones and complete the human checks in [../PROGRESS.md](../PROGRESS.md).
+Updated 2026-09-28. Hosting remains deferred. Use fictional profiles and disposable test records. The local browser demonstration is not physical-device acceptance or clinical validation. Read [jury claims and limits](JURY_READINESS.md) before presenting.
 
 ## Preparation
 
-1. Start `pnpm dev`; open the patient app and seed the fictional demo family through setup. Set the caregiver PIN. Use only consented recordings.
-2. Use **Mock demo** or configure **local Ollama** on the server. Paid cloud services are not connected. Keep mock/cached badges visible throughout. Verify the actual voice label: device voice or exact recorded phrase.
-3. Set the demo clock to 20:58 and show its badge. Enable stage measurement; clear only disposable demo attempts if starting a fresh measured comparison.
-4. Use Voice Studio to record exact phrases if demonstrating the free own-voice path. Listen to each and confirm its text. Explain that new sentences use device speech; this build does not create a generative clone or import recording files.
-5. Pair a separate caregiver browser context and tap Enable alerts there. Keep it open. Check receipts and Help acknowledgement. Do not use a real phone number in projected settings.
-6. Open `/demo` and tap **Warm up three scenarios**. This saves suggestion sets without playing audio. The seven sample scenes prepare inputs and clock settings; they do not exercise a microphone or camera. Prepare a water bottle and grant camera permission on the actual Camera page. Model download may take time; inference runs locally.
-7. For eventual phone rehearsal, charge two Android phones, arrange projector mirroring, confirm HTTPS microphone/camera access and check the chosen voices while offline. A LAN HTTP address usually cannot provide required secure-context APIs.
+1. Start the existing local web/API app; open Home at `http://localhost:5173/`. Use the caregiver gate in Settings to create/unlock the local PIN. Describe it as an interface lock.
+2. In Privacy, verify local-only protection is on and cloud sentence providers are blocked by server policy. In Speech recognition, select Local. Free vocabulary needs no key. Optional loopback Ollama needs a separately installed model and a reviewed daemon configuration; do not imply a live model was tested if it was not.
+3. Use only fictional names and selected demonstration routines. A simulated clock must keep its demo badge; real routine learning requires observed dates and caregiver review. Enable stage measurement only for the intended demonstration and keep demo observations separate from real usage metrics.
+4. Check the actual voice: supported local device voice or a consented exact recording. No generative voice clone is implemented. Missing local recognition or Tamil voices must remain visible; prepare Type/Topics/manual review as fallbacks.
+5. If showing the paired caregiver, use a separate browser context, enable alerts there and keep both pages open. Use fictional contact details. Receipt and “I'm coming” are different states, neither a guarantee of assistance.
+6. Rehearsal warm-up stores available authored vocabulary silently. Health/help inputs now bypass rehearsal caches and intent API calls. Camera model downloads are blocked in local-only mode; use a clearly labelled manual object selection or Topics unless a separately reviewed model is already available.
+7. Eventual phone testing needs secure-context APIs (normally HTTPS), actual microphone/camera permission and offline voice checks. Two local tabs do not satisfy the pending two-phone rehearsal.
 
 ## Six-minute walkthrough
 
-| Time | Action | Say / inspect |
+| Time | Action | Explain / inspect |
 | --- | --- | --- |
-| 0:00–0:35 | Show Home, Help, and four input methods | “Sollu offers possible sentences. The person decides what is said.” State the active provider/voice mode and whose consented voice is recorded. |
-| 0:35–1:30 | Speak “tablet… raathiri”, or visibly use a labelled mock transcript; choose one night-tablet sentence | Show three different meanings, Listen separately if needed, then the chosen exact sentence. Read the actual taps and time. No claimed two-tap result if extra taps were used. |
-| 1:30–2:10 | Repeat the same task on `/baseline` | Use the same measurement rules. Show the measured result without claiming a clinical speed improvement. |
-| 2:10–2:45 | Camera points at bottle | Show “bottle” label and water candidates. Never imply generic detector can recognise the tablet box. |
-| 2:45–3:25 | Select Dr. Rao; Topics → Pain → shoulder → left | English templates; choose intensity. Amber is urgency styling, not a diagnosis. With free device speech, state that the voice is generic. |
-| 3:25–4:05 | Partner question “மதியம் என்ன சாப்பிடணும்?”; fragment “ரசம்” | Show active question and answer candidates. If microphone unavailable, type the question and describe the fallback. |
-| 4:05–4:45 | “table” → None of these → clarify | Explain that rejecting the table meaning does not authorize an invented medicine meaning. Add a clearer word or use the repair tool. Demonstrate a substitution only after explicitly reviewing and approving that exact mapping in Privacy settings. |
-| 4:45–5:30 | Tap exact Help phrase; caregiver chooses “I'm coming” | The patient speaks only after their own tap; caregiver acknowledgement updates text, never remotely starts patient speech. Receipt/ack status must be real. Cancel with “It was a mistake”. |
-| 5:30–6:00 | Therapist-lite and privacy | Show today's actual attempts and CSV export. Explain what stays in the browser and which enabled services receive data. |
+| 0:00–0:40 | Home, recognition/privacy settings and supported selection | The person chooses meaning. Local recognition and cloud sentence generation have separate controls. Show familiar alternatives and optional two-step confirmation. |
+| 0:40–1:30 | Type `w-w-water` | Show the original fragment, proposed repair and exact sentence. Nothing speaks until a deliberate tap. Listen is a separate preview. Do not describe a typed fixture as an actual transcription. |
+| 1:30–2:10 | Type an ambiguous fragment such as `water ven`, then clarify | An empty result asks for another word/topic. None of these never authorizes an invented meaning. Personal corrections require explicit review and remain scoped. |
+| 2:10–2:50 | Type `chest pain`, then separately `chest pain yesterday` | The first uses existing prepared help wording. The second asks for clarification rather than discarding history. No LLM call, diagnosis, dosage or automatic alarm is generated. The phrase-routing rule is bounded, not an emergency detector. |
+| 2:50–3:50 | Communication practice: choose a familiar target and review a fictional/consented attempt | Capture requires consent and a user action. Review the transcript; show target-word matches and differences, readiness time, effort and fatigue. Text match is not pronunciation or recovery. Recordings do not fine-tune an acoustic model. |
+| 3:50–4:50 | Therapist dashboard → Communication Progress Report | Show weekly samples, missing data, language/method groups, reviewed word differences and reported understanding. Missing duration is absent, not zero. Clinician/reviewer identity is unverified. Avoid treatment-benefit claims. |
+| 4:50–5:30 | Encrypted report export/preview | Scope limits travel with the report. Use a fictional report and separate passphrase handling. Clips are separate consented unencrypted downloads. Nothing is automatically sent to a therapist. |
+| 5:30–6:00 | Optional exact Help phrase and paired caregiver acknowledgement | Only the deliberate confirmed message speaks/shares. Inspect actual delivery and acknowledgement states; cancel a mistaken Help. State that local storage remains unencrypted and there is no automatic history expiry. |
+
+For a baseline comparison, repeat the same fictional communication task using `/baseline` with the same measurement boundaries. Report actual taps and attempt-to-audio-start time; do not turn a one-person rehearsal into a clinical improvement percentage. Show only the distinct supported candidates available, up to three; do not force three for every fragment.
 
 ## Failure plan
 
 | Failure | Visible recovery |
 | --- | --- |
-| No microphone support / transcript wrong | Show retry or Type/Topics. Never present a fixture as a recording result. |
-| Local model unavailable / provider timeout | Show fallback or explicitly labelled mock/rehearsal output. Do not preserve live-latency claims. |
-| Audio becomes ready after tap expires | Ask for a new tap on the exact sentence. Include it in measured taps. |
-| Tamil voice missing | Display the sentence; use an exact recorded phrase if present. Do not speak a translated English sentence as though it were the selected Tamil sentence. |
-| Camera permission/model fails | Explain the limitation; return to Topics. A manually selected object label must be described as manual input. |
-| Caregiver relay disconnected | “Not sent” and SMS option; do not claim delivered. During offline rehearsal skip caregiver steps unless queued-delivery is actually implemented. |
-| Device offline | Use precached shell, quick phrases and available local/recorded audio. Mark every replayed intent result CACHED; show text or Help tone if speech unavailable. |
+| Local recognizer unavailable / transcript wrong | Type, Topics or manual transcript review. Do not silently switch online. |
+| Local model unavailable / provider timeout | Authored vocabulary or clarification, visibly labelled. No live-model quality claim. |
+| Audio is ready after the tap expires | A fresh tap on the exact sentence; include it in measured taps. |
+| Tamil voice absent | Keep Tamil text visible or use an exact approved recording. Do not silently translate the selected message. |
+| Camera permission/model blocked | Use Topics or clearly labelled manual object input. Do not say the detector recognized it. |
+| Caregiver disconnected | Inspect queued/not-sent/expired state and explicit messaging options. Help expires after 60 seconds, ordinary messages after five minutes; no background push promise. |
+| Offline | Previously cached app routes and local catalog/recordings may work. Recognition and voices still depend on device support. Prepared health/help wording remains local; ordinary rehearsal results show CACHED when actually replayed. |
 
-Record two consecutive live phone rehearsals and one offline rehearsal with date, devices, provider mode, actual timings, faults and the human's report. All three are pending until that report exists. The free recording path demonstrates useful voice replay but does not pass the original generative-clone milestone.
+Pending human acceptance: two consecutive physical-phone rehearsals and one offline rehearsal, with device, language, provider/voice mode, actual timings, faults and participant feedback recorded. Tamil content review, representative accessibility review, security/privacy assessment and clinical/regulatory review remain separate. See [PROGRESS](../PROGRESS.md) and the [v7 automated record](evidence/v7/VERIFICATION.md).

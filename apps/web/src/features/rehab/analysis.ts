@@ -255,7 +255,8 @@ function activeDays(records: PracticeRecord[]) {
 function reviewedScore(record: PracticeRecord): number | null {
   return record.transcriptReviewed &&
     record.transcriptSource !== "none" &&
-    record.kind !== "aac"
+    record.kind !== "aac" &&
+    record.communicationMethod !== "aac"
     ? scoreTranscript(record.target, record.transcript).matchPct
     : null;
 }
@@ -338,7 +339,9 @@ export function summarizePractice(
     ),
   }));
   const aacRecords = unique.filter(
-    (record) => record.kind === "aac" && record.aacCompleted !== null,
+    (record) =>
+      (record.kind === "aac" || record.communicationMethod === "aac") &&
+      record.aacCompleted !== null,
   );
   const aacCompleted = aacRecords.filter(
     (record) => record.aacCompleted === true,

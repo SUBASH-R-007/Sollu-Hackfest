@@ -179,6 +179,25 @@ describe("practice analytics", () => {
     expect(summary.textMatch).toMatchObject({ n: 1, median: 66.7 });
     expect(summary.groups).toHaveLength(2);
   });
+  it("does not score an AAC communication method even when the task is a sentence", () => {
+    const summary = summarizePractice(
+      [
+        record({
+          kind: "sentence",
+          communicationMethod: "aac",
+          aacCompleted: true,
+        }),
+      ],
+      { now },
+    );
+    expect(summary.textMatch).toMatchObject({ n: 0, median: null });
+    expect(summary.groups[0].textMatch).toMatchObject({ n: 0, median: null });
+    expect(summary.weekly.at(-1)?.textMatch).toMatchObject({
+      n: 0,
+      median: null,
+    });
+    expect(summary.aac).toMatchObject({ assessed: 1, completed: 1, rate: 1 });
+  });
   it("does not count duplicate attempt IDs or future observations", () => {
     const summary = summarizePractice(
       [

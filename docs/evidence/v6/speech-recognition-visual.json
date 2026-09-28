@@ -1,0 +1,44 @@
+[
+  {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "checks": [
+      {
+        "mode": "local",
+        "serious": [],
+        "overflow": false
+      },
+      {
+        "mode": "online",
+        "serious": [],
+        "overflow": false
+      }
+    ],
+    "errors": [],
+    "externalRequests": 0,
+    "recognitionStarts": 0
+  },
+  {
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "checks": [
+      {
+        "mode": "local",
+        "serious": [],
+        "overflow": false
+      },
+      {
+        "mode": "online",
+        "serious": [],
+        "overflow": false
+      }
+    ],
+    "errors": [],
+    "externalRequests": 0,
+    "recognitionStarts": 0
+  }
+]

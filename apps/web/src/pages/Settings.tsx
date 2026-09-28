@@ -47,6 +47,10 @@ import {
 } from "../features/settings/LlmSettings";
 import { PersonalizationSettings } from "../features/settings/Personalization";
 import { ContextSettings } from "../features/settings/ContextSettings";
+import { PrivacyControls } from "../features/privacy/PrivacyControls";
+import { setCloudSentencePermission } from "../features/privacy/sentencePolicy";
+import { SpeechRecognitionSettings } from "../features/settings/SpeechRecognitionSettings";
+import { setRecognitionPreference } from "../features/privacy/recognitionPreference";
 
 const sections = [
   { id: "general", label: "General", icon: Settings2 },
@@ -197,6 +201,7 @@ function General() {
   }
   return (
     <div className="settings-stack" style={{ display: "grid", gap: 24 }}>
+      <SpeechRecognitionSettings />
       <Card title="Make Sollu feel familiar">
         <div style={gridStyle}>
           <Field label="Preferred name">
@@ -285,9 +290,35 @@ function General() {
             checked={draft.twoStep}
             onChange={(value) => change("twoStep", value)}
           >
-            Select a sentence, then tap it again to speak
+            Confirm sentence selections before speaking
           </Toggle>
         </div>
+        <p className="settings-feature-muted">
+          On suggested sentences, select one and then tap Say. Some personal
+          cards and communication tools ask for a second tap on the same
+          sentence. My phrases, Listen previews and quick phrases still play on
+          one deliberate tap.
+        </p>
+      </Card>
+      <Card title="Choosing messages together">
+        <p>
+          Help the person find a reliable way to recognize and reject a message.
+          Give them time; use familiar words, pictures, gestures or a partner
+          reading the choices. Check the exact meaning without steering the
+          answer.
+        </p>
+        <p>
+          If sentence choices are difficult to understand, try Topics, familiar
+          saved phrases or supported yes/no communication. A speech-language
+          professional can help choose suitable access and confirmation methods.
+          Support depends on the person’s abilities and preferences, across
+          conditions.
+        </p>
+        <p className="settings-feature-muted">
+          A tap does not assess comprehension or prove who selected it. This app
+          does not verify a caregiver’s legal authority or diagnose
+          communication ability.
+        </p>
       </Card>
       <Card title="Comfort & access">
         <div style={gridStyle}>
@@ -1188,6 +1219,16 @@ function Privacy() {
     stop();
     audio.stop();
     try {
+      setCloudSentencePermission(false);
+    } catch {
+      /* Revocation remains effective in this tab. */
+    }
+    try {
+      setRecognitionPreference("local");
+    } catch {
+      // A failed preference write still revokes input; continue erasing records.
+    }
+    try {
       const { clearRehabData } = await import("../features/rehab/store");
       await clearRehabData();
       await db.transaction("rw", db.tables, async () => {
@@ -1201,6 +1242,8 @@ function Privacy() {
   }
   return (
     <div style={{ display: "grid", gap: 24 }}>
+      <PrivacyControls />
+      <SpeechRecognitionSettings />
       <Card title="Where your information goes">
         <div style={{ overflowX: "auto" }}>
           <table className="privacy-table attempt-table">
@@ -1214,12 +1257,14 @@ function Privacy() {
               <tr>
                 <td>Find sentences</td>
                 <td>
-                  Free vocabulary uses prepared meanings. Local Ollama runs on
-                  the Sollu server computer. A cloud engine sends your fragment,
+                  Cloud providers are blocked by default at the server. Free
+                  vocabulary uses prepared meanings. Local Ollama runs on the
+                  Sollu server computer. A cloud engine sends your fragment,
                   language and current conversation prompt to the selected
                   provider through the server only after cloud sharing is
-                  enabled. Optional history and personal context are controlled
-                  in Personalize. Provider retention policies apply.
+                  enabled by both server and device policy. Optional history and
+                  personal context are controlled in Personalize. Provider
+                  retention policies apply.
                 </td>
               </tr>
               <tr>
@@ -1235,17 +1280,19 @@ function Privacy() {
               <tr>
                 <td>Speak into the browser</td>
                 <td>
-                  The browser or operating system may send microphone audio to
-                  its speech-recognition service. Availability and retention
-                  depend on that service.
+                  Local-only protection requires supported on-device
+                  recognition. With protection off, online input still requires
+                  choosing Google / browser online in Speech recognition. That
+                  mode may send microphone audio to the browser’s vendor.
+                  Availability and retention depend on that service.
                 </td>
               </tr>
               <tr>
                 <td>Play a device voice</td>
                 <td>
                   Exact sentence text is passed to the browser’s speech system.
-                  Some installed voices work locally; others may use an online
-                  service.
+                  Local-only protection permits only voices marked local by the
+                  browser. When protection is off, online voices may be used.
                 </td>
               </tr>
               <tr>
@@ -1259,9 +1306,10 @@ function Privacy() {
               <tr>
                 <td>Use Camera</td>
                 <td>
-                  A recognition model downloads on first use. Photos are
-                  processed locally and discarded when you leave. Only an object
-                  label enters the sentence request.
+                  Local-only protection blocks external model downloads. When
+                  allowed, a recognition model downloads on first use. Photos
+                  are processed locally and discarded when you leave. Only an
+                  object label enters the sentence request.
                 </td>
               </tr>
               <tr>
@@ -1285,9 +1333,9 @@ function Privacy() {
                 <td>
                   Practice records, audio/video clips and reviewer notes stay in
                   a separate local database. Browser transcription is optional
-                  and may use the browser vendor's service. Reports and clips
-                  require explicit download; they are not automatically sent to
-                  a therapist or used to train a model.
+                  and obeys local-only protection. Reports and clips require
+                  explicit download; they are not automatically sent to a
+                  therapist or used to train a model.
                 </td>
               </tr>
               <tr>
@@ -1452,7 +1500,10 @@ export default function Settings() {
         ) : active === "personalize" ? (
           <PersonalizationSettings />
         ) : active === "llm" ? (
-          <LlmSettings onChanged={refreshHealth} />
+          <>
+            <SpeechRecognitionSettings />
+            <LlmSettings onChanged={refreshHealth} />
+          </>
         ) : active === "context" ? (
           <ContextSettings />
         ) : active === "voice" ? (

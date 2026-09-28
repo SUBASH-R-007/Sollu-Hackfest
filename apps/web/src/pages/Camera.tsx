@@ -13,6 +13,11 @@ import type { Fragment } from "@sollu/shared";
 import { useApp } from "../state";
 import { Back, Hint, PageTitle, TapButton } from "../ui";
 import { copy } from "../lib/copy";
+import {
+  isLocalProcessingOnly,
+  requireModelDownloadPermission,
+  subscribeLocalProcessingPolicy,
+} from "../features/privacy/browserPolicy";
 
 const concepts: Record<string, string> = {
   bottle: "Drink",
@@ -36,20 +41,56 @@ const concepts: Record<string, string> = {
 };
 
 // Model weights are reused in memory. Photos are never stored in this cache.
-let cachedModel: Promise<ObjectDetection> | undefined;
+let cachedModel: ObjectDetection | undefined;
+let pendingModel:
+  { promise: Promise<ObjectDetection>; revoked: boolean } | undefined;
 async function getModel(): Promise<ObjectDetection> {
-  if (!cachedModel) {
-    cachedModel = (async () => {
-      const tf = await import("@tensorflow/tfjs");
-      await tf.ready();
-      const coco = await import("@tensorflow-models/coco-ssd");
-      return coco.load({ base: "lite_mobilenet_v2" });
-    })().catch((error: unknown) => {
-      cachedModel = undefined;
-      throw error;
+  if (cachedModel) return cachedModel;
+  requireModelDownloadPermission();
+  if (!pendingModel) {
+    const pending = {
+      promise: undefined as unknown as Promise<ObjectDetection>,
+      revoked: false,
+    };
+    const stopWatching = subscribeLocalProcessingPolicy((protectedMode) => {
+      if (protectedMode) {
+        pending.revoked = true;
+        if (pendingModel === pending) pendingModel = undefined;
+      }
     });
+    const assertAllowed = () => {
+      requireModelDownloadPermission();
+      if (pending.revoked)
+        throw new Error(
+          "The model download was cancelled after privacy protection changed. Use Topics.",
+        );
+    };
+    pending.promise = (async () => {
+      const tf = await import("@tensorflow/tfjs");
+      assertAllowed();
+      await tf.ready();
+      assertAllowed();
+      const coco = await import("@tensorflow-models/coco-ssd");
+      // This wrapper has no AbortSignal option. Recheck immediately before the
+      // actual transfer; an already-started weight download may finish, but no
+      // photo is uploaded and a revoked result is discarded, never cached.
+      assertAllowed();
+      const model = await coco.load({ base: "lite_mobilenet_v2" });
+      if (pending.revoked || isLocalProcessingOnly()) {
+        model.dispose();
+        throw new Error(
+          "Privacy protection changed. The downloaded model was discarded. Use Topics.",
+        );
+      }
+      cachedModel = model;
+      return model;
+    })().finally(() => {
+      stopWatching();
+      if (pendingModel === pending) pendingModel = undefined;
+    });
+    pendingModel = pending;
   }
-  return cachedModel;
+  return pendingModel.promise;
 }
 
 function resizePhoto(
@@ -178,10 +219,12 @@ export default function Camera() {
         setError(
           "I’m not sure what this is. Try a bottle or cup, take another photo, or use Topics.",
         );
-    } catch {
+    } catch (failure) {
       if (mounted.current && request === detectionRequest.current) {
         setError(
-          "The object recogniser is unavailable. Its first download needs internet. Your photo has stayed on this device. Try Topics or the labelled demo below.",
+          failure instanceof Error && settings.localProcessingOnly
+            ? failure.message
+            : "The object recogniser is unavailable. Its first download needs internet. Your photo has stayed on this device. Try Topics or the labelled demo below.",
         );
       }
     } finally {
@@ -429,8 +472,11 @@ export default function Camera() {
         )}
         <Hint>
           <ShieldCheck size={18} aria-hidden="true" /> Photos stay on this
-          device. The first use downloads a free recognition model. Only the
-          object label is sent to find sentences.
+          device.{" "}
+          {settings.localProcessingOnly !== false
+            ? "Local-only protection blocks new model downloads. A model already loaded in this tab can still work."
+            : "The first use downloads a free recognition model. A transfer already started may finish if protection changes; it contains no photo."}{" "}
+          Only the object label is sent to the Sollu server to find sentences.
         </Hint>
         <p className="muted">
           Recognises everyday objects such as bottles, cups and chairs. It

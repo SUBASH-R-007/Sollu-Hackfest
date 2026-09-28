@@ -1,5 +1,7 @@
 # Approved build plan
 
+2026-09-28 jury-review extension: the user requested local privacy protection, robust fragmented input, word accuracy/coverage metrics and continued rehabilitation support. Current implementation decisions and jurisdiction-specific research are in [PRIVACY_AND_VALIDATION.md](PRIVACY_AND_VALIDATION.md). Cloud providers are blocked by default; encrypted report transfer does not make the active database encrypted or establish clinical/regulatory acceptance.
+
 2026-09-28 addition: the user requested research and implementation of multi-condition communication rehabilitation, recordings, scoring, therapist reporting and learned context. Scope and remaining clinical acceptance are documented in [REHABILITATION.md](REHABILITATION.md); rationale is in [REHABILITATION_RESEARCH.md](REHABILITATION_RESEARCH.md).
 
 Approved by the user on 2026-09-27 after the three planning questions. The user has no paid API keys, requests a free alternative, and explicitly defers hosting. This update overrides the original three-hour deployment target without changing the safety invariants. The complete original brief is [SPEC.md](SPEC.md).

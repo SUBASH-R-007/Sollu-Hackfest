@@ -20,7 +20,11 @@ import {
 import { Signer } from "./lib/signing.js";
 import { selectIntent } from "./lib/intent.js";
 import { mockWav } from "./providers/mock.js";
-import { isCloudProvider, type ServerConfig } from "./config.js";
+import {
+  CloudAIBlockedError,
+  isCloudProvider,
+  type ServerConfig,
+} from "./config.js";
 import { ProviderSettingsStore } from "./providers/providerSettings.js";
 import { generateStructured } from "./providers/cloud.js";
 
@@ -73,6 +77,12 @@ export async function createApp(
   });
   app.decorateRequest("deviceId", "");
   app.setErrorHandler((error, _request, reply) => {
+    if (error instanceof CloudAIBlockedError) {
+      void reply
+        .code(error.statusCode)
+        .send({ error: error.message, code: error.code });
+      return;
+    }
     const status =
       error instanceof ZodError
         ? 400
@@ -157,10 +167,17 @@ export async function createApp(
     ownVoiceAvailable: false,
     capabilities: {
       localIntent: config.intentProvider === "ollama",
-      paidProviders: true,
+      paidProviders: config.allowCloudAI === true,
       encryptedRelay: true,
     },
-    note: "Device speech and recorded phrases work without paid keys. Optional cloud sentence framing requires device settings and sharing permission. Mock cloning creates no real voice.",
+    privacy: {
+      mode: config.allowCloudAI === true ? "cloud-permitted" : "local-only",
+      allowCloudAI: config.allowCloudAI === true,
+    },
+    note:
+      config.allowCloudAI === true
+        ? "Device speech and recorded phrases work without paid keys. Cloud sentence framing requires device settings and sharing permission. Mock cloning creates no real voice."
+        : "Cloud sentence providers are blocked by server policy. Free vocabulary and loopback Ollama are available. Browser speech services have separate privacy settings. Mock cloning creates no real voice.",
   }));
   app.post("/api/device/register", { config: limited(10) }, async (request) => {
     const body = z
@@ -181,10 +198,13 @@ export async function createApp(
     providerSettings.update(request.deviceId!, request.body),
   );
   app.post("/api/llm/test", { config: limited(5) }, async (request, reply) => {
-    z.object({})
+    const input = z
+      .object({ localOnly: z.boolean().default(true) })
       .strict()
       .parse(request.body ?? {});
-    const selected = providerSettings.resolve(request.deviceId!);
+    const selected = providerSettings.resolve(request.deviceId!, {
+      localOnly: input.localOnly,
+    });
     const start = performance.now();
     const controller = new AbortController();
     const cancelled = () => {
@@ -195,6 +215,7 @@ export async function createApp(
     try {
       if (selected.intentProvider !== "mock") {
         const result = await generateStructured(selected.intentProvider, {
+          allowCloudAI: selected.allowCloudAI === true,
           model: selected.llmModel!,
           apiKey: selected.apiKey,
           ollamaUrl: selected.ollamaUrl,
@@ -240,7 +261,7 @@ export async function createApp(
   });
   app.post("/api/intent", { config: limited(30) }, async (request, reply) => {
     const body = z
-      .object({ context: z.unknown() })
+      .object({ context: z.unknown(), localOnly: z.boolean().default(true) })
       .strict()
       .parse(request.body);
     const input = body.context as Record<string, unknown>;
@@ -256,7 +277,9 @@ export async function createApp(
     request.raw.once("aborted", cancelled);
     reply.raw.once("close", cancelled);
     try {
-      const selected = providerSettings.resolve(request.deviceId!);
+      const selected = providerSettings.resolve(request.deviceId!, {
+        localOnly: body.localOnly,
+      });
       const result = await selectIntent(context, selected, controller.signal);
       const candidates = result.candidates.map((c) => ({
         ...c,
@@ -270,7 +293,11 @@ export async function createApp(
       return {
         candidates,
         model: result.model,
-        provider: selected.intentProvider,
+        provider:
+          result.model === "predefined-health-help"
+            ? "catalog"
+            : selected.intentProvider,
+        configuredProvider: selected.intentProvider,
         mock: selected.intentProvider === "mock",
         fallback: "fallback" in result ? result.fallback : false,
         revision: selected.revision,

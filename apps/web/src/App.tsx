@@ -22,6 +22,8 @@ import {
   LockKeyhole,
   Settings as SettingsIcon,
   ShieldCheck,
+  Sprout,
+  Stethoscope,
   WifiOff,
 } from "lucide-react";
 import { AppProvider, useApp } from "./state";
@@ -31,6 +33,7 @@ import { Brand, FooterNote, TapButton } from "./ui";
 import { clockNow } from "./lib/context";
 import { api } from "./lib/api";
 import { uiText } from "./lib/copy";
+import { RehabilitationNav } from "./features/rehab/RehabilitationNav";
 import {
   CommunicationDock,
   PausePage,
@@ -74,6 +77,12 @@ const CameraPage = lazy(() => import("./pages/Camera"));
 const Care = lazy(() => import("./pages/Care"));
 const Therapist = lazy(() => import("./pages/Therapist"));
 const PracticePage = lazy(() => import("./features/rehab/PracticePage"));
+const AppointmentsPage = lazy(
+  () => import("./features/appointments/AppointmentsPage"),
+);
+const RehabilitationHub = lazy(
+  () => import("./features/rehab/RehabilitationHub"),
+);
 const Demo = lazy(() => import("./pages/Demo"));
 
 function CaregiverGate({ children }: { children: ReactNode }) {
@@ -117,7 +126,7 @@ function CaregiverGate({ children }: { children: ReactNode }) {
       </h1>
       <p>
         {settings.pinHash
-          ? "Enter your PIN to open settings, Voice Studio and the communication log."
+          ? "Enter your PIN to open settings, Voice Studio and the clinician dashboard."
           : "Create a four-digit PIN to keep settings separate from everyday communication."}
       </p>
       <form
@@ -164,7 +173,10 @@ function Shell() {
   const hold = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const path = location.pathname,
     care = path === "/care",
-    family = ["/settings", "/therapist", "/demo"].includes(path),
+    family = ["/settings", "/therapist", "/clinician", "/demo"].includes(path),
+    rehabilitation = ["/rehabilitation", "/practice", "/appointments"].includes(
+      path,
+    ),
     home = path === "/";
   useEffect(() => {
     let active = true;
@@ -241,7 +253,13 @@ function Shell() {
     { path: "/phrases", label: "My phrases", icon: BookHeart },
     { path: "/recent", label: "Recent words", icon: Clock3 },
     { path: "/tools", label: "My tools", icon: BookHeart },
+    { path: "/rehabilitation", label: "Rehabilitation", icon: Sprout },
+    { path: "/clinician", label: "Clinician", icon: Stethoscope },
   ];
+  const isActive = (destination: string) =>
+    path === destination ||
+    (destination === "/rehabilitation" && rehabilitation) ||
+    (destination === "/clinician" && path === "/therapist");
   function go(to: string) {
     abandon();
     navigate(to);
@@ -265,12 +283,13 @@ function Shell() {
             {nav.map((n) => (
               <TapButton
                 key={n.path}
-                className={`nav-item ${path === n.path ? "active" : ""}`}
+                className={`nav-item ${isActive(n.path) ? "active" : ""}`}
+                aria-current={isActive(n.path) ? "page" : undefined}
                 onActivate={() => go(n.path)}
               >
                 <n.icon size={23} />
                 <span>{uiText(settings.lang, n.label)}</span>
-                {path === n.path && <span className="active-dot" />}
+                {isActive(n.path) && <span className="active-dot" />}
               </TapButton>
             ))}
           </nav>
@@ -353,7 +372,8 @@ function Shell() {
             {nav.map((n) => (
               <TapButton
                 key={n.path}
-                className={path === n.path ? "active" : ""}
+                className={isActive(n.path) ? "active" : ""}
+                aria-current={isActive(n.path) ? "page" : undefined}
                 onActivate={() => go(n.path)}
               >
                 <n.icon size={21} />
@@ -406,6 +426,7 @@ function Shell() {
               </div>
             </div>
           )}
+          {rehabilitation && <RehabilitationNav />}
           <Suspense
             fallback={<div className="route-loading">Opening your space…</div>}
           >
@@ -424,6 +445,8 @@ function Shell() {
               <Route path="/people" element={<PeoplePage />} />
               <Route path="/tools" element={<ToolsPage />} />
               <Route path="/practice" element={<PracticePage />} />
+              <Route path="/appointments" element={<AppointmentsPage />} />
+              <Route path="/rehabilitation" element={<RehabilitationHub />} />
               <Route path="/words" element={<WordsPage />} />
               <Route path="/scenes" element={<ScenesPage />} />
               <Route path="/stories" element={<StoriesPage />} />
@@ -437,6 +460,14 @@ function Shell() {
                 element={
                   <CaregiverGate>
                     <SettingsPage />
+                  </CaregiverGate>
+                }
+              />
+              <Route
+                path="/clinician"
+                element={
+                  <CaregiverGate>
+                    <Therapist />
                   </CaregiverGate>
                 }
               />
@@ -493,8 +524,11 @@ function Shell() {
               <TapButton onActivate={() => navigate("/settings?tab=voice")}>
                 Voice Studio
               </TapButton>
-              <TapButton onActivate={() => navigate("/therapist")}>
-                Communication log
+              <TapButton onActivate={() => navigate("/clinician")}>
+                {uiText(settings.lang, "Clinician dashboard")}
+              </TapButton>
+              <TapButton onActivate={() => navigate("/rehabilitation")}>
+                {uiText(settings.lang, "Rehabilitation")}
               </TapButton>
               <TapButton onActivate={() => navigate("/demo")}>
                 Demo & rehearsal

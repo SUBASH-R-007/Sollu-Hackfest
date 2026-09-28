@@ -24,6 +24,7 @@ import {
   defaultPhrases,
   painParts,
   quickPhrases,
+  requiresPredefinedCommunication,
   topics,
   type Candidate,
   type Fragment,
@@ -36,11 +37,15 @@ import { audio } from "../features/audio";
 import { Back, Empty, Hint, PageTitle, TapButton, Tile } from "../ui";
 import { copy, uiText } from "../lib/copy";
 import { extractTranscript } from "../lib/transcript";
+import { prepareBrowserRecognition } from "../features/privacy/browserPolicy";
+import { useSpeechRecognitionMode } from "../features/privacy/useSpeechRecognitionMode";
+import { recognitionErrorMessage } from "../features/privacy/recognitionDiagnostics";
 
 const ticket = (event: Event, text: string) =>
   audio.createTap(event, text, { role: "patient", surface: "patient" });
 export function Home() {
   const { settings, begin, question, online } = useApp();
+  const recognitionMode = useSpeechRecognitionMode();
   const navigate = useNavigate();
   const now = clockNow(settings);
   const due = getNearbyRoutines(settings, now)[0]?.routine;
@@ -173,8 +178,12 @@ export function Home() {
         </TapButton>
       </div>
       <div className="privacy-inline">
-        Browser speech may use an online service. Your saved phrases stay on
-        this device.
+        {settings.localProcessingOnly !== false
+          ? "Local-only speech protection is on."
+          : recognitionMode === "browser"
+            ? "Online speech recognition is selected. Speech may reach the browser vendor."
+            : "Speech recognition is local. Some speaking voices may use an online service."}{" "}
+        Your saved phrases stay on this device.
       </div>
     </>
   );
@@ -272,7 +281,13 @@ export function TypePage() {
         />
         <div className="suggestion-chips">
           {words.map((w) => (
-            <TapButton key={w} onActivate={() => setValue(w)}>
+            <TapButton
+              key={w}
+              onActivate={() => {
+                setValue(w);
+                updateDraft({ modality: "text", raw: w });
+              }}
+            >
               {w}
             </TapButton>
           ))}
@@ -492,7 +507,8 @@ function SentenceText({ c }: { c: Candidate }) {
   );
 }
 export function ConfirmPage() {
-  const { session, settings, speak, retry, generate } = useApp();
+  const { session, settings, speak, retry, generate, showMoreChoices } =
+    useApp();
   const [selected, setSelected] = useState<Candidate | null>(null);
   const navigate = useNavigate();
   useEffect(
@@ -509,6 +525,10 @@ export function ConfirmPage() {
       </>
     );
   const { candidates, loading, context } = session;
+  const hasModelChoices = [
+    ...candidates,
+    ...(session.moreCandidates ?? []),
+  ].some((candidate) => candidate.source === "model");
   return (
     <>
       <Back />
@@ -525,8 +545,18 @@ export function ConfirmPage() {
       </div>
       <PageTitle
         title="Is this what you mean?"
-        subtitle="Tap your sentence to say it. Listen lets you hear a preview."
+        subtitle={
+          settings.twoStep
+            ? "Choose a sentence, then tap Say to speak. Listen lets you hear a preview."
+            : "Tap your sentence to say it. Listen lets you hear a preview."
+        }
       />
+      {requiresPredefinedCommunication(context) && (
+        <p className="notice">
+          Health and help messages use prepared wording. Choose only what you
+          mean.
+        </p>
+      )}
       <div className="confirm-context">
         <TapButton onActivate={() => navigate("/people")}>
           To: {context.addressee?.name ?? "Someone nearby"}
@@ -552,9 +582,7 @@ export function ConfirmPage() {
       </div>
       <ContextSummary
         context={
-          candidates.some((candidate) => candidate.source === "model")
-            ? inferenceContext(context, settings)
-            : context
+          hasModelChoices ? inferenceContext(context, settings) : context
         }
         lang={settings.lang}
       />
@@ -593,12 +621,26 @@ export function ConfirmPage() {
               >
                 <span className="candidate-icon">{c.icon}</span>
                 <span className="candidate-copy">
+                  {c.reading.includes("→") && (
+                    <span className="candidate-reading candidate-gloss">
+                      {c.reading}
+                    </span>
+                  )}
                   {c.source === "model" && (
                     <span className="usual-label">
                       {copy(
                         settings.lang,
                         "AI draft · Check the meaning",
                         "AI வரைவு · பொருளைச் சரிபாருங்கள்",
+                      )}
+                    </span>
+                  )}
+                  {hasModelChoices && c.source === "catalog" && (
+                    <span className="usual-label">
+                      {copy(
+                        settings.lang,
+                        "Prepared option · Check the meaning",
+                        "தயாரான விருப்பம் · பொருளைச் சரிபாருங்கள்",
                       )}
                     </span>
                   )}
@@ -636,6 +678,19 @@ export function ConfirmPage() {
           ))
         )}
       </div>
+      {!loading && Boolean(session.moreCandidates?.length) && (
+        <TapButton
+          className="secondary-button full"
+          onActivate={showMoreChoices}
+        >
+          <Grid2X2 size={22} />
+          {copy(
+            settings.lang,
+            "Show more options",
+            "மேலும் விருப்பங்களைக் காட்டு",
+          )}
+        </TapButton>
+      )}
       {session.error && (
         <div role="status" className="notice amber">
           {session.error}
@@ -989,6 +1044,7 @@ interface Recognition {
   continuous: boolean;
   interimResults: boolean;
   maxAlternatives: number;
+  onstart: (() => void) | null;
   onresult: ((e: RecognitionEventLike) => void) | null;
   onerror: ((e: { error: string }) => void) | null;
   onend: (() => void) | null;
@@ -1001,6 +1057,7 @@ type SpeechWindow = Window & {
   webkitSpeechRecognition?: new () => Recognition;
 };
 export function SpeakPage({ partner = false }: { partner?: boolean }) {
+  const recognitionMode = useSpeechRecognitionMode();
   const {
     settings,
     session,
@@ -1012,11 +1069,12 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
   } = useApp();
   const [recordingRun, setRecordingRun] = useState(0);
   const navigate = useNavigate();
-  const recognition = useRef<Recognition | null>(null),
-    transcript = useRef(""),
+  const stopRecognition = useRef(() => {});
+  const transcript = useRef(""),
     alternatives = useRef<string[]>([]),
     submitted = useRef(false);
   const [listening, setListening] = useState(false),
+    [starting, setStarting] = useState(false),
     [heard, setHeard] = useState(""),
     [error, setError] = useState("");
   const submitRef = useRef((_text: string) => {});
@@ -1036,36 +1094,92 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
     }
   };
   useEffect(() => {
+    setError("");
+    setListening(false);
+    setStarting(false);
+    submitted.current = false;
     if (!partner && !session) begin({ modality: "speech", raw: "" });
     const Constructor =
       (window as SpeechWindow).SpeechRecognition ??
       (window as SpeechWindow).webkitSpeechRecognition;
-    if (!online) {
+    if (!online && recognitionMode === "browser") {
       setError("You’re offline. Use Topics or My phrases.");
       return;
     }
     if (!Constructor) {
       setError(
-        "Speech recognition isn’t available in this browser. You can type, use Topics, or try the labelled demo below.",
+        recognitionErrorMessage(
+          "recognition-unavailable",
+          recognitionMode,
+          settings.lang,
+        ),
       );
       return;
     }
-    const rec = new Constructor();
+    let rec: Recognition;
+    try {
+      rec = prepareBrowserRecognition(Constructor);
+    } catch (failure) {
+      setError(
+        failure instanceof Error
+          ? failure.message
+          : "Local speech recognition is unavailable. Use typing or Topics.",
+      );
+      return;
+    }
     const prefix = transcript.current;
-    submitted.current = false;
-    recognition.current = rec;
     rec.lang = settings.lang === "ta" ? "ta-IN" : "en-IN";
     rec.continuous = true;
     rec.interimResults = true;
     rec.maxAlternatives = 3;
+    let active = true;
+    let started = false;
+    let receivedSpeech = false;
     let silence: ReturnType<typeof setTimeout> | undefined;
-    const finish = () => {
-      rec.stop();
+    let cap: ReturnType<typeof setTimeout> | undefined;
+    const dispose = () => {
+      if (!active) return;
+      active = false;
+      clearTimeout(cap);
+      clearTimeout(silence);
+      clearTimeout(startup);
+      rec.onstart = rec.onend = rec.onresult = rec.onerror = null;
+      try {
+        rec.abort();
+      } catch {
+        /* The browser may already have ended. */
+      }
       setListening(false);
-      if (transcript.current) submitRef.current(transcript.current);
+      setStarting(false);
+    };
+    stopRecognition.current = dispose;
+    const fail = (code: string) => {
+      if (!active) return;
+      dispose();
+      setError(recognitionErrorMessage(code, recognitionMode, rec.lang));
+    };
+    const finish = () => {
+      if (!active) return;
+      dispose();
+      if (receivedSpeech && transcript.current.trim())
+        submitRef.current(transcript.current);
+      else
+        setError(
+          recognitionErrorMessage("no-speech", recognitionMode, rec.lang),
+        );
+    };
+    rec.onstart = () => {
+      if (!active || started) return;
+      started = true;
+      clearTimeout(startup);
+      setStarting(false);
+      setListening(true);
+      cap = setTimeout(finish, 15000);
     };
     rec.onresult = (e) => {
+      if (!active) return;
       const result = extractTranscript(e.results, prefix);
+      receivedSpeech = result.text.trim() !== prefix.trim();
       transcript.current = result.text;
       alternatives.current = result.alternatives;
       setHeard(transcript.current);
@@ -1079,42 +1193,25 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
       if (transcript.current.trim())
         silence = setTimeout(finish, settings.pauseSeconds * 1000);
     };
-    rec.onerror = (e) => {
-      setListening(false);
-      setError(
-        e.error === "not-allowed"
-          ? "Microphone access wasn’t allowed. Type or choose a topic instead."
-          : "We couldn’t hear that. You can try again, type, or choose a topic.",
-      );
-    };
-    rec.onend = () => {
-      setListening(false);
-      if (transcript.current) submitRef.current(transcript.current);
-    };
+    rec.onerror = (e) => fail(e.error);
+    rec.onend = finish;
+    setStarting(true);
+    const startup = setTimeout(() => fail("start-timeout"), 10000);
     try {
       rec.start();
-      setListening(true);
-    } catch {
-      setError("The microphone could not start. Try another input.");
+    } catch (failure) {
+      fail(failure instanceof Error ? failure.name : "unknown");
     }
-    const cap = setTimeout(finish, 15000);
     const stopRecording = () => {
       submitted.current = true;
-      clearTimeout(cap);
-      clearTimeout(silence);
-      rec.onend = null;
-      rec.onresult = null;
-      rec.abort();
-      setListening(false);
+      dispose();
     };
     window.addEventListener("sollu:stop", stopRecording);
     return () => {
       window.removeEventListener("sollu:stop", stopRecording);
-      clearTimeout(cap);
-      clearTimeout(silence);
-      rec.onend = null;
-      rec.onresult = null;
-      rec.abort();
+      dispose();
+      if (stopRecognition.current === dispose)
+        stopRecognition.current = () => {};
     };
     // The recorder starts once on entering this screen, never on transcript updates.
   }, [recordingRun]);
@@ -1137,6 +1234,11 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
         }
       />
       <div className={`listening-panel ${listening ? "is-listening" : ""}`}>
+        <p className="notice">
+          {recognitionMode === "local"
+            ? "Local recognition only. If unavailable, type or choose a topic."
+            : "Browser recognition may send audio to its vendor."}
+        </p>
         <div className="mic-orb">
           <Mic size={46} />
         </div>
@@ -1149,7 +1251,9 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
         <small>
           {listening
             ? "Listening through your browser"
-            : "Microphone is not recording"}
+            : starting
+              ? "Waiting for the browser to start the microphone…"
+              : "Microphone is not recording"}
         </small>
       </div>
       {error && (
@@ -1157,6 +1261,15 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
           {error}
         </div>
       )}
+      <TapButton
+        className="secondary"
+        onActivate={() => {
+          stopRecognition.current();
+          navigate("/settings?tab=privacy");
+        }}
+      >
+        Speech recognition settings
+      </TapButton>
       <div className="speaking-actions">
         <TapButton onActivate={() => setRecordingRun((v) => v + 1)}>
           {copy(settings.lang, "Keep listening", "தொடர்ந்து கேள்")}
@@ -1165,7 +1278,7 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
           className="primary"
           disabled={!heard}
           onActivate={() => {
-            recognition.current?.stop();
+            stopRecognition.current();
             submitRef.current(heard);
           }}
         >
@@ -1175,7 +1288,7 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
         <TapButton
           className="secondary"
           onActivate={() => {
-            recognition.current?.abort();
+            stopRecognition.current();
             navigate("/type");
           }}
         >
@@ -1195,7 +1308,7 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
               key={text}
               className="demo-fragment"
               onActivate={() => {
-                recognition.current?.abort();
+                stopRecognition.current();
                 submitRef.current(text);
               }}
             >
@@ -1206,8 +1319,9 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
         </div>
       )}
       <p className="privacy-inline">
-        Speech may be processed by your browser’s online service. Tamil support
-        depends on your browser.
+        {recognitionMode === "local"
+          ? "Only supported on-device recognition is allowed. Tamil requires an installed local language pack."
+          : "Speech may be processed by your browser’s online service. Tamil support depends on your browser."}
       </p>
     </>
   );

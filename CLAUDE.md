@@ -7,8 +7,9 @@ Work order: M0 → M1 → M3 → M2 + early M6 → M5 + M4 → remaining M6 → 
 Commands: pnpm install; pnpm dev; pnpm test; pnpm e2e; pnpm eval; pnpm verify; pnpm build; pnpm start.
 Check actual root scripts before use; pnpm verify must cover lint, types, unit and E2E checks.
 Use strict TypeScript, shared Zod contracts and the repository lockfile.
-Defaults: free controlled vocabulary; optional OpenAI/Anthropic/Gemini/Groq or local Ollama sentence generation; browser STT/device speech; exact-phrase recordings. Cloud selection requires device-specific text-sharing permission. Keys stay server-side (session memory or private environment), never browser persistence. Generated suggestions are drafts, not semantic/clinical proof.
+Defaults: free vocabulary or loopback Ollama; cloud AI blocked unless ALLOW_CLOUD_AI=1. Device local-only protection also defaults on: on-device recognition/local voices only, no external model downloads. Cloud use additionally requires device policy and sharing consent. Keys stay server-side; drafts are not clinical proof. See docs/PRIVACY_AND_VALIDATION.md.
 Do not claim browser Tamil availability, offline voices, cloud clone or real AI quality without evidence.
+Jury follow-up: recognized health/help input uses requiresPredefinedCommunication before any generator or rehearsal cache; prepared wording or clarification only, never claim this is emergency detection. Communication reports carry reportScope interpretation metadata in exported/printed output. Missing metric values are not zero. Preserve individualized multi-condition AAC access. See docs/JURY_READINESS.md and docs/evidence/v7/VERIFICATION.md.
 Only features/audio may access audio output APIs, including studio, preview, alarm and baseline.
 I-1: Only a fresh trusted patient tap on the exact sentence may speak; no autoplay, remote speech or prefetch playback; Stop/newer taps supersede pending work.
 I-2: One audio module with speak/preview/studio/alarm/baseline channels; enforce boundaries in lint and tests.

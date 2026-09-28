@@ -1,5 +1,30 @@
 # Language review inventory
 
+## Rehabilitation and clinician navigation — 2026-09-28
+
+Added to the shared `apps/web/src/lib/copy.ts` dictionary and applied to mobile/desktop navigation, rehabilitation navigation, and caregiver shortcuts. Native-speaker approval remains pending; runtime verification confirms language selection and rendering only.
+
+| English | Tamil |
+| --- | --- |
+| Rehabilitation | மறுவாழ்வு |
+| Clinician | சிகிச்சை நிபுணர் |
+| My rehabilitation | என் மறுவாழ்வு |
+| Clinician dashboard | சிகிச்சை நிபுணர் பலகை |
+| Practice | பயிற்சி |
+| Book appointment | சந்திப்பை முன்பதிவு செய் |
+| Rehabilitation navigation | மறுவாழ்வு வழிசெலுத்தல் |
+
+## Fragment repairs and word dashboard — 2026-09-28
+
+The new repair module reuses catalog Tamil meanings; no newly approved Tamil clinical content is introduced. Regression examples include `தண்-ணீர்` and `தண்ணீ` as possible input for the existing water meaning, plus Tanglish `th-thanni` and `than-ni`. These fixtures and the proposed interpretation display need native-speaker review across dialects and code mixing. The new privacy, encryption and word-analysis controls are English; full interface translation remains pending. Automated match tests are not language approval.
+
+## Multiple sentence options — 2026-09-28
+
+Pending native-speaker review in `apps/web/src/pages/Patient.tsx`:
+
+- `மேலும் விருப்பங்களைக் காட்டு` — Show more options.
+- `தயாரான விருப்பம் · பொருளைச் சரிபாருங்கள்` — Prepared option · Check the meaning.
+
 ## Rehabilitation addition — 2026-09-28
 
 Pending native-speaker and clinical review. New Tools tile in `apps/web/src/pages/Support.tsx`: `தொடர்பு பயிற்சி` (Communication practice), `உங்கள் வேகத்தில் பயிற்சி செய்யுங்கள்` (Practise at your own pace). Practice/dashboard controls and starter targets are currently English; Tamil custom targets are supported and require review by the person and a fluent speaker. Unicode scoring fixtures are test strings, not clinically approved prompts.

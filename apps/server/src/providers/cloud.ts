@@ -1,11 +1,13 @@
 import { z } from "zod";
 import {
+  assertProviderAllowed,
   validateLocalOllamaUrl,
   validateModel,
   type LlmProvider,
 } from "../config.js";
 
 export type StructuredOptions = {
+  allowCloudAI?: boolean;
   model: string;
   apiKey?: string;
   ollamaUrl?: string;
@@ -74,6 +76,7 @@ export async function generateStructured(
   provider: Exclude<LlmProvider, "mock">,
   options: StructuredOptions,
 ): Promise<unknown> {
+  assertProviderAllowed(provider, options.allowCloudAI);
   validateModel(provider, options.model);
   if (
     provider !== "ollama" &&

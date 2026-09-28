@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   Activity,
@@ -39,6 +39,11 @@ import {
 } from "./store";
 import EvidencePlayer from "./EvidencePlayer";
 import PracticeCorrection from "./PracticeCorrection";
+import WordAccuracyPanel from "./WordAccuracyPanel";
+import {
+  EncryptedReportExport,
+  EncryptedReportImport,
+} from "./EncryptedReportTools";
 import {
   buildReport,
   communicationSummary,
@@ -46,12 +51,14 @@ import {
   localDay,
   MAX_REPORT_BYTES,
   parseReport,
+  REPORT_INTERPRETATION,
   reportCsv,
   weeklyReport,
   type TherapyReport,
   type ReportSession,
 } from "./report";
 import "./dashboard.css";
+import type { ClinicianReviewTarget } from "./ClinicianOverview";
 
 const CASELOAD_KEY = "rehab-report-caseload-v1";
 type ImportedCase = { id: string; importedAt: number; report: TherapyReport };
@@ -109,10 +116,20 @@ async function readCaseload(): Promise<ImportedCase[]> {
 function ProfileEditor({
   profile,
   plan,
+  focus = false,
 }: {
   profile: RehabProfile;
   plan: RehabPlan;
+  focus?: boolean;
 }) {
+  const editorRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (focus && editorRef.current) {
+      editorRef.current.open = true;
+      editorRef.current.focus();
+      editorRef.current.scrollIntoView({ block: "start" });
+    }
+  }, [focus]);
   const [draft, setDraft] = useState(profile);
   const [goals, setGoals] = useState(profile.goals.join("\n"));
   const [targets, setTargets] = useState(plan.customTargets.join("\n"));
@@ -161,7 +178,11 @@ function ProfileEditor({
     }
   }
   return (
-    <details className="panel rehab-profile-editor print-hide">
+    <details
+      ref={editorRef}
+      tabIndex={-1}
+      className="panel rehab-profile-editor clinician-review-focus print-hide"
+    >
       <summary>
         <Save size={21} aria-hidden="true" /> Individual profile & practice plan
       </summary>
@@ -576,15 +597,29 @@ function SessionList({
   sessions,
   localRecords,
   imported,
+  focusedPracticeId,
 }: {
   sessions: ReportSession[];
   localRecords: PracticeRecord[];
   imported: boolean;
+  focusedPracticeId?: string;
 }) {
+  const recordRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (focusedPracticeId && recordRef.current) {
+      recordRef.current.open = true;
+      recordRef.current.focus();
+      recordRef.current.scrollIntoView({ block: "start" });
+    }
+  }, [focusedPracticeId]);
   const [limit, setLimit] = useState(20);
   const [deleting, setDeleting] = useState(""),
     [deleteStatus, setDeleteStatus] = useState("");
   const sorted = [...sessions].sort((a, b) => b.at - a.at);
+  const visibleLimit = Math.max(
+    limit,
+    sorted.findIndex((record) => record.id === focusedPracticeId) + 1,
+  );
   return (
     <section className="panel" aria-labelledby="rehab-session-title">
       <h3 id="rehab-session-title">Practice records & evidence</h3>
@@ -598,8 +633,13 @@ function SessionList({
           useful message.
         </p>
       )}
-      {sorted.slice(0, limit).map((session) => (
-        <details className="rehab-session" key={session.id}>
+      {sorted.slice(0, visibleLimit).map((session) => (
+        <details
+          className="rehab-session clinician-review-focus"
+          key={session.id}
+          tabIndex={-1}
+          ref={session.id === focusedPracticeId ? recordRef : undefined}
+        >
           <summary>
             <span>
               {dateTime(session.at)} · {session.kind}
@@ -734,10 +774,10 @@ function SessionList({
           )}
         </details>
       ))}
-      {sessions.length > limit && (
+      {sessions.length > visibleLimit && (
         <TapButton
           className="secondary-button print-hide"
-          onActivate={() => setLimit((old) => old + 20)}
+          onActivate={() => setLimit(visibleLimit + 20)}
         >
           Show 20 more records
         </TapButton>
@@ -765,7 +805,7 @@ function ProgressView({
   );
   const activeDays = new Set(report.sessions.map((s) => localDay(s.at))).size;
   const aac = report.sessions.filter(
-    (s) => s.kind === "aac" && s.aacCompleted !== null,
+    (s) => (s.kind === "aac" || s.method === "aac") && s.aacCompleted !== null,
   );
   const aacDone = aac.filter((s) => s.aacCompleted).length;
   const misses = new Map<string, number>();
@@ -796,9 +836,9 @@ function ProgressView({
           detail={`Median · n=${text.n}; ${report.sessions.length - text.n} without a score`}
         />
         <Stat
-          label="Response time"
+          label="Readiness-to-start time"
           value={fmt(response.median, "s")}
-          detail={`Median · n=${response.n}; no speed target`}
+          detail={`Median · n=${response.n}; ${report.sessions.length - response.n} missing; no speed target`}
         />
         <Stat
           label="Fatigue change"
@@ -808,14 +848,15 @@ function ProgressView({
         <Stat
           label="AAC task completed"
           value={`${aacDone} / ${aac.length}`}
-          detail={`${report.sessions.filter((s) => s.kind === "aac").length - aac.length} AAC records not assessed`}
+          detail={`${report.sessions.filter((s) => s.kind === "aac" || s.method === "aac").length - aac.length} AAC records not assessed`}
         />
       </div>
       <p className="notice">
         Text match compares a reviewed entered transcript with the target. It is
         not an acoustic speech score, intelligibility test, diagnosis, or
-        evidence that treatment works. Different methods and tasks are shown
-        separately below.{" "}
+        evidence that treatment works. Readiness-to-start time measures the
+        person starting an activity, not speech onset or quality. Different
+        methods and tasks are shown separately below.{" "}
         {imported
           ? "These are unverified values from an imported snapshot."
           : "No model is trained by saving a recording."}
@@ -872,7 +913,7 @@ function ProgressView({
                 <th scope="col">Week of</th>
                 <th scope="col">Records / current goal</th>
                 <th scope="col">Text match: median (n)</th>
-                <th scope="col">Response: median (n)</th>
+                <th scope="col">Readiness: median (n)</th>
                 <th scope="col">Fatigue change (n)</th>
               </tr>
             </thead>
@@ -937,7 +978,7 @@ function ProgressView({
           establish clinical improvement. Existing communication logs measure
           audio start; they do not establish completed playback or
           comprehension. Taps and seconds therefore describe speech-started
-          sentences.
+          attempts, not candidate-selection time or completed sentences.
         </p>
         <UnderstandingTable sessions={report.sessions} />
       </section>
@@ -962,7 +1003,7 @@ function ProgressView({
                 <th scope="col">Task · language · method · target</th>
                 <th scope="col">Records</th>
                 <th scope="col">Median text match (n)</th>
-                <th scope="col">Median response (n)</th>
+                <th scope="col">Median readiness (n)</th>
               </tr>
             </thead>
             <tbody>
@@ -1046,7 +1087,10 @@ function ProgressView({
   );
 }
 
-export default function TherapyDashboard() {
+export default function TherapyDashboard({
+  initialTarget,
+}: { initialTarget?: ClinicianReviewTarget } = {}) {
+  const transferRef = useRef<HTMLElement>(null);
   const data = useLiveQuery(async () => {
     const [profile, plan, sessions, reviews, attempts, corrections] =
       await Promise.all([
@@ -1063,17 +1107,26 @@ export default function TherapyDashboard() {
   const [selected, setSelected] = useState("local"),
     [participant, setParticipant] = useState("participant-001");
   const [from, setFrom] = useState(() => {
+    if (initialTarget?.section === "record") return localDay(initialTarget.at);
     const date = new Date();
     date.setDate(date.getDate() - 27);
     return localDay(date.getTime());
   });
-  const [to, setTo] = useState(() => localDay(Date.now()));
+  const [to, setTo] = useState(() =>
+    localDay(
+      initialTarget?.section === "record" ? initialTarget.at : Date.now(),
+    ),
+  );
   const [includeContent, setIncludeContent] = useState(false),
     [exportConsent, setExportConsent] = useState(false),
     [importConsent, setImportConsent] = useState(false);
   const [preview, setPreview] = useState<TherapyReport | null>(null),
     [status, setStatus] = useState(""),
     [forget, setForget] = useState(false);
+  const [importMode, setImportMode] = useState<"encrypted" | "plain">(
+    "encrypted",
+  );
+  const importOperation = useRef(0);
   const selectedCase = cases?.find((c) => c.id === selected);
   const invalidRange =
     !from ||
@@ -1104,7 +1157,19 @@ export default function TherapyDashboard() {
     }
   }, [data, participant, from, to, invalidRange]);
   const report = selectedCase?.report ?? reportResult.report;
+  useEffect(() => {
+    if (
+      initialTarget?.section === "transfer" &&
+      data &&
+      cases &&
+      transferRef.current
+    ) {
+      transferRef.current.focus();
+      transferRef.current.scrollIntoView({ block: "start" });
+    }
+  }, [initialTarget, data, cases]);
   async function importFile(file: File | undefined) {
+    const operation = ++importOperation.current;
     setStatus("");
     setPreview(null);
     setImportConsent(false);
@@ -1112,8 +1177,10 @@ export default function TherapyDashboard() {
     try {
       if (file.size > MAX_REPORT_BYTES)
         throw new Error("Choose a report smaller than 2 MB.");
-      setPreview(parseReport(await file.text()));
+      const parsed = parseReport(await file.text());
+      if (operation === importOperation.current) setPreview(parsed);
     } catch (error) {
+      if (operation !== importOperation.current) return;
       setStatus(
         error instanceof Error
           ? error.message
@@ -1200,13 +1267,23 @@ export default function TherapyDashboard() {
           <span className="eyebrow">
             Participation, practice & communication
           </span>
-          <h2 id="rehab-dashboard-title">Rehabilitation review</h2>
+          <h2 id="rehab-dashboard-title">{REPORT_INTERPRETATION.title}</h2>
           <p>
             Individual practice, weekly patterns and evidence for a conversation
             with your therapist.
           </p>
         </div>
         <Activity size={38} aria-hidden="true" />
+      </div>
+      <div
+        className="notice rehab-report-scope"
+        aria-label="Report purpose and limitations"
+      >
+        <p>
+          <strong>{REPORT_INTERPRETATION.purpose}</strong>
+        </p>
+        <p>{REPORT_INTERPRETATION.validation}</p>
+        <p>{REPORT_INTERPRETATION.reviewerAuthority}</p>
       </div>
       <p className="privacy-caption">
         <ShieldCheck size={18} aria-hidden="true" />
@@ -1276,7 +1353,11 @@ export default function TherapyDashboard() {
       </div>
       {selected === "local" && (
         <>
-          <ProfileEditor profile={data.profile} plan={data.plan} />
+          <ProfileEditor
+            profile={data.profile}
+            plan={data.plan}
+            focus={initialTarget?.section === "plan"}
+          />
           <div className="panel rehab-date-filter print-hide">
             <label>
               Practice report from
@@ -1340,6 +1421,7 @@ export default function TherapyDashboard() {
               </span>
             </div>
             <p>
+              Selected communication needs:{" "}
               {
                 CONDITION_PROFILES.find(
                   (c) => c.id === report.profile.condition,
@@ -1371,23 +1453,37 @@ export default function TherapyDashboard() {
             )}
           </section>
           <ProgressView report={report} imported={Boolean(selectedCase)} />
+          <WordAccuracyPanel
+            key={selected}
+            report={report}
+            allowPractice={!selectedCase}
+          />
           <SessionList
             sessions={report.sessions}
             localRecords={data.sessions}
             imported={Boolean(selectedCase)}
+            focusedPracticeId={
+              !selectedCase && initialTarget?.section === "record"
+                ? initialTarget.practiceId
+                : undefined
+            }
           />
         </>
       )}
       <section
-        className="panel rehab-transfer print-hide"
+        className="panel rehab-transfer clinician-review-focus print-hide"
+        ref={transferRef}
+        tabIndex={-1}
         aria-labelledby="rehab-transfer-title"
       >
-        <h3 id="rehab-transfer-title">Prepare a therapist report</h3>
+        <h3 id="rehab-transfer-title">
+          Prepare a Communication Progress Report
+        </h3>
         <p>
-          Exports are unencrypted and may reveal health information even with a
-          participant code. This app does not email, upload or send a report to
-          anyone. Print uses the displayed report, including visible personal
-          text.
+          Reports may reveal health information even with a participant code.
+          Prefer an encrypted report when transferring it. This app does not
+          email, upload or send a report to anyone. Print uses the displayed
+          report, including visible personal text, and is not encrypted.
         </p>
         {selected === "local" && (
           <>
@@ -1423,29 +1519,43 @@ export default function TherapyDashboard() {
               The person agrees to download this report for their chosen
               recipient.
             </label>
-            <div className="rehab-actions">
-              <TapButton
-                className="primary-button"
-                disabled={!exportConsent || invalidRange}
-                onActivate={() => exportReport("json")}
-              >
-                <Download size={20} aria-hidden="true" />
-                Download report JSON
-              </TapButton>
-              <TapButton
-                className="secondary-button"
-                disabled={!exportConsent || invalidRange}
-                onActivate={() => exportReport("csv")}
-              >
-                Download practice CSV
-              </TapButton>
-            </div>
-            <p className="muted">
-              JSON includes communication counts and evidence IDs. CSV contains
-              practice measurements. Clips are excluded from both; open a
-              practice record to export an individual clip with separate
-              permission.
-            </p>
+            <EncryptedReportExport
+              allowed={exportConsent && !invalidRange}
+              getReport={() =>
+                buildReport({ ...data, participant, from, to, includeContent })
+              }
+            />
+            <details>
+              <summary>Unencrypted JSON / CSV export</summary>
+              <p>
+                Anyone who can access these files can read them. Use only when
+                the chosen recipient requires this format and you have an
+                appropriate way to transfer and store it.
+              </p>
+              <div className="rehab-actions">
+                <TapButton
+                  className="primary-button"
+                  disabled={!exportConsent || invalidRange}
+                  onActivate={() => exportReport("json")}
+                >
+                  <Download size={20} aria-hidden="true" />
+                  Download report JSON
+                </TapButton>
+                <TapButton
+                  className="secondary-button"
+                  disabled={!exportConsent || invalidRange}
+                  onActivate={() => exportReport("csv")}
+                >
+                  Download practice CSV
+                </TapButton>
+              </div>
+              <p className="muted">
+                JSON includes communication counts and evidence IDs. CSV
+                contains practice measurements. Clips are excluded from both;
+                open a practice record to export an individual clip with
+                separate permission.
+              </p>
+            </details>
           </>
         )}
         <details>
@@ -1459,13 +1569,42 @@ export default function TherapyDashboard() {
             model, or verify a clinician's identity.
           </p>
           <label>
-            Choose Sollu report JSON (maximum 2 MB)
-            <input
-              type="file"
-              accept="application/json,.json"
-              onChange={(e) => void importFile(e.target.files?.[0])}
-            />
+            Report file protection
+            <select
+              value={importMode}
+              onChange={(event) => {
+                importOperation.current++;
+                setImportMode(event.target.value as "encrypted" | "plain");
+                setPreview(null);
+                setImportConsent(false);
+                setStatus("");
+              }}
+            >
+              <option value="encrypted">Passphrase-encrypted report</option>
+              <option value="plain">Unencrypted JSON report</option>
+            </select>
           </label>
+          {importMode === "encrypted" ? (
+            <EncryptedReportImport
+              onClear={() => {
+                setPreview(null);
+                setImportConsent(false);
+              }}
+              onPreview={(value) => {
+                setPreview(value);
+                setImportConsent(false);
+              }}
+            />
+          ) : (
+            <label>
+              Choose Sollu report JSON (maximum 2 MB)
+              <input
+                type="file"
+                accept="application/json,.json"
+                onChange={(e) => void importFile(e.target.files?.[0])}
+              />
+            </label>
+          )}
           {preview && (
             <div className="notice">
               <strong>{preview.participant}</strong>

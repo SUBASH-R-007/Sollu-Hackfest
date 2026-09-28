@@ -2,12 +2,13 @@ import {
   applyCandidatePolicy,
   getMockCandidates,
   generatedSentencesJsonSchema,
+  requiresPredefinedCommunication,
   resolveGeneratedSentences,
   type Candidate,
   type ContextPacket,
 } from "@sollu/shared";
 import { ollamaIntent, resolveSelectionResult } from "../providers/ollama.js";
-import type { ServerConfig } from "../config.js";
+import { isCloudProvider, type ServerConfig } from "../config.js";
 import { generateStructured } from "../providers/cloud.js";
 import { contextualPrompt } from "./contextualPrompt.js";
 
@@ -18,13 +19,34 @@ export async function selectIntent(
   legacySelector?: typeof ollamaIntent,
   generator: typeof generateStructured = generateStructured,
 ) {
+  if (signal?.aborted) throw new Error("Cancelled");
+  const start = performance.now();
+  const controlled = applyCandidatePolicy(getMockCandidates(context), context);
+  // The route is lexical and deliberately applies to negated/historical wording too.
+  // It is not a severity assessment: unchanged catalog validation must preserve qualifiers
+  // or ask for clarification. No provider receives these fragments on this path.
+  if (requiresPredefinedCommunication(context))
+    return {
+      candidates: controlled.candidates,
+      model: "predefined-health-help",
+      clarification: controlled.clarification,
+      validationDrops: controlled.dropped,
+      latencyMs: Math.round(performance.now() - start),
+      fallback: false,
+    };
   // Retained solely for the independent catalog-selection regression/evaluation adapter.
   // Every active non-mock provider uses contextual generation below.
   if (legacySelector)
     return selectCatalogIntent(context, config, signal, legacySelector);
-  if (signal?.aborted) throw new Error("Cancelled");
-  const start = performance.now();
-  const controlled = applyCandidatePolicy(getMockCandidates(context), context);
+  if (isCloudProvider(config.intentProvider) && config.allowCloudAI !== true)
+    return {
+      candidates: controlled.candidates,
+      model: "catalog-v2 · cloud disabled by server privacy policy",
+      clarification: controlled.clarification,
+      validationDrops: controlled.dropped,
+      latencyMs: Math.round(performance.now() - start),
+      fallback: true,
+    };
   if (config.intentProvider === "mock")
     return {
       candidates: controlled.candidates,
@@ -52,6 +74,7 @@ export async function selectIntent(
     });
     const raw = await Promise.race([
       generator(config.intentProvider, {
+        allowCloudAI: config.allowCloudAI === true,
         model: config.llmModel ?? config.ollamaModel,
         apiKey: config.apiKey,
         ollamaUrl: config.ollamaUrl,
@@ -64,26 +87,42 @@ export async function selectIntent(
     ]);
     if (signal?.aborted) throw new Error("Cancelled");
     const generated = resolveGeneratedSentences(raw, context);
-    const final = applyCandidatePolicy(generated.candidates, context, {
+    const verified = applyCandidatePolicy(generated.candidates, context, {
       serverGeneratedCandidates: generated.candidates,
     });
     const hasRejectedOutput =
-      generated.reasons.length > 0 && final.candidates.length === 0;
+      generated.reasons.length > 0 && verified.candidates.length === 0;
     if (hasRejectedOutput)
       return {
         candidates: controlled.candidates,
         model: "catalog-v2 · model suggestions could not be verified",
         clarification: controlled.clarification,
         validationDrops:
-          controlled.dropped + generated.reasons.length + final.dropped,
+          controlled.dropped + generated.reasons.length + verified.dropped,
         latencyMs: Math.round(performance.now() - start),
         fallback: true,
       };
+    // Valid model suggestions lead; already-grounded prepared meanings can fill spare
+    // slots. Apply the same cross-source rejection and deduplication policy again.
+    // An explicit model abstention must remain a request for clarification.
+    const choices = verified.candidates.length
+      ? applyCandidatePolicy(
+          [...verified.candidates, ...controlled.candidates],
+          context,
+          { serverGeneratedCandidates: verified.candidates },
+        )
+      : verified;
+    const includesPrepared = choices.candidates.some(
+      (candidate) => candidate.source !== "model",
+    );
     return {
-      candidates: final.candidates,
-      model: `${config.intentProvider}:${config.llmModel ?? config.ollamaModel} · contextual suggestions`,
-      clarification: final.clarification,
-      validationDrops: generated.reasons.length + final.dropped,
+      candidates: choices.candidates,
+      model: `${config.intentProvider}:${config.llmModel ?? config.ollamaModel} · contextual suggestions${includesPrepared ? " + prepared alternatives" : ""}`,
+      clarification: choices.clarification,
+      validationDrops:
+        generated.reasons.length +
+        verified.dropped +
+        (choices === verified ? 0 : choices.dropped),
       latencyMs: Math.round(performance.now() - start),
       fallback: false,
     };

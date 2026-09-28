@@ -1,6 +1,7 @@
 import { CandidateSchema, type Candidate, type ContextPacket } from "./schemas";
 import { getMockCandidates } from "./mock";
 import { numberWords } from "./phrases";
+import { requiresPredefinedCommunication } from "./predefinedCommunication";
 import {
   catalogFitsExplicitContext,
   modelMeaningKey,
@@ -112,6 +113,12 @@ export function applyCandidatePolicy(
       packet.communication?.maxWords ?? 12,
     ]);
   const generated = (options.serverGeneratedCandidates ?? []).flatMap((c) => {
+    // A saved or previously signed model result cannot bypass today's communication route.
+    if (
+      requiresPredefinedCommunication(context) ||
+      requiresPredefinedCommunication(modelContext)
+    )
+      return [];
     if (fragmentKey(modelContext) !== fragmentKey(context)) return [];
     const checked = validateModelCandidate(c, modelContext);
     return checked ? [checked] : [];

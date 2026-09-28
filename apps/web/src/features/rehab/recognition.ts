@@ -1,7 +1,14 @@
+import {
+  getSpeechRecognitionMode,
+  prepareBrowserRecognition,
+} from "../privacy/browserPolicy";
+import { recognitionErrorMessage } from "../privacy/recognitionDiagnostics";
+
 interface Recognition {
   lang: string;
   continuous: boolean;
   interimResults: boolean;
+  onstart: (() => void) | null;
   onresult:
     | ((event: {
         results: {
@@ -20,7 +27,9 @@ export function startPracticeTranscript(
   language: "en" | "ta",
   onText: (text: string) => void,
   onEnd: (error?: string) => void,
+  onStarted?: () => void,
 ): () => void {
+  const mode = getSpeechRecognitionMode();
   const host = window as Window & {
     SpeechRecognition?: new () => Recognition;
     webkitSpeechRecognition?: new () => Recognition;
@@ -28,28 +37,45 @@ export function startPracticeTranscript(
   const Constructor = host.SpeechRecognition ?? host.webkitSpeechRecognition;
   if (!Constructor)
     throw new Error(
-      "Browser transcription is unavailable. A partner can type the words they heard.",
+      recognitionErrorMessage("recognition-unavailable", mode, language),
     );
-  const recognition = new Constructor();
+  const recognition = prepareBrowserRecognition(Constructor);
   recognition.lang = language === "ta" ? "ta-IN" : "en-IN";
   recognition.continuous = true;
   recognition.interimResults = false;
   let stopped = false;
+  let started = false;
+  let recordingTimer: ReturnType<typeof setTimeout> | undefined;
   const stop = () => {
     if (stopped) return;
     stopped = true;
-    clearTimeout(timer);
-    recognition.onresult = recognition.onend = recognition.onerror = null;
+    clearTimeout(startupTimer);
+    clearTimeout(recordingTimer);
+    recognition.onresult =
+      recognition.onend =
+      recognition.onerror =
+      recognition.onstart =
+        null;
     try {
       recognition.abort();
     } catch {
       // Some engines throw if they have already ended or start() failed.
     }
   };
-  const timer = setTimeout(() => {
+  const startupTimer = setTimeout(() => {
     stop();
-    onEnd();
-  }, 120_000);
+    onEnd(recognitionErrorMessage("start-timeout", mode, language));
+  }, 10_000);
+  recognition.onstart = () => {
+    if (stopped || started) return;
+    started = true;
+    clearTimeout(startupTimer);
+    recordingTimer = setTimeout(() => {
+      stop();
+      onEnd();
+    }, 120_000);
+    onStarted?.();
+  };
   recognition.onresult = (event) => {
     if (stopped) return;
     const words = Array.from(
@@ -63,13 +89,14 @@ export function startPracticeTranscript(
       .slice(0, 1000);
     onText(words);
   };
-  recognition.onerror = () => {
+  recognition.onerror = (event) => {
+    if (stopped) return;
     stop();
-    onEnd(
-      "Transcription could not hear this attempt. This is not a speech assessment. You can enter the words manually.",
-    );
+    const message = recognitionErrorMessage(event.error, mode, language);
+    onEnd(message ? `${message} This is not a speech assessment.` : undefined);
   };
   recognition.onend = () => {
+    if (stopped) return;
     stop();
     onEnd();
   };
@@ -77,7 +104,13 @@ export function startPracticeTranscript(
     recognition.start();
   } catch (error) {
     stop();
-    throw error;
+    const message = recognitionErrorMessage(
+      error instanceof Error ? error.name : "unknown",
+      mode,
+      language,
+    );
+    if (message) throw new Error(message);
+    onEnd();
   }
   return stop;
 }

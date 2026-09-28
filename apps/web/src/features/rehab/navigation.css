@@ -1,0 +1,32 @@
+.rehabilitation-nav {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 26px;
+}
+.rehabilitation-nav .tap {
+  background: #fff;
+  border: 1px solid var(--line);
+  padding: 12px;
+  text-align: center;
+}
+.rehabilitation-nav [aria-current="page"] {
+  background: #efe5f7;
+  border-color: #805195;
+  color: #4d1967;
+  font-weight: 700;
+}
+@media (max-width: 760px) {
+  .rehabilitation-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .rehabilitation-nav .tap {
+    flex-direction: column;
+    gap: 6px;
+    font-size: calc(13px * var(--text-scale));
+    padding: 10px 5px;
+    overflow-wrap: anywhere;
+  }
+}

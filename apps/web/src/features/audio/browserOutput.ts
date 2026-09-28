@@ -1,3 +1,5 @@
+import { allowedDeviceVoice } from "../privacy/browserPolicy";
+
 /** All browser APIs capable of making sound are confined to this directory. */
 export type AudioSource = "recording" | "device" | "tone";
 export interface VoiceInfo {
@@ -55,6 +57,7 @@ export class BrowserAudioOutput implements AudioOutput {
     if (typeof window === "undefined" || !window.speechSynthesis) return [];
     return window.speechSynthesis
       .getVoices()
+      .filter(allowedDeviceVoice)
       .filter((voice) => !lang || languageMatches(lang, voice.lang))
       .map(({ name, lang: voiceLang, localService }) => ({
         name,
@@ -68,6 +71,7 @@ export class BrowserAudioOutput implements AudioOutput {
       return undefined;
     return window.speechSynthesis
       .getVoices()
+      .filter(allowedDeviceVoice)
       .filter((voice) => languageMatches(lang, voice.lang))
       .sort((a, b) => Number(b.localService) - Number(a.localService))[0];
   }

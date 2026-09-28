@@ -101,3 +101,48 @@
     width: 100%;
   }
 }
+.recognition-mode-options {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  gap: 12px;
+}
+.recognition-mode-options legend {
+  margin-bottom: 12px;
+  font-weight: 700;
+}
+.recognition-mode-options .recognition-mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px;
+  min-height: 96px;
+  border: 2px solid var(--line);
+  border-radius: 16px;
+}
+.recognition-mode-option.is-selected {
+  border-color: var(--brand);
+}
+.recognition-mode-option input[type="radio"] {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  margin: 2px 0 0;
+  padding: 0;
+  accent-color: var(--brand);
+  flex-shrink: 0;
+}
+.recognition-mode-option strong,
+.recognition-mode-option small {
+  display: block;
+}
+.recognition-mode-option small {
+  margin-top: 8px;
+  line-height: 1.5;
+}
+.recognition-mode-option:focus-within {
+  outline: 3px solid var(--brand);
+  outline-offset: 3px;
+}

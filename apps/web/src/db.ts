@@ -10,6 +10,7 @@ import type {
 } from "@sollu/shared";
 
 export interface Settings {
+  localProcessingOnly: boolean;
   name: string;
   lang: Lang;
   hand: "left" | "right";
@@ -101,6 +102,7 @@ export async function setKV(key: string, value: unknown) {
   await db.kv.put({ key, value });
 }
 export const defaultSettings: Settings = {
+  localProcessingOnly: true,
   name: "Amma",
   lang: "ta",
   hand: "left",

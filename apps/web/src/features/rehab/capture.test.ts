@@ -186,10 +186,12 @@ describe("optional browser transcript lifecycle", () => {
   function recognitionHarness() {
     vi.useFakeTimers();
     class Recognition {
+      processLocally = false;
       static latest: Recognition;
       lang = "";
       continuous = false;
       interimResults = true;
+      onstart: (() => void) | null = null;
       onresult:
         | ((event: {
             results: { isFinal: boolean; 0: { transcript: string } }[];
@@ -237,6 +239,7 @@ describe("optional browser transcript lifecycle", () => {
     const Constructor = recognitionHarness(),
       end = vi.fn();
     startPracticeTranscript("en", vi.fn(), end);
+    Constructor.latest.onstart?.();
     Constructor.latest.abort.mockImplementation(() => {
       throw new Error("already stopped");
     });

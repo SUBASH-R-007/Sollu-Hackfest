@@ -4,6 +4,7 @@ import {
   type Candidate,
   type ContextPacket,
 } from "@sollu/shared";
+import { validateLocalOllamaUrl, validateModel } from "../config.js";
 
 // Selection only: the local model never supplies the sentence that will be signed/spoken.
 export const intentOutputSchema = {
@@ -89,13 +90,16 @@ export async function ollamaIntent(
     correction?: { previous: unknown; reasons: unknown };
   },
 ): Promise<unknown> {
+  validateModel("ollama", options.model);
+  const url = new URL("/api/chat", validateLocalOllamaUrl(options.url));
   const signal = options.signal
     ? AbortSignal.any([options.signal, AbortSignal.timeout(options.timeoutMs)])
     : AbortSignal.timeout(options.timeoutMs);
-  const res = await fetch(new URL("/api/chat", options.url), {
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     signal,
+    redirect: "error",
     body: JSON.stringify({
       model: options.model,
       stream: false,

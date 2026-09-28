@@ -430,7 +430,11 @@ describe("inference context sharing", () => {
       sharePersonalContext: true,
       shareRecentContext: false,
     });
-    expect(personal.people).toEqual(context.people);
+    expect(personal.people).toEqual(
+      context.people?.filter(
+        (person) => person.name === context.addressee?.name,
+      ),
+    );
     expect(personal.recentTurns).toEqual([]);
     const recent = inferenceContext(context, {
       ...settings,
@@ -440,6 +444,187 @@ describe("inference context sharing", () => {
     expect(recent.people).toBeUndefined();
     expect(recent.recentTurns).toEqual(context.recentTurns);
     expect(JSON.stringify(personal)).not.toContain("pinHash");
+  });
+  it("shares only explicitly named contacts, aliases and the selected listener", () => {
+    const context = buildContext(settings, {
+      modality: "text",
+      raw: "Ask ANNA and Karthi, please. My doctor can wait.",
+    });
+    context.addressee = {
+      name: "Priya",
+      relation: "family",
+      register: "familiar",
+    };
+    context.people = [
+      { name: "Ann", relation: "friend", aliases: [] },
+      { name: "Anna", relation: "friend", aliases: [] },
+      { name: "Karthik", relation: "son", aliases: ["Karthi"] },
+      { name: "Priya", relation: "family", aliases: [] },
+      { name: "Rao", relation: "doctor", aliases: [] },
+      { name: "Meena", relation: "daughter", aliases: [] },
+    ];
+    context.partnerQuestion = {
+      text: "Would you like Meena here?",
+      lang: "en",
+      minutesAgo: 1,
+    };
+    const packet = inferenceContext(context, {
+      ...settings,
+      sharePersonalContext: true,
+    });
+    expect(packet.people?.map((person) => person.name)).toEqual([
+      "Anna",
+      "Karthik",
+      "Priya",
+      "Meena",
+    ]);
+    expect(packet.addressee).toEqual(context.addressee);
+  });
+  it("matches complete custom terms without guessing from word fragments", () => {
+    const context = buildContext(settings, {
+      modality: "text",
+      raw: "COFF, tea and school please",
+    });
+    context.addressee = {
+      name: "Priya",
+      relation: "family",
+      register: "familiar",
+    };
+    context.vocabulary = [
+      "coffee",
+      "filter coffee",
+      "tea",
+      "Aadhav’s school",
+      "balcony chair",
+      "Priya",
+    ].map((term) => ({ term, kind: "other" as const }));
+    context.partnerQuestion = {
+      text: "Do you mean the balcony chair?",
+      lang: "en",
+      minutesAgo: 1,
+    };
+    const packet = inferenceContext(context, {
+      ...settings,
+      sharePersonalContext: true,
+    });
+    expect(packet.vocabulary?.map((entry) => entry.term)).toEqual([
+      "tea",
+      "balcony chair",
+      "Priya",
+    ]);
+  });
+  it("keeps Tamil combining marks intact and rejects Tamil prefixes and suffixes", () => {
+    const context = buildContext(settings, {
+      modality: "text",
+      raw: "மாலா, தண்ணீர் வேண்டும்.",
+    });
+    context.addressee = undefined;
+    context.people = [
+      { name: "மாலா", relation: "friend", aliases: [] },
+      { name: "மால", relation: "friend", aliases: [] },
+      { name: "மாலதி", relation: "friend", aliases: [] },
+      { name: "Meena", relation: "family", aliases: ["மீனா"] },
+    ];
+    context.vocabulary = [
+      "தண்ணீர்",
+      "தண்ணீ",
+      "தண்ணீரில்",
+      "குளிர்ந்த தண்ணீர்",
+      "தேநீர்",
+    ].map((term) => ({ term, kind: "other" as const }));
+    context.partnerQuestion = {
+      text: "மீனா தேநீர் வேண்டுமா?",
+      lang: "ta",
+      minutesAgo: 1,
+    };
+    const packet = inferenceContext(context, {
+      ...settings,
+      sharePersonalContext: true,
+    });
+    expect(packet.people?.map((person) => person.name)).toEqual([
+      "மாலா",
+      "Meena",
+    ]);
+    expect(packet.vocabulary?.map((entry) => entry.term)).toEqual([
+      "தண்ணீர்",
+      "தேநீர்",
+    ]);
+  });
+  it("handles punctuation and canonical Unicode without sharing empty terms", () => {
+    const context = buildContext(settings, {
+      modality: "text",
+      raw: "Jean-Luc, bring Aadhav's school bag and cafe\u0301 menu.",
+    });
+    context.addressee = undefined;
+    context.people = [{ name: "Jean Luc", relation: "friend", aliases: [] }];
+    context.vocabulary = [
+      "Aadhav’s school bag",
+      "café menu",
+      "!!!",
+      "unrelated item",
+    ].map((term) => ({ term, kind: "other" as const }));
+    const packet = inferenceContext(context, {
+      ...settings,
+      sharePersonalContext: true,
+    });
+    expect(packet.people?.map((person) => person.name)).toEqual(["Jean Luc"]);
+    expect(packet.vocabulary?.map((entry) => entry.term)).toEqual([
+      "Aadhav’s school bag",
+      "café menu",
+    ]);
+  });
+  it("does not use history, routines or examples to expand the shared address book", () => {
+    const context = buildContext(settings, { modality: "text", raw: "water" });
+    context.addressee = undefined;
+    context.people = [{ name: "Ravi", relation: "friend", aliases: [] }];
+    context.vocabulary = [{ term: "private club", kind: "other" }];
+    context.recentTurns = [
+      { speaker: "person", text: "Ravi at the private club", minutesAgo: 1 },
+    ];
+    context.ownExamples = [
+      {
+        fragment: "water",
+        sentence: "Ravi, water please",
+        timeBucket: "morning",
+      },
+    ];
+    context.substitutions = [
+      {
+        heard: "water",
+        means: "water please",
+        confirmed: true,
+        count: 1,
+      },
+    ];
+    const original = structuredClone(context);
+    const packet = inferenceContext(context, {
+      ...settings,
+      sharePersonalContext: true,
+      shareRecentContext: true,
+    });
+    expect(packet.people).toEqual([]);
+    expect(packet.vocabulary).toEqual([]);
+    expect(packet.ownExamples).toEqual(context.ownExamples);
+    expect(packet.substitutions).toEqual(context.substitutions);
+    expect(packet.recentTurns).toEqual(context.recentTurns);
+    expect(context).toEqual(original);
+  });
+  it("keeps the full controlled local packet while minimizing a named listener snapshot", () => {
+    const context = buildContext(settings, { modality: "text", raw: "water" });
+    const originalPeople = structuredClone(context.people);
+    const originalVocabulary = structuredClone(context.vocabulary);
+    const packet = inferenceContext(context, {
+      ...settings,
+      addressee: "rao",
+      sharePersonalContext: true,
+    });
+    expect(packet.addressee?.name).toBe(context.addressee?.name);
+    expect(packet.people?.map((person) => person.name)).toEqual([
+      context.addressee?.name,
+    ]);
+    expect(packet.vocabulary).toEqual([]);
+    expect(context.people).toEqual(originalPeople);
+    expect(context.vocabulary).toEqual(originalVocabulary);
   });
   it("uses only recent confirmed chosen messages for the same listener, language and place", () => {
     const now = Date.now();

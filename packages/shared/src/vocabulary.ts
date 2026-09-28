@@ -1,4 +1,10 @@
 import type { Candidate, ContextInput, Lang } from "./schemas";
+import {
+  confirmedFragmentCorrection,
+  fragmentRepairReading,
+  repairFragment,
+  type FragmentRepair,
+} from "./fragmentRepair";
 
 export const vocabularyCategories = [
   "core",
@@ -1878,6 +1884,49 @@ export function normalizeVocabularyQuery(value: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+const catalogTokens = new Set(
+  vocabularyCatalog.flatMap((v) =>
+    [
+      v.en,
+      v.ta,
+      v.enSentence,
+      v.taSentence,
+      ...v.aliases.en,
+      ...v.aliases.ta,
+      ...v.aliases.tanglish,
+    ].flatMap((form) => normalizeVocabularyQuery(form).split(" ")),
+  ),
+);
+const repairableTokens = new Set(
+  vocabularyCatalog
+    .filter((v) => v.category !== "health" && v.polarity === "positive")
+    .flatMap((v) => [...v.aliases.en, ...v.aliases.ta, ...v.aliases.tanglish])
+    .map(normalizeVocabularyQuery)
+    .filter((form) => /^[\p{L}\p{M}]+$/u.test(form)),
+);
+
+/** Original text must still be retained for display, evidence and any model request. */
+export function repairCatalogFragment(raw: string): FragmentRepair {
+  return repairFragment(raw, {
+    repairable: repairableTokens,
+    known: catalogTokens,
+  });
+}
+
+export function prepareCatalogFragment(context: ContextInput): {
+  text: string;
+  reading?: string;
+  ambiguous: boolean;
+} {
+  const confirmed = confirmedFragmentCorrection(context);
+  if (confirmed.ambiguous) return confirmed;
+  const repaired = repairCatalogFragment(confirmed.text);
+  return {
+    text: repaired.text,
+    reading: confirmed.reading ?? fragmentRepairReading(repaired),
+    ambiguous: false,
+  };
+}
 const forms = (v: VocabularyEntry) =>
   [
     v.id,
@@ -1951,7 +2000,9 @@ export function getVocabularyCandidate(
 
 /** Conservative exact/alias retrieval. New sentences, body slots and personalised facts are not invented. */
 export function getVocabularyCandidates(context: ContextInput): Candidate[] {
-  let raw = normalizeVocabularyQuery(context.fragment.raw);
+  const prepared = prepareCatalogFragment(context);
+  if (prepared.ambiguous) return [];
+  let raw = normalizeVocabularyQuery(prepared.text);
   if (
     context.fragment.modality === "topic" &&
     (context.fragment.topicPath?.length ?? 0) > 1
@@ -2010,7 +2061,7 @@ export function getVocabularyCandidates(context: ContextInput): Candidate[] {
       )
         return [];
       seen.add(v.id);
-      return [candidate];
+      return [{ ...candidate, reading: prepared.reading ?? candidate.reading }];
     })
     .slice(0, 3);
 }

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   BarChart3,
@@ -14,6 +15,11 @@ import { db } from "../db";
 import { attemptsCsv, download, isStruggle, metrics } from "../lib/metrics";
 import { Back, Empty, PageTitle, TapButton } from "../ui";
 import TherapyDashboard from "../features/rehab/TherapyDashboard";
+import ClinicianOverview, {
+  type ClinicianReviewTarget,
+} from "../features/rehab/ClinicianOverview";
+import { COMMUNICATION_LOG_INTERPRETATION } from "../features/rehab/reportScope";
+import AppointmentsPage from "../features/appointments/AppointmentsPage";
 
 const localDate = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -26,12 +32,32 @@ const dateTime = (at: number) =>
   });
 
 export default function Therapist() {
-  const [view, setView] = useState<"rehab" | "log">("rehab");
+  const location = useLocation();
+  const [params, setParams] = useSearchParams();
+  const [reviewTarget, setReviewTarget] = useState<ClinicianReviewTarget>();
+  const clinicianRoute = location.pathname === "/clinician";
+  const requestedView = params.get("view");
+  const view =
+    requestedView === "overview" ||
+    requestedView === "rehab" ||
+    requestedView === "log" ||
+    requestedView === "appointments"
+      ? requestedView
+      : clinicianRoute
+        ? "overview"
+        : "rehab";
+  function setView(
+    next: "overview" | "rehab" | "log" | "appointments",
+    target?: ClinicianReviewTarget,
+  ) {
+    setReviewTarget(target);
+    setParams({ view: next });
+  }
   return (
     <section className="therapist-page">
       <Back to="/settings" label="Caregiver settings" />
       <PageTitle
-        title="Therapist dashboard"
+        title={clinicianRoute ? "Clinician dashboard" : "Therapist dashboard"}
         subtitle="Review communication, personal practice and evidence together."
         action={
           <TapButton
@@ -45,6 +71,12 @@ export default function Therapist() {
       />
       <div className="rehab-actions print-hide" aria-label="Dashboard views">
         <TapButton
+          aria-pressed={view === "overview"}
+          onActivate={() => setView("overview")}
+        >
+          Overview
+        </TapButton>
+        <TapButton
           aria-pressed={view === "rehab"}
           onActivate={() => setView("rehab")}
         >
@@ -56,8 +88,25 @@ export default function Therapist() {
         >
           Communication log
         </TapButton>
+        <TapButton
+          aria-pressed={view === "appointments"}
+          onActivate={() => setView("appointments")}
+        >
+          Appointments
+        </TapButton>
       </div>
-      {view === "rehab" ? <TherapyDashboard /> : <CommunicationLog />}
+      {view === "overview" ? (
+        <ClinicianOverview
+          onReview={(target) => setView("rehab", target)}
+          onLog={() => setView("log")}
+        />
+      ) : view === "rehab" ? (
+        <TherapyDashboard initialTarget={reviewTarget} />
+      ) : view === "appointments" ? (
+        <AppointmentsPage embedded />
+      ) : (
+        <CommunicationLog />
+      )}
     </section>
   );
 }
@@ -120,7 +169,7 @@ function CommunicationLog() {
       icon: <MessageCircle size={22} aria-hidden="true" />,
     },
     {
-      label: "Spoken",
+      label: "Audio started",
       value: summary.spoken,
       icon: <CheckCircle2 size={22} aria-hidden="true" />,
     },
@@ -135,13 +184,16 @@ function CommunicationLog() {
       icon: <MessageCircle size={22} aria-hidden="true" />,
     },
     {
-      label: "Median taps",
+      label: "Median taps to audio start",
       value: summary.spoken ? summary.medianTaps.toFixed(1) : "—",
       icon: <Hand size={22} aria-hidden="true" />,
     },
     {
-      label: "Median seconds",
-      value: summary.spoken ? `${summary.medianSeconds.toFixed(1)}s` : "—",
+      label: "Median seconds to audio start",
+      value:
+        summary.medianSeconds === null
+          ? "—"
+          : `${summary.medianSeconds.toFixed(1)}s`,
       icon: <Clock3 size={22} aria-hidden="true" />,
     },
   ];
@@ -162,6 +214,15 @@ function CommunicationLog() {
           </TapButton>
         }
       />
+      <div
+        className="notice"
+        aria-label="Communication log purpose and limitations"
+      >
+        <p>
+          <strong>{COMMUNICATION_LOG_INTERPRETATION.purpose}</strong>
+        </p>
+        <p>{COMMUNICATION_LOG_INTERPRETATION.validation}</p>
+      </div>
       <div className="privacy-caption">
         <ShieldCheck size={17} aria-hidden="true" />
         <span>
@@ -227,11 +288,20 @@ function CommunicationLog() {
             ))}
           </div>
           <p className="muted">
-            Tap and time medians use spoken attempts. Mock, demo-time and cached
-            entries remain labelled below; these numbers are not a clinical
-            outcome measure. “Confirmed understood” records the person’s
-            explicit choice after checking with their partner; playback and
-            delivery alone do not count.
+            Tap and time medians use attempts where audio started. Time runs
+            from the start of an attempt to audio start, not candidate selection
+            or completed speech. Mock, demo-time and cached entries remain
+            labelled below; these numbers are not a clinical outcome measure.
+            “Confirmed understood” records the person’s explicit choice after
+            checking with their partner; playback and delivery alone do not
+            count.
+          </p>
+          <p className="muted">
+            Time measured for {summary.measuredTimeCount} of {summary.spoken}{" "}
+            speech-started attempts; {summary.missingTimeCount} missing. Missing
+            times are excluded from the median, never treated as zero. This
+            activity log includes all selected attempts, including labelled
+            demonstrations; see the progress report for assessed-only rates.
           </p>
           {!visible.length ? (
             <Empty icon="🌱" title="Every conversation starts somewhere">
@@ -245,15 +315,19 @@ function CommunicationLog() {
                 <div className="section-heading">
                   <div>
                     <span className="eyebrow">When another try helped</span>
-                    <h2 id="struggle-chart-title">Struggles by hour</h2>
+                    <h2 id="struggle-chart-title">
+                      Retries & longer attempts by hour
+                    </h2>
                   </div>
                   <span className="muted">
                     Local clock · {struggles.length} total
                   </span>
                 </div>
                 <p>
-                  A struggle means a retry, a rejected set, an unfinished
-                  attempt, or more than 30 seconds before speech.
+                  This application flag means a retry, a rejected set, an
+                  unfinished attempt, or more than 30 seconds before audio
+                  start. It is not a clinical difficulty score; the person may
+                  be taking time or choosing not to speak.
                 </p>
                 <div
                   className="hourly-chart"
@@ -297,7 +371,7 @@ function CommunicationLog() {
                           </span>
                           <span className="badge">
                             {attempt.outcome === "spoken"
-                              ? "Found their words"
+                              ? "Audio started"
                               : "Not yet spoken"}
                           </span>
                         </div>
