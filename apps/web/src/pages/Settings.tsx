@@ -3,12 +3,14 @@ import { useSearchParams } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   Check,
+  BrainCircuit,
   Copy,
   Link2,
   Mic,
   RefreshCw,
   Save,
   Settings2,
+  SlidersHorizontal,
   ShieldCheck,
   Square,
   Trash2,
@@ -30,7 +32,7 @@ import {
   type Consent,
   type Settings as UserSettings,
 } from "../db";
-import { health } from "../lib/api";
+import { api } from "../lib/api";
 import { createPairing } from "../lib/relay";
 import { useApp } from "../state";
 import { Back, Hint, PageTitle, TapButton } from "../ui";
@@ -38,9 +40,16 @@ import { audio, type VoiceInfo } from "../features/audio";
 import { startPhraseRecording, type PhraseRecorder } from "../features/voice";
 import { MemoryPanel, OfflinePanel } from "./Communication";
 import { BackupPanel } from "./Support";
+import {
+  LlmSettings,
+  type LlmConfiguration,
+} from "../features/settings/LlmSettings";
+import { PersonalizationSettings } from "../features/settings/Personalization";
 
 const sections = [
   { id: "general", label: "General", icon: Settings2 },
+  { id: "personalize", label: "Personalize", icon: SlidersHorizontal },
+  { id: "llm", label: "Sentence engine", icon: BrainCircuit },
   { id: "voice", label: "Voice Studio", icon: Mic },
   { id: "link", label: "Link phones", icon: Link2 },
   { id: "privacy", label: "Privacy", icon: ShieldCheck },
@@ -1200,9 +1209,22 @@ function Privacy() {
               <tr>
                 <td>Find sentences</td>
                 <td>
-                  Your fragment and limited context go to the Sollu server. Mock
-                  mode uses deterministic examples. If configured, local Ollama
-                  generates candidates.
+                  Free vocabulary uses prepared meanings. Local Ollama runs on
+                  the Sollu server computer. A cloud engine sends your fragment,
+                  language and current conversation prompt to the selected
+                  provider through the server only after cloud sharing is
+                  enabled. Optional history and personal context are controlled
+                  in Personalize. Provider retention policies apply.
+                </td>
+              </tr>
+              <tr>
+                <td>Configure a sentence-engine key</td>
+                <td>
+                  A pasted API key stays in server memory for this device
+                  session, expiring after 12 hours of inactivity or a server
+                  restart. It is excluded from this browser’s database and
+                  backups. A separately configured server environment key stays
+                  configured until the server owner removes it.
                 </td>
               </tr>
               <tr>
@@ -1264,15 +1286,20 @@ function Privacy() {
           </table>
         </div>
         <p>
-          There is no paid voice provider connected and no provider voice to
-          delete. This browser’s storage is not a substitute for a secure device
-          lock.
+          The sentence engine handles text; it does not clone or upload your
+          voice. API keys can be forgotten in Sentence engine settings. This
+          browser’s storage is not a substitute for a secure device lock.
         </p>
       </Card>
       <OfflinePanel />
       <MemoryPanel />
       <BackupPanel />
       <Card title="Erase this device’s Sollu data">
+        <p>
+          Forget server session keys in Sentence engine before erasing this
+          browser’s data. Erasing browser data does not remove server
+          environment keys.
+        </p>
         <p>
           This removes saved recordings, consent, phrases, history, learned
           phrasing, settings, the caregiver PIN and local pairing keys from this
@@ -1311,18 +1338,20 @@ export default function Settings() {
     : "general";
   const [provider, setProvider] = useState("Checking local server…");
   function refreshHealth() {
-    void health()
+    void api<LlmConfiguration>("llm/settings", undefined, undefined, "GET")
       .then((result) => {
-        const providers = result.providers as
-          Record<string, unknown> | undefined;
-        const mode =
-          providers?.intent === "ollama"
-            ? "Local Ollama configured"
-            : providers?.intent === "mock" || result.mode === "mock"
-              ? "Deterministic mock sentences"
-              : "Server configuration unavailable";
+        const selected = result.providers.find(
+          (item) => item.id === result.provider,
+        );
+        const mode = selected?.label ?? "Sentence engine unavailable";
+        const readiness =
+          selected?.requiresKey && !selected.keyConfigured
+            ? " · key needed; free vocabulary fallback"
+            : selected?.requiresKey && !result.cloudConsent
+              ? " · cloud sharing off"
+              : "";
         setProvider(
-          `${mode} · browser speech and exact recordings · no paid voice clone`,
+          `${mode}${readiness} · browser speech and exact recordings`,
         );
       })
       .catch(() =>
@@ -1404,6 +1433,10 @@ export default function Settings() {
       >
         {active === "general" ? (
           <General />
+        ) : active === "personalize" ? (
+          <PersonalizationSettings />
+        ) : active === "llm" ? (
+          <LlmSettings onChanged={refreshHealth} />
         ) : active === "voice" ? (
           <VoiceStudio />
         ) : active === "link" ? (

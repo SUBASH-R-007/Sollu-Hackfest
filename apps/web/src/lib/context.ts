@@ -1,4 +1,5 @@
 import type {
+  Attempt,
   ContextPacket,
   Fragment,
   MemoryEntry,
@@ -126,7 +127,80 @@ export function buildContext(
         sentence: m.sentence,
         timeBucket: m.timeBucket,
       })),
+    communication: {
+      sentenceStyle: settings.sentenceStyle ?? "natural",
+      maxWords: settings.sentenceLength ?? 12,
+      preferences: settings.sharePersonalContext
+        ? settings.communicationPreferences?.trim().slice(0, 240) || undefined
+        : undefined,
+    },
   };
+}
+
+/** Explicit allowlist: device settings, keys, raw history and recordings never enter inference. */
+export function inferenceContext(
+  context: ContextPacket,
+  settings: Settings,
+): ContextPacket {
+  return {
+    fragment: context.fragment,
+    outputLang: context.outputLang,
+    inputLangHints: context.inputLangHints,
+    round: context.round,
+    exclude: context.exclude,
+    rejectedMeaningKeys: context.rejectedMeaningKeys,
+    now: context.now,
+    partnerQuestion: context.partnerQuestion,
+    communication: {
+      sentenceStyle: context.communication?.sentenceStyle ?? "natural",
+      maxWords: context.communication?.maxWords ?? 12,
+      ...(settings.sharePersonalContext && context.communication?.preferences
+        ? { preferences: context.communication.preferences }
+        : {}),
+    },
+    ...(settings.sharePersonalContext
+      ? {
+          place: context.place,
+          speaker: context.speaker,
+          addressee: context.addressee,
+          people: context.people,
+          vocabulary: context.vocabulary,
+          routine: context.routine,
+          substitutions: context.substitutions,
+          ownExamples: context.ownExamples,
+        }
+      : {}),
+    recentTurns: settings.shareRecentContext ? (context.recentTurns ?? []) : [],
+  };
+}
+
+export function recentConfirmedTurns(
+  attempts: Attempt[],
+  context: ContextPacket,
+  now = Date.now(),
+): NonNullable<ContextPacket["recentTurns"]> {
+  return attempts
+    .filter(
+      (attempt) =>
+        attempt.outcome === "spoken" &&
+        ["intended", "understood"].includes(
+          attempt.communicationOutcome ?? "",
+        ) &&
+        Boolean(attempt.chosenText?.trim()) &&
+        attempt.outputLang === context.outputLang &&
+        attempt.addresseeId === context.addressee?.id &&
+        attempt.place === context.place &&
+        (attempt.endedAt ?? 0) <= now &&
+        (attempt.endedAt ?? 0) > now - 10 * 60_000,
+    )
+    .sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0))
+    .slice(0, 3)
+    .reverse()
+    .map((attempt) => ({
+      speaker: "person",
+      text: attempt.chosenText!.slice(0, 500),
+      minutesAgo: (now - attempt.endedAt!) / 60000,
+    }));
 }
 export const normalize = (s: string) =>
   s

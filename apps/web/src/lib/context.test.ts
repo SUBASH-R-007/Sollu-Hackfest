@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { ContextPacketSchema, demoSeed, type MemoryEntry } from "@sollu/shared";
+import {
+  ContextPacketSchema,
+  demoSeed,
+  type Attempt,
+  type MemoryEntry,
+} from "@sollu/shared";
 import { defaultSettings, type Settings } from "../db";
 import {
   buildContext,
@@ -7,6 +12,8 @@ import {
   memoryScore,
   minuteDistance,
   timeBucket,
+  inferenceContext,
+  recentConfirmedTurns,
 } from "./context";
 
 const settings: Settings = {
@@ -215,6 +222,113 @@ describe("context timing and grounding", () => {
     );
     expect(packet.ownExamples).toEqual([
       { fragment: "water", sentence: approved.sentence, timeBucket: "night" },
+    ]);
+  });
+});
+
+describe("inference context sharing", () => {
+  it("keeps personal context private by default and retains the current question", () => {
+    const context = buildContext(
+      settings,
+      { modality: "text", raw: "no coffee" },
+      {
+        question: { text: "Would you like coffee?", at: Date.now() },
+      },
+    );
+    context.communication = {
+      sentenceStyle: "brief",
+      maxWords: 8,
+      preferences: "Private preference",
+    };
+    context.recentTurns = [
+      { speaker: "person", text: "Earlier message", minutesAgo: 1 },
+    ];
+    const result = inferenceContext(context, {
+      ...settings,
+      sharePersonalContext: false,
+      shareRecentContext: false,
+    });
+    expect(result.fragment.raw).toBe("no coffee");
+    expect(result.partnerQuestion?.text).toBe("Would you like coffee?");
+    expect(result.communication).toEqual({
+      sentenceStyle: "brief",
+      maxWords: 8,
+    });
+    for (const key of [
+      "speaker",
+      "people",
+      "addressee",
+      "routine",
+      "vocabulary",
+      "substitutions",
+      "ownExamples",
+      "place",
+    ])
+      expect(result).not.toHaveProperty(key);
+    expect(result.recentTurns).toEqual([]);
+    expect(ContextPacketSchema.safeParse(result).success).toBe(true);
+  });
+  it("shares each optional context group independently", () => {
+    const context = buildContext(settings, { modality: "text", raw: "coffee" });
+    context.recentTurns = [
+      { speaker: "person", text: "Earlier message", minutesAgo: 1 },
+    ];
+    const personal = inferenceContext(context, {
+      ...settings,
+      sharePersonalContext: true,
+      shareRecentContext: false,
+    });
+    expect(personal.people).toEqual(context.people);
+    expect(personal.recentTurns).toEqual([]);
+    const recent = inferenceContext(context, {
+      ...settings,
+      sharePersonalContext: false,
+      shareRecentContext: true,
+    });
+    expect(recent.people).toBeUndefined();
+    expect(recent.recentTurns).toEqual(context.recentTurns);
+    expect(JSON.stringify(personal)).not.toContain("pinHash");
+  });
+  it("uses only recent confirmed chosen messages for the same listener, language and place", () => {
+    const now = Date.now();
+    const context = buildContext(settings, { modality: "text", raw: "yes" });
+    const valid: Attempt = {
+      id: "a",
+      startedAt: now - 60000,
+      endedAt: now - 30000,
+      outcome: "spoken",
+      modality: "text",
+      fragmentRaw: "garden",
+      sttRetries: 0,
+      outputLang: context.outputLang,
+      place: context.place!,
+      timeBucket: context.now!.timeBucket,
+      addresseeId: context.addressee?.id,
+      demoClock: false,
+      rounds: [],
+      chosenText: "I want to visit the garden.",
+      communicationOutcome: "intended",
+      taps: 1,
+      offline: false,
+      demoCached: false,
+    };
+    const attempts = [
+      valid,
+      {
+        ...valid,
+        id: "unconfirmed",
+        communicationOutcome: "unconfirmed" as const,
+      },
+      { ...valid, id: "refused", communicationOutcome: "declined" as const },
+      { ...valid, id: "repair", communicationOutcome: "needs_repair" as const },
+      { ...valid, id: "old", endedAt: now - 600001 },
+      { ...valid, id: "future", endedAt: now + 1 },
+      { ...valid, id: "other", addresseeId: "another-listener" },
+      { ...valid, id: "place", place: "hospital" },
+      { ...valid, id: "abandoned", outcome: "abandoned" as const },
+    ];
+    expect(recentConfirmedTurns(attempts, context, now)).toEqual([
+      { speaker: "person", text: valid.chosenText, minutesAgo: 0.5 },
     ]);
   });
 });

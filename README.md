@@ -6,13 +6,25 @@ Tamil-first communication aid prototype for BME Ignite Hackfest 2026, Team echo.
 
 **No paid API key is needed to run the default demo.** Mock output is deterministic and must stay visibly labelled. Free device speech and exact-phrase own-voice recordings are distinct from generative voice cloning. Tamil recognition and Tamil device voices depend on the browser/device. This is a prototype; real-phone, native-speaker and clinic acceptance are tracked in [PROGRESS.md](PROGRESS.md).
 
-## Communication tools added on 28 September
+## Contextual LLM and caregiver personalization
+
+Open **Caregiver settings → Sentence engine** (`/settings?tab=llm`), unlock with the local PIN, and choose **OpenAI**, **Anthropic Claude**, **Google Gemini**, **Groq**, **local Ollama**, or **Free vocabulary**. For OpenAI, paste your API key, review cloud text sharing, and save. You can edit the model ID and maximum waiting time. The separate synthetic connection test makes one small request and may incur provider charges. No real cloud key or paid call was used during implementation.
+
+Pasted keys stay in server memory for the authenticated device and expire after 12 hours of inactivity or a server restart. They are never returned to the page or saved in browser storage/backups. **Forget session key** removes that source; environment keys must be removed from the server environment separately. For persistent local setup, put `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, or `GROQ_API_KEY` in the server's private `.env` and restart. Do not use `VITE_` keys. An environment key alone does not consent to cloud sharing: select the provider and enable sharing for this device in Settings. The default remains the free catalog.
+
+Models can now compose sentences beyond the prepared vocabulary, using the current fragment and conversation question. Structured responses carry exact evidence spans and pass bounded checks for source evidence, language, negation, side, quantities, unsupported details and repeated meanings. Generated wording is labelled **AI draft · Check the meaning**. These filters cannot prove semantic correctness or translation quality; the person reviews and taps the exact sentence. Failed, invalid or timed-out requests fall back to vocabulary or clarification; there is no automatic switch to another cloud provider. Model drafts are not reused from rehearsal caches.
+
+**Personalize** adds brief/natural/polite style, 8/12/18-word limits, a preferred first input tile, reduced motion and a communication-preference note. Optional personal context and recent conversation start off. Recent context contains at most three chosen messages explicitly marked intended/understood, from the same listener/place/language in the last ten minutes. Existing text size, contrast, speech speed, quiet mode, tap filtering, choice count and confirmation controls remain in General. Voice playback and speech recognition are separate from the sentence engine.
+
+Provider request formats, retention caveats and model defaults are recorded in the dated [provider ledger](docs/PROVIDERS.md).
+
+### Vocabulary and other communication tools
 
 Open **My tools** (`/tools`) for a bilingual word finder with 124 controlled message meanings, personal words with aliases and descriptions, familiar photos with selectable messages, prepared conversations, a printable communication passport, and drawing/writing. Personal cards are drafted behind the caregiver lock and appear for everyday use only after the person reviews the exact words. Editing or importing a card requires fresh approval. Pin, hide and delete controls keep the word collection personal.
 
 The persistent support strip offers Help, repair, Pause and Stop. Repair includes message editing and an explicit check of what the partner understood. Comfort phrases and a small request/refusal sentence builder work without an AI service. Pause preserves an unfinished message; drawings survive a pause in the current app session. Access settings include choice count, repeated-tap filtering, listening pauses, speech speed, two-step confirmation and a quiet screen.
 
-All suggestion paths share the same meaning policy: preserve negation/body side/output language, remove repeated or previously rejected meanings, and abstain when there is not enough supported content. Speaking a sentence alone never approves a learned mapping. Corrections and remembered phrasing require review and are scoped to the listener, place and language. The optional local model selects controlled meanings; it cannot author unverified medication details or names.
+All suggestion paths apply checks for negation/body side/output language, repeated or previously rejected meanings, and insufficient support. Speaking a sentence alone never approves a learned mapping. Corrections and remembered phrasing require review and are scoped to the listener, place and language. Local and cloud model drafts use the contextual generation path described above; the free catalog remains available without inference.
 
 Caregiver messages queue encrypted on the patient device and retry with the same message ID. Help expires after 60 seconds, ordinary messages after five minutes. “Delivered” means received by the companion page; “understood” requires the person's explicit confirmation. Both pages and the relay must eventually be available. Privacy settings include an offline-readiness panel and passphrase-encrypted backup with import preview; imports preserve existing entries and do not restore credentials, pairing keys or the caregiver PIN.
 
@@ -38,7 +50,7 @@ For a production bundle, run `pnpm build`, then `pnpm start`. The exact availabl
 
 | Need | Free route | Limit |
 | --- | --- | --- |
-| Candidate generation | Bundled controlled Tamil/English catalog; optional local Ollama selector | Unrecognized meanings require clarification or personal wording. The tested installed model timed out; this is not evidence of model accuracy. |
+| Candidate generation | Bundled controlled Tamil/English catalog; optional local Ollama generation | Catalog coverage is bounded. The earlier installed-model selector benchmark timed out; it does not measure the new generation path or establish model accuracy. |
 | Speech input | Browser SpeechRecognition when supported | May send audio to browser-vendor servers; language/support/offline behaviour vary. Type and Topics always provide another input route. |
 | Speak a new sentence | Available device/browser speech voice | Generic voice; Tamil voice may be missing and remote voices may need internet. |
 | Speak in a consenting person's actual voice | Record an exact phrase in Voice Studio and replay it for that phrase | Genuine recording, not a generative clone; it cannot say new text or translate the recording. File upload is not implemented. |
@@ -46,7 +58,7 @@ For a production bundle, run `pnpm build`, then `pnpm start`. The exact availabl
 
 To use Ollama, install it separately, choose and download a local model suitable for your hardware, and confirm it appears in `ollama list`. Set `LLM_PROVIDER=ollama`, `MOCK_PROVIDERS=0`, `OLLAMA_BASE_URL=http://127.0.0.1:11434`, and `OLLAMA_MODEL` to that installed model's exact name in `.env`. Set `OLLAMA_NO_CLOUD=1` in the Ollama application's environment and restart Ollama for local-only operation. Sollu does not install models automatically. See [verified provider notes](docs/PROVIDERS.md) for the API and privacy limits.
 
-The future paid upgrade path is Anthropic intent, evaluated Sarvam STT, and consented ElevenLabs cloning/TTS. **These paid adapters are not connected in this build; adding keys alone does not enable them.** The implemented intent routes are mock and local Ollama. A production server requires `ACCESS_CODE` and a persistent `SERVER_SECRET` of at least 32 bytes. Keep secrets in server configuration. Paid integration, retention and deletion need implementation and real account checks. [Provider ledger](docs/PROVIDERS.md)
+Cloud sentence adapters are implemented for OpenAI, Anthropic, Gemini and Groq, with settings and explicit sharing permission. **Cloud STT, generative voice cloning and paid TTS are still unimplemented.** A production server requires `ACCESS_CODE` and a persistent `SERVER_SECRET` of at least 32 bytes. Live account access, output quality and account retention settings still need checking with the chosen provider. [Provider ledger](docs/PROVIDERS.md)
 
 ## Verification and status
 

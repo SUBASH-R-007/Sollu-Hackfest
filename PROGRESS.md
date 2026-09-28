@@ -1,6 +1,21 @@
 # Sollu progress and acceptance ledger
 
-Last updated: 2026-09-28. **Current state: approved aphasia-support improvements implemented locally; final verification recorded below, human acceptance pending.** The user approved the improvement plan with “go.” No paid keys or hosting were added. The complete specification is [docs/SPEC.md](docs/SPEC.md); approved changes are [docs/DECISIONS.md](docs/DECISIONS.md). This is not a claim that the original full-product, clinical-validation or paid-clone milestones are complete.
+Last updated: 2026-09-28. **Current state: contextual sentence engine and caregiver personalization implemented locally; automated verification passed, live-provider and human acceptance pending.** The user approved the improvement plan with “go,” then requested OpenAI and alternative provider settings. No real credentials or paid requests were used; hosting remains deferred. The complete specification is [docs/SPEC.md](docs/SPEC.md); approved changes are [docs/DECISIONS.md](docs/DECISIONS.md). This is not a claim that the original full-product, clinical-validation or paid-clone milestones are complete.
+
+## Contextual engine and caregiver settings (v3)
+
+| Area | Implementation and evidence |
+| --- | --- |
+| Contextual sentences | OpenAI, Anthropic, Gemini, Groq and local Ollama can frame new sentence drafts from the current fragment/question and permitted context. Evidence/context binding, explicit-detail checks, rejection deduplication, bounded waits and honest free fallback are enforced. These checks do not establish semantic or clinical accuracy. |
+| Caregiver engine controls | PIN-protected Sentence engine tab: provider, editable model, deadline, masked session key, explicit text-sharing permission, synthetic connection test and key removal. Device-specific keys live in server memory; restart or 12 hours of inactivity clears them. Free vocabulary remains the default. |
+| Personalization | Brief/natural/polite wording, preferred maximum length, communication note, optional confirmed recent/personal context, first Home input tile and reduced motion. Existing size/contrast/voice/tap/choice controls remain available. Context sharing starts off. |
+| Patient control | Model output is marked “AI draft · Check the meaning.” Only the person's exact-sentence tap speaks. Changed partner questions invalidate pending/unselected suggestions; drafts are not reused as rehearsal cache entries. Demo warm-up makes no inference requests. |
+| Automated checks | **473 unit tests / 17 files; complete 32-test browser suite; ESLint; web/server/shared TypeScript; production web/API builds; compiled offline PWA smoke all passed.** [Dated verification and limitations](docs/evidence/v3/VERIFICATION.md). |
+| Controlled evaluation | **240/240** authored catalog executions passed, including bilingual vocabulary and refusal/rejection flows. This measures the controlled fixtures, not the new LLM's quality. |
+| Visual checks | Sentence engine and Personalize at 390×844 and 1440×1000: no horizontal overflow, keyboard tab navigation, masked/empty key field, no unexpected audio or console errors. [Evidence](docs/evidence/v3/settings-visual-checks.json). |
+| Pending | User-supplied key and live-provider quality/latency evaluation; native Tamil review including model evidence translations; SLP/patient/caregiver phone acceptance. No paid voice, hosting or treatment claims added. |
+
+Setup: caregiver **Settings → Sentence engine → OpenAI**, enter a key, enable text sharing, save, then deliberately run **Test connection**. The test may use provider quota and sends synthetic content only. [Provider setup and official sources](docs/PROVIDERS.md).
 
 ## Approved improvement release (v2)
 

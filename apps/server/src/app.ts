@@ -20,7 +20,9 @@ import {
 import { Signer } from "./lib/signing.js";
 import { selectIntent } from "./lib/intent.js";
 import { mockWav } from "./providers/mock.js";
-import type { ServerConfig } from "./config.js";
+import { isCloudProvider, type ServerConfig } from "./config.js";
+import { ProviderSettingsStore } from "./providers/providerSettings.js";
+import { generateStructured } from "./providers/cloud.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -50,6 +52,7 @@ export async function createApp(
   logStream?: { write(message: string): void },
 ) {
   const signer = new Signer(config.secret);
+  const providerSettings = new ProviderSettingsStore(config);
   const app = Fastify({
     bodyLimit: 64 * 1024,
     logger: config.logging
@@ -143,7 +146,9 @@ export async function createApp(
     ok: true,
     mode: config.intentProvider === "ollama" ? "free-local" : "mock",
     providers: {
-      intent: config.intentProvider,
+      intent: isCloudProvider(config.intentProvider)
+        ? "mock"
+        : config.intentProvider,
       stt: "mock",
       tts: "device (browser)",
       clone: "mock",
@@ -152,10 +157,10 @@ export async function createApp(
     ownVoiceAvailable: false,
     capabilities: {
       localIntent: config.intentProvider === "ollama",
-      paidProviders: false,
+      paidProviders: true,
       encryptedRelay: true,
     },
-    note: "Device speech and recorded phrases are available without paid keys. Mock cloning creates no real voice.",
+    note: "Device speech and recorded phrases work without paid keys. Optional cloud sentence framing requires device settings and sharing permission. Mock cloning creates no real voice.",
   }));
   app.post("/api/device/register", { config: limited(10) }, async (request) => {
     const body = z
@@ -168,6 +173,70 @@ export async function createApp(
       throw new HttpError(403, "Wrong access code");
     const deviceId = randomUUID();
     return { deviceId, token: signer.device(deviceId) };
+  });
+  app.get("/api/llm/settings", async (request) =>
+    providerSettings.view(request.deviceId!),
+  );
+  app.post("/api/llm/settings", { config: limited(20) }, async (request) =>
+    providerSettings.update(request.deviceId!, request.body),
+  );
+  app.post("/api/llm/test", { config: limited(5) }, async (request, reply) => {
+    z.object({})
+      .strict()
+      .parse(request.body ?? {});
+    const selected = providerSettings.resolve(request.deviceId!);
+    const start = performance.now();
+    const controller = new AbortController();
+    const cancelled = () => {
+      if (!reply.raw.writableEnded) controller.abort();
+    };
+    request.raw.once("aborted", cancelled);
+    reply.raw.once("close", cancelled);
+    try {
+      if (selected.intentProvider !== "mock") {
+        const result = await generateStructured(selected.intentProvider, {
+          model: selected.llmModel!,
+          apiKey: selected.apiKey,
+          ollamaUrl: selected.ollamaUrl,
+          timeoutMs: selected.timeoutMs,
+          signal: controller.signal,
+          system:
+            'This is a synthetic connection test. Return the JSON object {"ok":true} only.',
+          user: "Connection test. No patient data is included.",
+          schema: {
+            type: "object",
+            properties: { ok: { type: "boolean", enum: [true] } },
+            required: ["ok"],
+            additionalProperties: false,
+          },
+        });
+        z.object({ ok: z.literal(true) })
+          .strict()
+          .parse(result);
+      }
+      return {
+        ok: true,
+        message:
+          selected.intentProvider === "mock"
+            ? "Free vocabulary is ready. No external request was made."
+            : "Connection passed with synthetic data. Sentence quality still needs patient review.",
+        provider: selected.intentProvider,
+        model: selected.llmModel,
+        latencyMs: Math.round(performance.now() - start),
+      };
+    } catch {
+      return {
+        ok: false,
+        message:
+          "Connection failed. Check the key, model, account limits and network, or use Free vocabulary.",
+        provider: selected.intentProvider,
+        model: selected.llmModel,
+        latencyMs: Math.round(performance.now() - start),
+      };
+    } finally {
+      request.raw.off("aborted", cancelled);
+      reply.raw.off("close", cancelled);
+    }
   });
   app.post("/api/intent", { config: limited(30) }, async (request, reply) => {
     const body = z
@@ -187,7 +256,8 @@ export async function createApp(
     request.raw.once("aborted", cancelled);
     reply.raw.once("close", cancelled);
     try {
-      const result = await selectIntent(context, config, controller.signal);
+      const selected = providerSettings.resolve(request.deviceId!);
+      const result = await selectIntent(context, selected, controller.signal);
       const candidates = result.candidates.map((c) => ({
         ...c,
         sig: signer.signText(
@@ -200,8 +270,10 @@ export async function createApp(
       return {
         candidates,
         model: result.model,
-        provider: config.intentProvider,
-        mock: config.intentProvider === "mock",
+        provider: selected.intentProvider,
+        mock: selected.intentProvider === "mock",
+        fallback: "fallback" in result ? result.fallback : false,
+        revision: selected.revision,
         latencyMs: result.latencyMs,
         validationDrops: result.validationDrops,
         clarification: result.clarification,
@@ -513,6 +585,7 @@ export async function createApp(
   );
   const cleanup = setInterval(() => {
     const now = Date.now();
+    providerSettings.prune();
     for (const [id, value] of caregiverCounts)
       if (value.expires < now) caregiverCounts.delete(id);
     for (const [id, expiry] of deletedVoices)
@@ -530,6 +603,7 @@ export async function createApp(
   cleanup.unref();
   app.addHook("onClose", async () => {
     clearInterval(cleanup);
+    providerSettings.clear();
     for (const sockets of rooms.values())
       for (const entry of sockets) entry.socket.terminate();
     rooms.clear();

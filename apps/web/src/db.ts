@@ -25,6 +25,13 @@ export interface Settings {
   quietMode: boolean;
   speakerGender: "female" | "male" | "unspecified";
   dialectNote: string;
+  sentenceStyle: "brief" | "natural" | "polite";
+  sentenceLength: 8 | 12 | 18;
+  shareRecentContext: boolean;
+  sharePersonalContext: boolean;
+  communicationPreferences: string;
+  reducedMotion: boolean;
+  preferredInput: "speech" | "type" | "topics" | "camera";
   stage: boolean;
   demo: boolean;
   demoTime: string;
@@ -105,6 +112,13 @@ export const defaultSettings: Settings = {
   quietMode: false,
   speakerGender: "unspecified",
   dialectNote: "",
+  sentenceStyle: "natural",
+  sentenceLength: 12,
+  shareRecentContext: false,
+  sharePersonalContext: false,
+  communicationPreferences: "",
+  reducedMotion: false,
+  preferredInput: "speech",
   stage: false,
   demo: true,
   demoTime: "20:58",

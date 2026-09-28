@@ -9,11 +9,15 @@ import {
   Trash2,
   WifiOff,
 } from "lucide-react";
-import { getMockCandidates, type Fragment, type Lang } from "@sollu/shared";
+import {
+  applyCandidatePolicy,
+  getMockCandidates,
+  type Fragment,
+  type Lang,
+} from "@sollu/shared";
 import { useApp } from "../state";
 import type { Settings } from "../db";
 import { buildContext } from "../lib/context";
-import { getIntent } from "../lib/api";
 import {
   clearRehearsal,
   getRehearsalCount,
@@ -97,8 +101,7 @@ export default function Demo() {
   const navigate = useNavigate();
   const [count, setCount] = useState(0),
     [busy, setBusy] = useState(false),
-    [status, setStatus] = useState(""),
-    [provider, setProvider] = useState("Not checked");
+    [status, setStatus] = useState("");
   const request = useRef<AbortController | null>(null),
     mounted = useRef(true);
   useEffect(() => {
@@ -126,20 +129,10 @@ export default function Demo() {
   });
   async function warm() {
     setBusy(true);
-    setStatus("Checking the local server…");
+    setStatus("Preparing local vocabulary…");
     const controller = new AbortController();
     request.current = controller;
     try {
-      const response = await fetch("/api/health", {
-        signal: controller.signal,
-      });
-      if (!response.ok) throw new Error("The local server is unavailable.");
-      const health = (await response.json()) as {
-        providers?: { intent?: string };
-      };
-      const mock = health.providers?.intent !== "ollama";
-      if (mounted.current)
-        setProvider(mock ? "Mock fixtures — not live AI" : "Local Ollama");
       const nightSettings = configured("20:58");
       const waterSettings = configured("14:10", "karthik");
       const recoverySettings = configured("16:30");
@@ -156,19 +149,24 @@ export default function Demo() {
         round: 2,
         exclude: getMockCandidates(first).map((c) => c.text),
       });
+      let stored = 0;
       for (const [index, context] of [night, water, recovery].entries()) {
         if (mounted.current)
           setStatus(`Preparing ${index + 1} of 3 sentence sets…`);
-        const result = await getIntent(context, controller.signal);
+        const result = {
+          candidates: applyCandidatePolicy(getMockCandidates(context), context)
+            .candidates,
+          model: "Local vocabulary rehearsal",
+          latencyMs: 0,
+        };
         if (controller.signal.aborted) return;
         await saveRehearsal(context, result);
+        if (result.candidates.length) stored++;
       }
       if (mounted.current) {
         setCount(await getRehearsalCount());
         setStatus(
-          mock
-            ? "Three mock sentence sets are stored. They will be labelled CACHED when reused. No real AI quality or speech latency was measured."
-            : "Three local-model sentence sets are stored. Reused results are labelled CACHED; their old generation time is not a live measurement.",
+          `${stored} of 3 local vocabulary sets stored. ${3 - stored} needed clarification and were not cached. Reused results are labelled CACHED. No external request, speech or live AI measurement was made.`,
         );
       }
     } catch (error) {
@@ -252,18 +250,20 @@ export default function Demo() {
       <section className="panel">
         <h2>Warm up and save a rehearsal</h2>
         <p>
-          Checks the server and prepares night tablets, water, and the second
-          “table” round. This button never plays audio. Own-voice recordings and
-          device voices are prepared separately in Voice Studio.
+          Prepares night tablets, water, and the second “table” round using
+          vocabulary on this device, including when offline. Unclear meanings
+          are left for clarification. This button makes no external request and
+          never plays audio. Recordings and device voices are prepared in Voice
+          Studio.
         </p>
         <div style={rowStyle}>
-          <span className="mode-badge">{provider}</span>
+          <span className="mode-badge">Free vocabulary · on this device</span>
           <span>{count} / 100 cached sentence sets</span>
         </div>
         <div style={rowStyle}>
           <TapButton
             className="primary"
-            disabled={busy || !online}
+            disabled={busy}
             onActivate={() => {
               void warm();
             }}
@@ -288,8 +288,9 @@ export default function Demo() {
           </p>
         )}
         <Hint>
-          Warm-up stores sentence suggestions. It does not record a voice, run
-          speech recognition, or test your camera.
+          Warm-up stores local vocabulary only. It does not run a language
+          model, record a voice, recognize speech or test your camera. Opening a
+          sample below uses your chosen sentence engine and sharing settings.
         </Hint>
       </section>
       {!online && (

@@ -1,5 +1,10 @@
-import type { Candidate, ContextPacket } from "@sollu/shared";
-import { getKV, setKV } from "../db";
+import {
+  CandidateSchema,
+  type Candidate,
+  type ContextPacket,
+} from "@sollu/shared";
+import { getKV, setKV, type Settings } from "../db";
+import { inferenceContext } from "./context";
 type Device = { deviceId: string; token: string };
 let devicePromise: Promise<Device> | undefined;
 async function register(): Promise<Device> {
@@ -58,12 +63,30 @@ export async function api<T>(
     );
   return (await res.json()) as T;
 }
-export const getIntent = (context: ContextPacket, signal?: AbortSignal) =>
-  api<{ candidates: Candidate[]; model: string; latencyMs: number }>(
-    "intent",
-    { context },
-    signal,
-  );
+export const getIntent = async (
+  context: ContextPacket,
+  settings: Settings,
+  signal?: AbortSignal,
+) => {
+  const result = await api<{
+    candidates: Candidate[];
+    model: string;
+    latencyMs: number;
+    mock?: boolean;
+    fallback?: boolean;
+  }>("intent", { context: inferenceContext(context, settings) }, signal);
+  if (
+    !Array.isArray(result.candidates) ||
+    result.candidates.length > 3 ||
+    typeof result.model !== "string" ||
+    !Number.isFinite(result.latencyMs)
+  )
+    throw new Error("Invalid sentence response");
+  return {
+    ...result,
+    candidates: result.candidates.map((c) => CandidateSchema.parse(c)),
+  };
+};
 export async function health(): Promise<{
   mode?: string;
   providers?: unknown;

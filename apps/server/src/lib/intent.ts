@@ -1,17 +1,113 @@
 import {
   applyCandidatePolicy,
   getMockCandidates,
+  generatedSentencesJsonSchema,
+  resolveGeneratedSentences,
   type Candidate,
   type ContextPacket,
 } from "@sollu/shared";
 import { ollamaIntent, resolveSelectionResult } from "../providers/ollama.js";
 import type { ServerConfig } from "../config.js";
+import { generateStructured } from "../providers/cloud.js";
+import { contextualPrompt } from "./contextualPrompt.js";
 
 export async function selectIntent(
   context: ContextPacket,
   config: ServerConfig,
   signal?: AbortSignal,
-  provider = ollamaIntent,
+  legacySelector?: typeof ollamaIntent,
+  generator: typeof generateStructured = generateStructured,
+) {
+  // Retained solely for the independent catalog-selection regression/evaluation adapter.
+  // Every active non-mock provider uses contextual generation below.
+  if (legacySelector)
+    return selectCatalogIntent(context, config, signal, legacySelector);
+  if (signal?.aborted) throw new Error("Cancelled");
+  const start = performance.now();
+  const controlled = applyCandidatePolicy(getMockCandidates(context), context);
+  if (config.intentProvider === "mock")
+    return {
+      candidates: controlled.candidates,
+      model: "mock-deterministic-v2",
+      clarification: controlled.clarification,
+      validationDrops: controlled.dropped,
+      latencyMs: Math.round(performance.now() - start),
+      fallback: false,
+    };
+  const controller = new AbortController();
+  const combined = signal
+    ? AbortSignal.any([signal, controller.signal])
+    : controller.signal;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let onAbort: (() => void) | undefined;
+  try {
+    const prompt = contextualPrompt(context);
+    const budget = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        reject(new Error("Provider timeout"));
+      }, config.timeoutMs);
+      onAbort = () => reject(new Error("Cancelled"));
+      signal?.addEventListener("abort", onAbort, { once: true });
+    });
+    const raw = await Promise.race([
+      generator(config.intentProvider, {
+        model: config.llmModel ?? config.ollamaModel,
+        apiKey: config.apiKey,
+        ollamaUrl: config.ollamaUrl,
+        timeoutMs: config.timeoutMs,
+        signal: combined,
+        ...prompt,
+        schema: generatedSentencesJsonSchema,
+      }),
+      budget,
+    ]);
+    if (signal?.aborted) throw new Error("Cancelled");
+    const generated = resolveGeneratedSentences(raw, context);
+    const final = applyCandidatePolicy(generated.candidates, context, {
+      serverGeneratedCandidates: generated.candidates,
+    });
+    const hasRejectedOutput =
+      generated.reasons.length > 0 && final.candidates.length === 0;
+    if (hasRejectedOutput)
+      return {
+        candidates: controlled.candidates,
+        model: "catalog-v2 · model suggestions could not be verified",
+        clarification: controlled.clarification,
+        validationDrops:
+          controlled.dropped + generated.reasons.length + final.dropped,
+        latencyMs: Math.round(performance.now() - start),
+        fallback: true,
+      };
+    return {
+      candidates: final.candidates,
+      model: `${config.intentProvider}:${config.llmModel ?? config.ollamaModel} · contextual suggestions`,
+      clarification: final.clarification,
+      validationDrops: generated.reasons.length + final.dropped,
+      latencyMs: Math.round(performance.now() - start),
+      fallback: false,
+    };
+  } catch {
+    if (signal?.aborted) throw new Error("Cancelled");
+    return {
+      candidates: controlled.candidates,
+      model: "catalog-v2 · model unavailable",
+      clarification: controlled.clarification,
+      validationDrops: controlled.dropped,
+      latencyMs: Math.round(performance.now() - start),
+      fallback: true,
+    };
+  } finally {
+    clearTimeout(timer);
+    if (onAbort) signal?.removeEventListener("abort", onAbort);
+  }
+}
+
+async function selectCatalogIntent(
+  context: ContextPacket,
+  config: ServerConfig,
+  signal: AbortSignal | undefined,
+  provider: typeof ollamaIntent,
 ) {
   const start = performance.now(),
     deadline = start + config.timeoutMs;
@@ -78,5 +174,6 @@ export async function selectIntent(
     clarification,
     validationDrops: drops,
     latencyMs: Math.round(performance.now() - start),
+    fallback: model.includes("unavailable"),
   };
 }

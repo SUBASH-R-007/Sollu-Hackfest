@@ -15,7 +15,7 @@ export interface RehearsalEntry extends RehearsalResult {
   key: string;
   savedAt: number;
 }
-const storageKey = "sollu:rehearsal:v3";
+const storageKey = "sollu:rehearsal:v4";
 const MAX_ENTRIES = 100;
 
 /** Time of day matters; a new wall-clock timestamp must not invalidate a rehearsal. */
@@ -29,8 +29,9 @@ export function rehearsalKey(context: ContextPacket): string {
   ) =>
     stable(items.map((item) => [normalize(item.label), item.topic, item.time]));
   return JSON.stringify({
-    version: 3,
+    version: 4,
     policyVersion: "meaning-1",
+    communication: context.communication,
     alternatives: context.fragment.sttAlternatives ?? [],
     objectSource: context.fragment.objectSource,
     speaker: context.speaker,
@@ -89,20 +90,32 @@ function validEntry(entry: unknown): entry is RehearsalEntry {
     Array.isArray(e.candidates) &&
     e.candidates.length > 0 &&
     e.candidates.length <= 3 &&
-    e.candidates.every((c) => CandidateSchema.safeParse(c).success)
+    e.candidates.every(
+      (c) => CandidateSchema.safeParse(c).success && c.source !== "model",
+    )
   );
 }
 async function entries(): Promise<RehearsalEntry[]> {
   const stored = await getKV<unknown>(storageKey);
   return Array.isArray(stored)
-    ? stored.filter(validEntry).filter(e => Date.now() - e.savedAt < 7 * 86400000 && e.savedAt <= Date.now()).slice(0, MAX_ENTRIES)
+    ? stored
+        .filter(validEntry)
+        .filter(
+          (e) =>
+            Date.now() - e.savedAt < 7 * 86400000 && e.savedAt <= Date.now(),
+        )
+        .slice(0, MAX_ENTRIES)
     : [];
 }
 export async function saveRehearsal(
   context: ContextPacket,
   result: RehearsalResult,
 ): Promise<void> {
-  if (!result.candidates.length) return;
+  if (
+    !result.candidates.length ||
+    result.candidates.some((c) => c.source === "model")
+  )
+    return;
   const value: RehearsalEntry = {
     key: rehearsalKey(context),
     candidates: result.candidates.map((c) => CandidateSchema.parse(c)),

@@ -2,6 +2,16 @@
 
 Date: 2026-09-27. [SPEC.md](SPEC.md) remains unchanged. This document records the brief's deliberate differences and the user's approved changes.
 
+## 28 September: contextual generation and caregiver customization
+
+The user authorized an OpenAI-backed contextual sentence engine, other API choices in Settings, and expanded caregiver personalization. This supersedes the earlier catalog-selector-only decision for optional models. OpenAI Responses, Anthropic Messages, Gemini generateContent, Groq Chat Completions and local Ollama now share a structured sentence contract; the no-key catalog is still the initial default. No paid key was provided and no live cloud inference was performed.
+
+Each cloud device must opt into text sharing, even when an environment key exists. Runtime keys are device-scoped, memory-only, never echoed, and expire on restart or 12 hours of inactivity. Endpoints are fixed/allowlisted; local Ollama remains loopback-only. Key removal is independent of cloud permission and does not activate a provider. Settings are a local caregiver-PIN surface, while server access uses the existing device capability; this is not a multi-user clinical authorization system.
+
+The engine frames new sentences with exact source evidence. Deterministic checks constrain explicit negation, side, quantities, source words, excluded meanings and schema; model-authored translation anchors permit new Tamil wording beyond the catalog. Those anchors and the sentence's semantics are not independently proven. Patient review remains necessary and generated suggestions are visibly drafts. No model speaks automatically, no provider failover uploads to another vendor, and generated drafts are excluded from rehearsal reuse. Existing exact phrases remain verbatim.
+
+Personalization controls style, word limit, Home input order and reduced motion. Context transfer is an explicit allowlist, with personal context and confirmed recent turns independently off by default. Provider/setting changes cancel stale suggestions; provider changes also clear rehearsal suggestions. Rehearsal keys include wording preferences and relevant context. These changes do not erase personal words, recordings or history. Demo cache warm-up runs entirely on the local catalog and never invokes a provider.
+
 ## The ten deliberate differences from SPEC §0.2
 
 1. **A thin server exists.** API keys cannot ship inside a PWA (§3.1).

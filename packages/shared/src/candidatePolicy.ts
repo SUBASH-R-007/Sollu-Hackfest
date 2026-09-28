@@ -1,6 +1,11 @@
 import { CandidateSchema, type Candidate, type ContextPacket } from "./schemas";
 import { getMockCandidates } from "./mock";
 import { numberWords } from "./phrases";
+import {
+  catalogFitsExplicitContext,
+  modelMeaningKey,
+  validateModelCandidate,
+} from "./modelGrounding";
 
 export const normalizeCandidateText = (text: string) =>
   text
@@ -28,6 +33,7 @@ const advice =
 
 /** Language-independent identity for a meaning, not a model's display label. */
 export function candidateMeaningKey(c: Candidate): string {
+  if (c.source === "model" && c.modelReview) return c.modelReview.meaningKey;
   if (!c.intentId) return `text:${normalizeCandidateText(c.text)}`;
   return JSON.stringify([
     c.intentId,
@@ -63,9 +69,12 @@ export interface CandidatePolicyResult {
 export interface CandidatePolicyOptions {
   /** Caller-owned, explicitly approved local phrases. Never pass model output here. */
   trustedCandidates?: Candidate[];
+  /** Fresh authenticated server results only. The browser also requires a nonempty proof signature.
+   * A source label, imported record or arbitrary model response is not provenance. */
+  serverGeneratedCandidates?: Candidate[];
 }
 
-/** Every displayed path uses this policy; unknown model prose is never made trusted by metadata. */
+/** Every displayed path uses this policy; model prose requires explicit server provenance and revalidation. */
 export function applyCandidatePolicy(
   input: unknown,
   context: ContextPacket,
@@ -88,6 +97,10 @@ export function applyCandidatePolicy(
     return p.success ? [p.data] : [];
   });
   const allowed = [...current, ...personal];
+  const generated = (options.serverGeneratedCandidates ?? []).flatMap((c) => {
+    const checked = validateModelCandidate(c, context);
+    return checked ? [checked] : [];
+  });
   // Historic candidates are useful only for rejection identity, never current grounding.
   const history = ([1, 2, 3] as const).flatMap((round) =>
     getMockCandidates({
@@ -100,8 +113,25 @@ export function applyCandidatePolicy(
   const exclusions = new Set(context.exclude.map(normalizeCandidateText));
   const rejected = new Set(context.rejectedMeaningKeys ?? []);
   for (const c of [...history, ...personal])
-    if (exclusions.has(normalizeCandidateText(c.text)))
+    if (exclusions.has(normalizeCandidateText(c.text))) {
       rejected.add(candidateMeaningKey(c));
+      rejected.add(
+        modelMeaningKey(
+          c.gloss_en,
+          c.polarity ?? (negative(c.text) ? "negative" : "positive"),
+          c.side,
+        ),
+      );
+    }
+  for (const c of [...history, ...personal])
+    if (rejected.has(candidateMeaningKey(c)))
+      rejected.add(
+        modelMeaningKey(
+          c.gloss_en,
+          c.polarity ?? (negative(c.text) ? "negative" : "positive"),
+          c.side,
+        ),
+      );
   const out: CandidatePolicyResult = {
     candidates: [],
     dropped: 0,
@@ -129,6 +159,40 @@ export function applyCandidatePolicy(
       continue;
     }
     const proposed = parsed.data;
+    const serverCandidate = generated.find(
+      (c) =>
+        normalizeCandidateText(c.text) ===
+        normalizeCandidateText(proposed.text),
+    );
+    if (serverCandidate) {
+      const key = candidateMeaningKey(serverCandidate);
+      if (
+        exclusions.has(normalizeCandidateText(serverCandidate.text)) ||
+        rejected.has(key)
+      ) {
+        drop(i, "rejected");
+        continue;
+      }
+      if (
+        out.candidates.some(
+          (old) =>
+            candidateMeaningKey(old) === key ||
+            modelMeaningKey(
+              old.gloss_en,
+              old.polarity ?? (negative(old.text) ? "negative" : "positive"),
+              old.side,
+            ) === key ||
+            normalizeCandidateText(old.text) ===
+              normalizeCandidateText(serverCandidate.text),
+        )
+      ) {
+        drop(i, "duplicate");
+        continue;
+      }
+      out.candidates.push(serverCandidate);
+      if (out.candidates.length === 3) break;
+      continue;
+    }
     const trusted = allowed.find(
       (c) =>
         normalizeCandidateText(c.text) ===
@@ -144,6 +208,10 @@ export function applyCandidatePolicy(
       (item) =>
         normalizeCandidateText(item.text) === normalizeCandidateText(c.text),
     );
+    if (isCurrent && !catalogFitsExplicitContext(c, context)) {
+      drop(i, "context_mismatch");
+      continue;
+    }
     if (c.text.length > 90) {
       drop(i, "length");
       continue;
@@ -215,7 +283,16 @@ export function applyCandidatePolicy(
       continue;
     }
     const key = candidateMeaningKey(c);
-    if (exclusions.has(normalizeCandidateText(c.text)) || rejected.has(key)) {
+    const semanticKey = modelMeaningKey(
+      c.gloss_en,
+      c.polarity ?? (negative(c.text) ? "negative" : "positive"),
+      c.side,
+    );
+    if (
+      exclusions.has(normalizeCandidateText(c.text)) ||
+      rejected.has(key) ||
+      rejected.has(semanticKey)
+    ) {
       drop(i, "rejected");
       continue;
     }
@@ -223,6 +300,8 @@ export function applyCandidatePolicy(
       out.candidates.some(
         (old) =>
           candidateMeaningKey(old) === key ||
+          (old.source === "model" &&
+            candidateMeaningKey(old) === semanticKey) ||
           normalizeCandidateText(old.text) === normalizeCandidateText(c.text),
       )
     ) {

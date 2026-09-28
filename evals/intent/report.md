@@ -1,6 +1,6 @@
 # Intent controlled fixture regression
 
-Generated: 2026-09-28T07:10:38.560Z
+Generated: 2026-09-28T08:24:24.246Z
 
 Mode: **MOCK / CONTROLLED CATALOG — no real-model quality evidence**. Model: `controlled-catalog-vocabulary-1`.
 
@@ -14,7 +14,7 @@ This set has **120 hand-authored input scenarios × 2 output languages = 240 exe
 | Requested output language/script | 240 / 240 |
 | Contradictory tested polarity/side | 0 |
 | Request errors | 0 |
-| Fixture execution p50 / p95 | 4.7 / 10.2 ms |
+| Fixture execution p50 / p95 | 6.8 / 15.3 ms |
 
 Result: **PASS**.
 

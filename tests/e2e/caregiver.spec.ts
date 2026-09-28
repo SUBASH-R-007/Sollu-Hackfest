@@ -77,6 +77,58 @@ test("two isolated devices pair, exchange encrypted words/receipts/questions and
     );
     expect((await spokenCalls(page)).length).toBe(spokenBeforeQuestion);
 
+    // Hold an answer to the old question while the partner sends a different question.
+    let releaseOldAnswer!: () => void;
+    let requestStarted!: () => void;
+    const answerReady = new Promise<void>((resolve) => {
+      releaseOldAnswer = resolve;
+    });
+    const requestReady = new Promise<void>((resolve) => {
+      requestStarted = resolve;
+    });
+    await page.route("**/api/intent", async (route) => {
+      requestStarted();
+      await answerReady;
+      await route
+        .fulfill({
+          json: {
+            candidates: [],
+            model: "delayed synthetic response",
+            latencyMs: 10,
+          },
+        })
+        .catch(() => undefined);
+    });
+    await page.getByRole("button", { name: /^Type / }).click();
+    await page.getByLabel(/Your words/).fill("yes");
+    await page.getByRole("button", { name: "Find my words" }).click();
+    await requestReady;
+    await expect(page.locator(".candidate-list")).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    await care
+      .getByLabel("Your question", { exact: true })
+      .fill("Would you like coffee instead?");
+    // This is a deliberate second question, outside the configured repeat-tap filter.
+    await care.waitForTimeout(425);
+    await care.getByRole("button", { name: "Send question" }).click();
+    await expect(care.getByLabel("Your question", { exact: true })).toHaveValue("");
+    await expect(page.getByRole("status")).toContainText(
+      "The conversation question changed",
+    );
+    releaseOldAnswer();
+    await expect(page.locator(".candidate-list")).toHaveAttribute(
+      "aria-busy",
+      "false",
+    );
+    await expect(candidates(page)).toHaveCount(0);
+    expect((await spokenCalls(page)).length).toBe(spokenBeforeQuestion);
+    await page
+      .locator(".mobile-nav")
+      .getByRole("button", { name: "My space" })
+      .click();
+
     await clickAndWaitForSpeech(page, page.locator(".quick-help"));
     await expect(
       care.getByRole("heading", { name: "They need your help." }),

@@ -2,12 +2,12 @@
 
 Source of truth: docs/SPEC.md. Approved updates: docs/PLAN.md and docs/DECISIONS.md.
 Resume from PROGRESS.md; preserve the current milestone, open checks and modified files when compacting.
-User approved local implementation on 2026-09-27; no paid keys and no hosting now.
+User approved local implementation on 2026-09-27 and contextual LLM/provider settings on 2026-09-28. OpenAI/other cloud adapters are authorized; no real key has yet been supplied. Hosting remains deferred.
 Work order: M0 → M1 → M3 → M2 + early M6 → M5 + M4 → remaining M6 → M7–M11.
 Commands: pnpm install; pnpm dev; pnpm test; pnpm e2e; pnpm eval; pnpm verify; pnpm build; pnpm start.
 Check actual root scripts before use; pnpm verify must cover lint, types, unit and E2E checks.
 Use strict TypeScript, shared Zod contracts and the repository lockfile.
-Defaults: mocked providers; optional local Ollama; browser STT/device speech; exact-phrase recordings.
+Defaults: free controlled vocabulary; optional OpenAI/Anthropic/Gemini/Groq or local Ollama sentence generation; browser STT/device speech; exact-phrase recordings. Cloud selection requires device-specific text-sharing permission. Keys stay server-side (session memory or private environment), never browser persistence. Generated suggestions are drafts, not semantic/clinical proof.
 Do not claim browser Tamil availability, offline voices, cloud clone or real AI quality without evidence.
 Only features/audio may access audio output APIs, including studio, preview, alarm and baseline.
 I-1: Only a fresh trusted patient tap on the exact sentence may speak; no autoplay, remote speech or prefetch playback; Stop/newer taps supersede pending work.
@@ -18,7 +18,7 @@ I-5: Unpicked candidates never speak as the person; only an explicit neutral Lis
 I-6: Help requires no AI: cached own phrase → available device voice → tone, with an honest send status and SMS option.
 I-7: No cloned/recorded own voice without consent; withdrawal stops use and removes requested local/provider assets with confirmed status.
 I-8: Cloud TTS requires valid device/text/language/expiry signature and device-bound voice grant; sign sources are constrained.
-I-9: Personal records stay on-device; no content logs; manual place labels, no GPS; transient uploads deleted after processing.
+I-9: Personal records are stored on-device; only permitted bounded text context may go to the chosen sentence provider. Personal/recent context switches default off. No content logs; manual place labels, no GPS; transient uploads deleted after processing.
 I-10: Patient targets ≥72×72 px, primary tiles ≥120 px tall; icon + word; no required gestures/time limits; specified contrast.
 Freshness is checked at actual playback (≤1500 ms); late audio needs a new exact-sentence tap.
 Intent prompt: docs/SPEC.md §7.3. Signature/source rules: §7.4 and §7.6. Data/context: §5–6.

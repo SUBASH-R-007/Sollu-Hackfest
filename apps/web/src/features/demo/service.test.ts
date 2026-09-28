@@ -41,6 +41,20 @@ const context = (): ContextPacket =>
   });
 
 describe("rehearsal context keys", () => {
+  it("does not reuse wording after sentence preferences change", () => {
+    const c = context();
+    expect(
+      rehearsalKey({
+        ...c,
+        communication: { sentenceStyle: "brief", maxWords: 8 },
+      }),
+    ).not.toBe(
+      rehearsalKey({
+        ...c,
+        communication: { sentenceStyle: "polite", maxWords: 18 },
+      }),
+    );
+  });
   it("changes when the place, contact, register, or routine meaning changes", () => {
     const c = context(),
       original = rehearsalKey(c);

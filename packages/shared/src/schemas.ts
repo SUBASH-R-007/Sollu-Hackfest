@@ -21,6 +21,26 @@ export const UrgencySchema = z.enum(["none", "elevated", "emergency"]);
 export type Urgency = z.infer<typeof UrgencySchema>;
 const short = z.string().trim().max(120);
 const sentence = z.string().trim().min(1).max(500);
+export const CommunicationPreferencesSchema = z.object({
+  sentenceStyle: z.enum(["brief", "natural", "polite"]),
+  maxWords: z.union([z.literal(8), z.literal(12), z.literal(18)]),
+  preferences: z.string().trim().max(240).optional(),
+});
+export const ModelEvidenceSchema = z
+  .object({
+    path: z.string().min(1).max(120),
+    quote: z.string().trim().min(1).max(500),
+    translation_en: z.string().trim().max(500),
+  })
+  .strict();
+export const ModelReviewSchema = z
+  .object({
+    version: z.literal("contextual-v1"),
+    contextKey: z.string().min(1).max(80),
+    evidence: z.array(ModelEvidenceSchema).min(1).max(12),
+    meaningKey: z.string().min(1).max(800),
+  })
+  .strict();
 export const CandidateSchema = z.object({
   text: sentence,
   reading: z.string().trim().min(1).max(40),
@@ -53,8 +73,10 @@ export const CandidateSchema = z.object({
       "memory",
       "personal",
       "cache",
+      "model",
     ])
     .optional(),
+  modelReview: ModelReviewSchema.optional(),
 });
 export type Candidate = z.infer<typeof CandidateSchema>;
 export const FragmentSchema = z.object({
@@ -86,6 +108,7 @@ export const ContextPacketSchema = z.object({
   fragment: FragmentSchema,
   outputLang: LangSchema.default("ta"),
   lang: LangSchema.optional(),
+  communication: CommunicationPreferencesSchema.optional(),
   now: z
     .object({
       localTime: z.string().regex(/^\d{2}:\d{2}$/),

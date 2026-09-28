@@ -29,6 +29,7 @@ import { getKV, hashPin } from "./db";
 import { audio } from "./features/audio";
 import { Brand, FooterNote, TapButton } from "./ui";
 import { clockNow } from "./lib/context";
+import { api } from "./lib/api";
 import { uiText } from "./lib/copy";
 import {
   CommunicationDock,
@@ -171,16 +172,38 @@ function Shell() {
         navigate("/care", { replace: true });
       setRoleReady(true);
     });
-    void fetch("/api/health")
-      .then((r) => r.json())
-      .then((h: { providers?: { intent?: string } }) =>
-        setProvider(
-          h.providers?.intent === "ollama"
-            ? "Local AI · Ollama"
-            : "Demo phrases",
-        ),
+  }, []);
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      void api<{ provider: string }>(
+        "llm/settings",
+        undefined,
+        undefined,
+        "GET",
       )
-      .catch(() => setProvider("Offline phrases"));
+        .then((result) => {
+          if (!active) return;
+          const labels: Record<string, string> = {
+            mock: "Free vocabulary",
+            ollama: "Local AI · Ollama",
+            openai: "AI · OpenAI",
+            anthropic: "AI · Claude",
+            gemini: "AI · Gemini",
+            groq: "AI · Groq",
+          };
+          setProvider(labels[result.provider] ?? "Sentence engine");
+        })
+        .catch(() => {
+          if (active) setProvider("Offline phrases");
+        });
+    };
+    refresh();
+    window.addEventListener("sollu:llm-settings-changed", refresh);
+    return () => {
+      active = false;
+      window.removeEventListener("sollu:llm-settings-changed", refresh);
+    };
   }, []);
   useEffect(() => {
     document.documentElement.lang = settings.lang;
@@ -192,7 +215,16 @@ function Shell() {
       "high-contrast",
       settings.highContrast,
     );
-  }, [settings.lang, settings.textScale, settings.highContrast]);
+    document.documentElement.classList.toggle(
+      "reduced-motion",
+      settings.reducedMotion,
+    );
+  }, [
+    settings.lang,
+    settings.textScale,
+    settings.highContrast,
+    settings.reducedMotion,
+  ]);
   useEffect(() => {
     window.scrollTo(0, 0);
     if (

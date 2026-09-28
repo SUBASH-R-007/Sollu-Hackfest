@@ -5791,3 +5791,34 @@ Scan coverage: 895 matching lines across 18 runtime source files, from 50 files 
 | Tamil | pending | pending | pending |
 | Hindi | pending | pending, M10 | pending |
 | Telugu | pending | pending, M10 | pending |
+
+
+## 28 September — contextual engine additions (pending native review)
+
+Generated sentences and their evidence translations are model-authored drafts. They are not a preapproved language corpus. The following authored Tamil source lines and fictional test fixtures are preserved for review; regex lines also appear so the review inventory is complete for these new files.
+
+Patient label in `apps/web/src/pages/Patient.tsx`: **AI வரைவு · பொருளைச் சரிபாருங்கள்** — English: “AI draft · Check the meaning”. Pending native review.
+
+### packages/shared/src/modelGrounding.ts
+
+```text
+35:   /\b(?:no|not|never|don['’]?t|doesn['’]?t|didn['’]?t|can['’]?t|cannot|won['’]?t|without|venam|vendam|vendaam|illai|illa)\b|வேணாம்|வேண்டாம்|இல்லை|இல்ல|முடியாது|மாட்டேன்/u.test(
+39:   left: /\bleft\b|இடது|\bidathu\b/iu.test(text),
+40:   right: /\bright\b|வலது|\bvalathu\b/iu.test(text),
+44:   /\b(?:mg|mcg|ml|milligrams?|micrograms?|millilit(?:er|re)s?|dosage|you should|you must|diagnos(?:is|ed)|prescri(?:be|ption)|take .{0,30}(?:daily|every)|stop taking|double .{0,20}dose)\b|மில்லிகிராம்|மி\.கி|மருந்தளவு|மருந்து எடுத்துக்கொள்ள/iu;
+576:     !/\b(?:yes|hello|thanks|thank)\b|ஆமா|நன்றி|வணக்கம்/iu.test(current)
+623:         (context.outputLang === "ta" ? "வாக்கியம்" : "Sentence"),
+```
+
+### apps/server/tests/contextual.test.ts
+
+```text
+152:     const raw = "நாளை தோட்டத்தில் என் சகோதரியை பார்க்க விரும்புகிறேன்",
+155:       text: "நாளை தோட்டத்தில் என் சகோதரியை பார்க்க விரும்புகிறேன்.",
+170:           evidence: [{ ...item.evidence[0], quote: "நாளை" }],
+183:             text: "நாளை தோட்டத்தில் என் சகோதரியை பார்க்க விரும்புகிறேன்.",
+321:         response({ ...item, text: "எனக்கு சூப் வேண்டும்." }),
+327:         response({ ...item, text: "எனக்கு சூப் வேண்டாம்." }),
+355:         response({ ...item, text: "வலது கால் வலிக்கிறது." }),
+361:         response({ ...item, text: "இடது கால் வலிக்கிறது." }),
+```

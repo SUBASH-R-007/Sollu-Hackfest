@@ -29,12 +29,21 @@ import {
   type Pairing,
   type Settings,
 } from "./db";
-import { buildContext, memoryScore, normalize } from "./lib/context";
+import {
+  buildContext,
+  memoryScore,
+  normalize,
+  recentConfirmedTurns,
+} from "./lib/context";
 import { getIntent } from "./lib/api";
 import { RelayClient, type DeliveryStatus } from "./lib/relay";
 import { copy } from "./lib/copy";
 import { audio, type TapTicket } from "./features/audio";
-import { getRehearsal, saveRehearsal } from "./features/demo/service";
+import {
+  clearRehearsal,
+  getRehearsal,
+  saveRehearsal,
+} from "./features/demo/service";
 import { parseStoredDraft } from "./lib/draft";
 import { memoryIdentity } from "./lib/memory";
 
@@ -116,6 +125,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [helpAck, setHelpAck] = useState(""),
     [online, setOnline] = useState(navigator.onLine);
   const settingsRef = useRef(settings);
+  const questionRef = useRef(question);
   const speechEpoch = useRef(0);
   const draftWrites = useRef(Promise.resolve());
   const sessionRef = useRef<Session | null>(null),
@@ -129,6 +139,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
   function changeSession(update: (s: Session) => Session) {
     if (sessionRef.current) setSession(update(sessionRef.current));
+  }
+  function changeQuestion(next: typeof question) {
+    questionRef.current = next;
+    setQuestionState(next);
+    const current = sessionRef.current;
+    if (
+      !current ||
+      current.chosen ||
+      (!current.loading && !current.candidates.length)
+    )
+      return;
+    // A reply to an older question must not arrive after a partner changes the question.
+    generation.current++;
+    abort.current?.abort();
+    changeSession((s) => ({
+      ...s,
+      loading: false,
+      candidates: [],
+      model: "",
+      error:
+        settingsRef.current.lang === "ta"
+          ? "வேறு வார்த்தை அல்லது தலைப்பைத் தேர்ந்தெடுக்கவும்."
+          : "The conversation question changed. Add a word or choose a topic to find new choices.",
+    }));
   }
   function deliveryText(
     status: DeliveryStatus | undefined,
@@ -219,6 +253,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     audio.setRate(settings.speechRate);
   }, [settings.speechRate]);
   useEffect(() => {
+    const changed = (event: Event) => {
+      generation.current++;
+      speechEpoch.current++;
+      abort.current?.abort();
+      audio.stop();
+      changeSession((s) => ({
+        ...s,
+        candidates: [],
+        loading: false,
+        chosen: undefined,
+        model: "",
+        error: "",
+      }));
+      if (event.type === "sollu:llm-settings-changed") void clearRehearsal();
+    };
+    window.addEventListener("sollu:llm-settings-changed", changed);
+    window.addEventListener("sollu:communication-settings-changed", changed);
+    return () => {
+      window.removeEventListener("sollu:llm-settings-changed", changed);
+      window.removeEventListener(
+        "sollu:communication-settings-changed",
+        changed,
+      );
+    };
+  }, []);
+  useEffect(() => {
     if (!ready) return;
     const draft =
       session && !session.attempt.endedAt
@@ -262,7 +322,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           )
             setHelpAck(`${pair.name} is coming ✓`);
           if (message.type === "ask" && message.text)
-            setQuestionState({
+            changeQuestion({
               text: message.text,
               at: message.at,
               lang: message.lang,
@@ -295,6 +355,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     settingsRef.current = next;
     setSettings(next);
     await setKV("settings", next);
+    window.dispatchEvent(new Event("sollu:communication-settings-changed"));
   }
   function begin(fragment: Fragment, preserveAudio = false) {
     pendingReceipt.current = null;
@@ -313,7 +374,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         outcome: "abandoned",
       });
     const context = buildContext(settingsRef.current, fragment, {
-      question: question ?? undefined,
+      question: questionRef.current ?? undefined,
     });
     const attempt: Attempt = {
       id: crypto.randomUUID(),
@@ -369,7 +430,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               r.candidates.map((c) => c.text),
             )
           : [],
-      question: question ?? undefined,
+      question: questionRef.current ?? undefined,
     });
     if (override) context.outputLang = override;
     context.rejectedMeaningKeys =
@@ -406,9 +467,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     navigate("/confirm");
     try {
-      const [memories, substitutions] = await Promise.all([
+      const [memories, substitutions, recentAttempts] = await Promise.all([
         db.memories.toArray(),
         db.substitutions.toArray(),
+        settingsRef.current.shareRecentContext
+          ? db.attempts
+              .where("startedAt")
+              .above(Date.now() - 10 * 60_000)
+              .toArray()
+          : Promise.resolve([]),
       ]);
       if (run !== generation.current || requestController.signal.aborted)
         return;
@@ -442,6 +509,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             input.raw.toLowerCase().includes(s.heard.toLowerCase()),
         )
         .slice(0, 10);
+      context.recentTurns = recentConfirmedTurns(recentAttempts, context);
       const path = input.topicPath ?? [];
       const pain =
         path[0] === "pain" && round === 1
@@ -451,6 +519,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         model: string,
         latencyMs = 0,
         demoCached = false;
+      let serverGeneratedCandidates: Candidate[] = [];
       const savedPhrases = await db.phrases
         .where("lang")
         .equals(context.outputLang)
@@ -485,13 +554,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       } else {
         try {
-          const result = await getIntent(context, requestController.signal);
+          const result = await getIntent(
+            context,
+            settingsRef.current,
+            requestController.signal,
+          );
           if (run !== generation.current || requestController.signal.aborted)
             return;
-          candidates = result.candidates;
+          // Catalog interpretation can use private device context without sending it to a model.
+          candidates =
+            result.mock || result.fallback
+              ? getControlledCandidates(context)
+              : result.candidates;
+          serverGeneratedCandidates = result.candidates.filter(
+            (c) => c.source === "model" && Boolean(c.sig),
+          );
           model = result.model;
           latencyMs = result.latencyMs;
-          if (settingsRef.current.demo) await saveRehearsal(context, result);
+          // Generated suggestions must come from this request, never a stale rehearsal.
+          if (settingsRef.current.demo && !serverGeneratedCandidates.length)
+            await saveRehearsal(context, { ...result, candidates });
         } catch (error) {
           const cached =
             settingsRef.current.demo && !requestController.signal.aborted
@@ -528,6 +610,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (run !== generation.current) return;
       const checked = applyCandidatePolicy(candidates, context, {
         trustedCandidates,
+        serverGeneratedCandidates,
       });
       candidates = checked.candidates.slice(0, settingsRef.current.choiceCount);
       const usualShown = Boolean(
@@ -557,11 +640,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
               round,
               source: pain.length
                 ? "template"
-                : model.toLowerCase().includes("mock")
-                  ? "mock"
-                  : model.startsWith("ollama:")
+                : serverGeneratedCandidates.length
+                  ? model.startsWith("ollama:")
                     ? "local"
-                    : "template",
+                    : "llm"
+                  : model.toLowerCase().includes("mock")
+                    ? "mock"
+                    : model.startsWith("ollama:")
+                      ? "local"
+                      : "template",
               model,
               latencyMs,
               candidates,
@@ -838,7 +925,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
   useEffect(() => {
     const timer = setInterval(() => {
-      setQuestionState((q) => (q && Date.now() - q.at > 300000 ? null : q));
+      if (questionRef.current && Date.now() - questionRef.current.at > 300000)
+        changeQuestion(null);
     }, 10000);
     return () => clearInterval(timer);
   }, []);
@@ -894,7 +982,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         retry,
         question,
         setQuestion: (text) =>
-          setQuestionState({
+          changeQuestion({
             text,
             at: Date.now(),
             lang: settingsRef.current.lang,

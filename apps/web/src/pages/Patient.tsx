@@ -50,6 +50,53 @@ export function Home() {
         Math.abs(minuteDistance(b.time, now)),
     )[0];
   const contact = settings.contacts.find((c) => c.id === settings.addressee);
+  const inputs = [
+    {
+      id: "speech",
+      path: "/speak",
+      modality: "speech",
+      tone: "speak-tile",
+      icon: <Mic size={31} />,
+      title: "Speak",
+      tamil: "பேசு",
+      detail: "A word is a good place to start",
+    },
+    {
+      id: "topics",
+      path: "/topics",
+      modality: "topic",
+      tone: "topics-tile",
+      icon: <Grid2X2 size={29} />,
+      title: "Topics",
+      tamil: "வகைகள்",
+      detail: "Find what’s on your mind",
+    },
+    {
+      id: "camera",
+      path: "/camera",
+      modality: "camera",
+      tone: "camera-tile",
+      icon: <Camera size={30} />,
+      title: "Camera",
+      tamil: "கேமரா",
+      detail: "Show us what you mean",
+    },
+    {
+      id: "type",
+      path: "/type",
+      modality: "text",
+      tone: "type-tile",
+      icon: <Keyboard size={30} />,
+      title: "Type",
+      tamil: "எழுது",
+      detail: "A few letters are enough",
+    },
+  ] as const;
+  const orderedInputs = [...inputs].sort(
+    (a, b) =>
+      Number(b.id === settings.preferredInput) -
+      Number(a.id === settings.preferredInput),
+  );
   function go(path: string, modality: Fragment["modality"]) {
     begin({ modality, raw: "" });
     navigate(path);
@@ -101,38 +148,17 @@ export function Home() {
         </div>
       </div>
       <div className="home-grid">
-        <Tile
-          tone="speak-tile"
-          icon={<Mic size={31} />}
-          title="Speak"
-          tamil="பேசு"
-          detail="A word is a good place to start"
-          onActivate={() => go("/speak", "speech")}
-        />
-        <Tile
-          tone="topics-tile"
-          icon={<Grid2X2 size={29} />}
-          title="Topics"
-          tamil="வகைகள்"
-          detail="Find what’s on your mind"
-          onActivate={() => go("/topics", "topic")}
-        />
-        <Tile
-          tone="camera-tile"
-          icon={<Camera size={30} />}
-          title="Camera"
-          tamil="கேமரா"
-          detail="Show us what you mean"
-          onActivate={() => go("/camera", "camera")}
-        />
-        <Tile
-          tone="type-tile"
-          icon={<Keyboard size={30} />}
-          title="Type"
-          tamil="எழுது"
-          detail="A few letters are enough"
-          onActivate={() => go("/type", "text")}
-        />
+        {orderedInputs.map((input) => (
+          <Tile
+            key={input.id}
+            tone={input.tone}
+            icon={input.icon}
+            title={input.title}
+            tamil={input.tamil}
+            detail={input.detail}
+            onActivate={() => go(input.path, input.modality)}
+          />
+        ))}
       </div>
       <div className="home-bottom">
         <Hint>
@@ -566,6 +592,15 @@ export function ConfirmPage() {
               >
                 <span className="candidate-icon">{c.icon}</span>
                 <span className="candidate-copy">
+                  {c.source === "model" && (
+                    <span className="usual-label">
+                      {copy(
+                        settings.lang,
+                        "AI draft · Check the meaning",
+                        "AI வரைவு · பொருளைச் சரிபாருங்கள்",
+                      )}
+                    </span>
+                  )}
                   {session.usual === c.text && (
                     <span className="usual-label">
                       ★{" "}

@@ -23,10 +23,18 @@ test("rehearsal warm-up stays silent and cached Type suggestions work offline", 
   await page
     .getByRole("button", { name: "Demo & rehearsal", exact: true })
     .click();
+  const inferenceRequests: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/api/intent"))
+      inferenceRequests.push(request.url());
+  });
   await page.getByRole("button", { name: "Warm up three scenarios" }).click();
-  await expect(page.getByRole("status")).toContainText(
-    "Three mock sentence sets are stored",
-  );
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "of 3 local vocabulary sets stored" }),
+  ).toContainText("2 of 3 local vocabulary sets stored");
+  expect(inferenceRequests).toEqual([]);
   expect(await spokenCalls(page)).toEqual([]);
   await startTyped(page, "tablet… raathiri");
   await expect(candidates(page)).toHaveCount(3);
@@ -396,7 +404,8 @@ test("changing the addressee on confirmation regenerates in the doctor’s langu
   await expect(candidates(page).first()).toContainText("night tablets");
   expect(await sentenceAt(page, 0)).not.toMatch(/[\u0B80-\u0BFF]/);
   expect(contexts.at(-1)?.outputLang).toBe("en");
-  expect(contexts.at(-1)?.addressee?.name).toBe("Dr. Rao");
+  // The listener controls output language locally; their name stays private by default.
+  expect(contexts.at(-1)?.addressee).toBeUndefined();
   expect(await spokenCalls(page)).toEqual([]);
   await clickAndWaitForSpeech(page, candidates(page).first());
   expect((await spokenCalls(page))[0].lang).toBe("en-IN");
