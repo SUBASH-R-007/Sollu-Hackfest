@@ -2,7 +2,7 @@
 export type AudioRole = "patient" | "caregiver";
 export type AudioSurface = "patient" | "studio" | "care" | "baseline";
 export type AudioChannel =
-  "speak" | "preview" | "studio" | "alarm" | "baseline";
+  "speak" | "preview" | "studio" | "alarm" | "baseline" | "review";
 
 export interface TapTicket {
   readonly id: number;
@@ -78,13 +78,16 @@ export class TapGate {
     )
       return false;
     const allowed =
-      channel === "studio"
-        ? ticket.role === "caregiver" && ticket.surface === "studio"
-        : channel === "alarm"
-          ? ticket.role === "caregiver" && ticket.surface === "care"
-          : channel === "baseline"
-            ? ticket.role === "patient" && ticket.surface === "baseline"
-            : ticket.role === "patient" && ticket.surface === "patient";
+      channel === "review"
+        ? (ticket.role === "patient" && ticket.surface === "patient") ||
+          (ticket.role === "caregiver" && ticket.surface === "studio")
+        : channel === "studio"
+          ? ticket.role === "caregiver" && ticket.surface === "studio"
+          : channel === "alarm"
+            ? ticket.role === "caregiver" && ticket.surface === "care"
+            : channel === "baseline"
+              ? ticket.role === "patient" && ticket.surface === "baseline"
+              : ticket.role === "patient" && ticket.surface === "patient";
     if (!allowed) return false;
     this.consumed.add(ticket);
     return true;

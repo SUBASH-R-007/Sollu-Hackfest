@@ -25,7 +25,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import { AppProvider, useApp } from "./state";
-import { getKV, hashPin } from "./db";
+import { hashPin } from "./db";
 import { audio } from "./features/audio";
 import { Brand, FooterNote, TapButton } from "./ui";
 import { clockNow } from "./lib/context";
@@ -73,6 +73,7 @@ const SettingsPage = lazy(() => import("./pages/Settings"));
 const CameraPage = lazy(() => import("./pages/Camera"));
 const Care = lazy(() => import("./pages/Care"));
 const Therapist = lazy(() => import("./pages/Therapist"));
+const PracticePage = lazy(() => import("./features/rehab/PracticePage"));
 const Demo = lazy(() => import("./pages/Demo"));
 
 function CaregiverGate({ children }: { children: ReactNode }) {
@@ -159,20 +160,12 @@ function Shell() {
   } = useApp();
   const navigate = useNavigate(),
     location = useLocation();
-  const [provider, setProvider] = useState("Demo phrases"),
-    [roleReady, setRoleReady] = useState(false);
+  const [provider, setProvider] = useState("Demo phrases");
   const hold = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const path = location.pathname,
     care = path === "/care",
     family = ["/settings", "/therapist", "/demo"].includes(path),
     home = path === "/";
-  useEffect(() => {
-    void getKV<string>("role").then((role) => {
-      if (role === "care" && location.pathname === "/")
-        navigate("/care", { replace: true });
-      setRoleReady(true);
-    });
-  }, []);
   useEffect(() => {
     let active = true;
     const refresh = () => {
@@ -233,7 +226,7 @@ function Shell() {
       audio.stop();
   }, [path]);
   useEffect(() => () => clearTimeout(hold.current), []);
-  if (!ready || !roleReady)
+  if (!ready)
     return (
       <div className="app-loading">
         <Brand />
@@ -430,6 +423,7 @@ function Shell() {
               <Route path="/recent" element={<RecentPage />} />
               <Route path="/people" element={<PeoplePage />} />
               <Route path="/tools" element={<ToolsPage />} />
+              <Route path="/practice" element={<PracticePage />} />
               <Route path="/words" element={<WordsPage />} />
               <Route path="/scenes" element={<ScenesPage />} />
               <Route path="/stories" element={<StoriesPage />} />

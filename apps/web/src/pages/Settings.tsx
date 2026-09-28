@@ -1188,6 +1188,8 @@ function Privacy() {
     stop();
     audio.stop();
     try {
+      const { clearRehabData } = await import("../features/rehab/store");
+      await clearRehabData();
       await db.transaction("rw", db.tables, async () => {
         await Promise.all(db.tables.map((table) => table.clear()));
       });
@@ -1279,6 +1281,16 @@ function Privacy() {
                 </td>
               </tr>
               <tr>
+                <td>Practice and rehabilitation evidence</td>
+                <td>
+                  Practice records, audio/video clips and reviewer notes stay in
+                  a separate local database. Browser transcription is optional
+                  and may use the browser vendor's service. Reports and clips
+                  require explicit download; they are not automatically sent to
+                  a therapist or used to train a model.
+                </td>
+              </tr>
+              <tr>
                 <td>Send SMS</td>
                 <td>
                   The SMS link opens your messaging app with a draft. You choose
@@ -1305,7 +1317,8 @@ function Privacy() {
         </p>
         <p>
           This removes saved recordings, consent, phrases, history, learned
-          phrasing, settings, the caregiver PIN and local pairing keys from this
+          phrasing, therapy practice, evidence, reviewer notes, imported
+          reports, settings, the caregiver PIN and local pairing keys from this
           browser. Data already received on another phone or exported to a file
           is separate.
         </p>

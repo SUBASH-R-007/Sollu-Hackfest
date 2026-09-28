@@ -1,6 +1,21 @@
 # Sollu progress and acceptance ledger
 
-Last updated: 2026-09-28. **Current state: time/place/routine context engine and caregiver editing implemented locally; automated verification passed, live-provider and human acceptance pending.** The user approved the improvement plan with “go,” then requested OpenAI/alternative providers and a context engine. No real credentials or paid requests were used; hosting remains deferred. The complete specification is [docs/SPEC.md](docs/SPEC.md); approved changes are [docs/DECISIONS.md](docs/DECISIONS.md). This is not a claim that the original full-product, clinical-validation or paid-clone milestones are complete.
+Last updated: 2026-09-28. **Current state: multi-condition communication practice, therapist review/reporting and reviewed routine learning implemented locally; automated verification passed, clinical and live-provider acceptance pending.** The user approved improvements, then requested contextual LLMs and rehabilitation beyond post-stroke aphasia. No real credentials or paid requests were used; hosting remains deferred. The complete specification is [docs/SPEC.md](docs/SPEC.md); approved changes are [docs/DECISIONS.md](docs/DECISIONS.md). This is not a claim that full-product, clinical-validation or paid-clone milestones are complete.
+
+## Communication rehabilitation and review (v5)
+
+| Area | Implementation and evidence |
+| --- | --- |
+| Research and scope | [11 primary/authoritative sources](docs/REHABILITATION_RESEARCH.md) inform profiles for aphasia, dysarthria, ALS, Parkinson's and laryngectomy. [Workflow and limitations](docs/REHABILITATION.md). Individual communication methods and therapist-agreed plans; no universal physiological drills or clinical-grade claims. |
+| Practice | Functional words, sentences, scripts, AAC and custom targets; optional browser transcript, local audio/video, consent, review, discard, fatigue/rest and feedback. Saved clips use entered review transcripts, not a separately captured live recognizer result. Context snapshot survives plan changes. |
+| Feedback | Versioned token edit comparison, provisional/unreviewed distinction, unknown scores stay missing, marked practice words and person/partner understanding. Text match is not pronunciation, intelligibility or clinical recovery. |
+| Therapist workspace | Weekly activity, comparable targets, fatigue, medians/IQR/sample sizes, confirmed-understanding denominators and descriptive interval, taps/time to speech start, reviewer observations and local evidence. JSON/CSV reports, separately consented clips, validated read-only patient snapshots. |
+| Personalization/context | Marked words become practice choices; separately confirmed wording mappings can guide the intent engine. Local log scan requires three distinct real dates and caregiver approval for learned routines. Therapy repetition/diagnosis/media never becomes an inferred daily need. No acoustic-model fine-tuning. |
+| Privacy and deletion | Media/attempts saved atomically in a bounded separate database. Clip/attempt/snapshot deletion and erase-all verified. Original encrypted personal backup explicitly excludes therapy data; reports/clips need separate exports. No automatic report sending. |
+| Root route | Opening `/` remains patient Home even with a stored caregiver role; explicit `/care` pairing remains functional. |
+| Verification | **614 unit tests / 24 files, 45 distinct browser checks across the full run and targeted rechecks, repository ESLint, all three TypeScript projects, production web/API builds and compiled rehabilitation offline smoke passed.** [Dated evidence](docs/evidence/v5/VERIFICATION.md). |
+| Visual/accessibility | 390×844 and 1440×1000: no horizontal page overflow, serious/critical Axe violations, console/page errors, inference calls or automatic speech in checked views. Scrollable tables/charts support keyboard focus. |
+| Pending | Clinical validation, real patient/partner and SLP acceptance, native Tamil content/interface review, physical microphone/camera/device recognition quality, and live LLM evaluation. This is local practice/review, not an authenticated clinical portal or validated therapy. |
 
 ## Time, place and routine context (v4)
 

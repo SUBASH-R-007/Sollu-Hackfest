@@ -1,5 +1,9 @@
 # Language review inventory
 
+## Rehabilitation addition — 2026-09-28
+
+Pending native-speaker and clinical review. New Tools tile in `apps/web/src/pages/Support.tsx`: `தொடர்பு பயிற்சி` (Communication practice), `உங்கள் வேகத்தில் பயிற்சி செய்யுங்கள்` (Practise at your own pace). Practice/dashboard controls and starter targets are currently English; Tamil custom targets are supported and require review by the person and a fluent speaker. Unicode scoring fixtures are test strings, not clinically approved prompts.
+
 Generated 2026-09-27 from every original specification line containing Tamil, Devanagari or Telugu script. Whole source lines are retained so every draft string and its context remain available; duplicate occurrences are intentional. Source line numbers refer to the unchanged SPEC.md. All entries are **pending native-speaker review**.
 
 Review spoken register, exact meaning, respect/familiarity, Hindi gender and oblique forms, Telugu case agreement, pain intensity, word highlighting and the actual voice pronunciation. Record reviewer, date, accepted/corrected wording, and source location; do not mark strings approved based on generated output.

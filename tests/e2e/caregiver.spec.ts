@@ -113,7 +113,9 @@ test("two isolated devices pair, exchange encrypted words/receipts/questions and
     // This is a deliberate second question, outside the configured repeat-tap filter.
     await care.waitForTimeout(425);
     await care.getByRole("button", { name: "Send question" }).click();
-    await expect(care.getByLabel("Your question", { exact: true })).toHaveValue("");
+    await expect(care.getByLabel("Your question", { exact: true })).toHaveValue(
+      "",
+    );
     await expect(page.getByRole("status")).toContainText(
       "The conversation question changed",
     );
@@ -168,6 +170,10 @@ test("therapist metrics reflect actual rejected sets and study CSV excludes raw 
   await expect.poll(async () => (await readAttempts(page)).length).toBe(1);
   await page.goto("/therapist");
   await unlockCaregiver(page);
+  await page
+    .locator('[aria-label="Dashboard views"]')
+    .getByRole("button", { name: "Communication log", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Communication log." }),
   ).toBeVisible();

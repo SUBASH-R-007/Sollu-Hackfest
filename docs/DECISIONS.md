@@ -67,4 +67,6 @@ The user explicitly requested time, location and routine reasoning. Added the ca
 
 ## Remaining acceptance
 
+The 2026-09-28 rehabilitation request authorizes the local expansion in [REHABILITATION.md](REHABILITATION.md), informed by [clinical research](REHABILITATION_RESEARCH.md). Practice is person/therapist directed. Engineering completion does not imply clinically validated scores, acoustic-model training or a clinical-grade system. A central `review` audio channel supports explicit evidence playback with the existing trusted-activation, freshness and Stop boundary. Exports are local downloads; no automatic therapist messages/uploads. Root `/` consistently opens patient Home without deleting caregiver pairing.
+
 Real cloud generation, paid cloning, actual provider deletion, native-speaker sign-off, phone accessibility, real STT recordings and phone performance remain separate checks. All full M7–M11 work and any unimplemented M0–M6 item remain visible in [../PROGRESS.md](../PROGRESS.md).

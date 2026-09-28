@@ -59,6 +59,14 @@ export function ToolsPage() {
     t = useText();
   const links = [
     [
+      "/practice",
+      "🌱",
+      "தொடர்பு பயிற்சி",
+      "Communication practice",
+      "உங்கள் வேகத்தில் பயிற்சி செய்யுங்கள்",
+      "Practise messages, record and review together",
+    ],
+    [
       "/repair",
       "↩️",
       "நான் சொன்னது வேறு",

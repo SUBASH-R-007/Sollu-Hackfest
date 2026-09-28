@@ -1,5 +1,7 @@
 # Approved build plan
 
+2026-09-28 addition: the user requested research and implementation of multi-condition communication rehabilitation, recordings, scoring, therapist reporting and learned context. Scope and remaining clinical acceptance are documented in [REHABILITATION.md](REHABILITATION.md); rationale is in [REHABILITATION_RESEARCH.md](REHABILITATION_RESEARCH.md).
+
 Approved by the user on 2026-09-27 after the three planning questions. The user has no paid API keys, requests a free alternative, and explicitly defers hosting. This update overrides the original three-hour deployment target without changing the safety invariants. The complete original brief is [SPEC.md](SPEC.md).
 
 Sollu is a Tamil-first communication PWA for adults who can recognise and choose a sentence. Speech, topics, a photo, or typed fragments lead to up to three distinct candidate sentences. The person chooses the exact sentence before it is spoken. Tamil and English are the first languages. The application includes a caregiver view and a local communication log; it makes no diagnostic or treatment claim.

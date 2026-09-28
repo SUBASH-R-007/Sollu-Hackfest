@@ -88,6 +88,88 @@ export class AudioController {
     this.cancelCurrent();
   }
 
+  /** Explicit review of a local evidence clip; never speaks as the patient. */
+  async reviewMedia(options: {
+    element: HTMLMediaElement;
+    blob: Blob;
+    text: string;
+    ticket: TapTicket | null;
+  }): Promise<AudioResult> {
+    const { element, blob, text, ticket } = options;
+    if (!ticket || !this.gate.consume(ticket, text, "review"))
+      return {
+        status:
+          ticket && !this.gate.isFresh(ticket) ? "expired" : "unavailable",
+      };
+    if (!blob.size || !/^(audio|video)\//u.test(blob.type))
+      return { status: "unavailable" };
+    this.cancelCurrent();
+    const controller = new AbortController();
+    this.pending = controller;
+    let url: string | undefined;
+    let started = false;
+    try {
+      url = URL.createObjectURL(blob);
+      element.autoplay = false;
+      element.srcObject = null;
+      element.src = url;
+      // Unmute only after the actual playing event passes the tap freshness check.
+      element.muted = true;
+      element.volume = this.volume;
+      return await new Promise<AudioResult>((resolve) => {
+        let finished = false;
+        const finish = (status: AudioResult["status"]) => {
+          if (finished) return;
+          finished = true;
+          clearTimeout(deadline);
+          controller.signal.removeEventListener("abort", cancel);
+          element.muted = true;
+          element.pause();
+          element.onplaying = element.onended = element.onerror = null;
+          resolve({ status });
+        };
+        const cancel = () => finish("cancelled");
+        const deadline = setTimeout(
+          () => {
+            if (!started) finish("expired");
+          },
+          Math.max(0, TAP_WINDOW_MS - (this.output.now() - ticket.issuedAt)),
+        );
+        controller.signal.addEventListener("abort", cancel, {
+          once: true,
+        });
+        element.onplaying = () => {
+          if (finished || !this.gate.isFresh(ticket)) finish("expired");
+          else {
+            started = true;
+            clearTimeout(deadline);
+            element.muted = false;
+          }
+        };
+        element.onended = () => finish(started ? "completed" : "failed");
+        element.onerror = () => finish("failed");
+        try {
+          void element.play().catch(() => finish("failed"));
+        } catch {
+          finish("failed");
+        }
+      });
+    } catch {
+      return { status: controller.signal.aborted ? "cancelled" : "failed" };
+    } finally {
+      // A superseding tap may reuse this element before this promise resumes.
+      // Old cleanup must not erase the newer clip or its event handlers.
+      if (url && element.src === url) {
+        element.muted = true;
+        element.pause();
+        element.removeAttribute("src");
+        element.load();
+      }
+      if (url) URL.revokeObjectURL(url);
+      if (this.pending === controller) this.pending = undefined;
+    }
+  }
+
   async speak(options: SpeakOptions): Promise<AudioResult> {
     return this.play(options, false);
   }

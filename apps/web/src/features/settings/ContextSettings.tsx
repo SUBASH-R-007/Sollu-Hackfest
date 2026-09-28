@@ -19,6 +19,7 @@ import { useApp } from "../../state";
 import { TapButton } from "../../ui";
 import { SettingsCard, SettingsField, SettingsToggle } from "./Controls";
 import "./context-settings.css";
+import { LearnedRoutines } from "../rehab/LearnedRoutinePanel";
 
 const places = [
   ["home", "Home"],
@@ -658,6 +659,7 @@ export function ContextSettings() {
           </TapButton>
         )}
       </SettingsCard>
+      <LearnedRoutines />
     </div>
   );
 }

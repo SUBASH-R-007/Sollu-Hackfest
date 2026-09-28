@@ -1,0 +1,20 @@
+# Rehabilitation verification
+
+Date: 2026-09-28. Windows, Node 22.17.1, installed Chromium 151. All automated records are fictional. No real API keys, paid calls, physical microphone/camera access, report sending, deployment or model downloads.
+
+| Check | Observed result |
+| --- | --- |
+| Unit | **614/614, 24 files.** Adds Unicode token alignment, missing scores/outcomes, descriptive statistics, consent/schema limits, conservative routine proposals, report import/export, correction conflicts, recording cancellation and trusted media-review lifecycle. |
+| Browser | **45 distinct checks passed across runs.** Initial full run: 43/44 passed. The synthetic camera fixture was corrected to explicitly request canvas frames and wait for native encoder bytes; its targeted rerun passed. One additional plan-snapshot/erase-all test passed; all three dashboard tests also passed their final recheck. Other passes cover patient communication, pairing, relay, provider/settings privacy, root routing, local routine learning, manual practice, offline saving and microphone denial. |
+| Video evidence | Native Chrome MediaRecorder encoded generated canvas video, explicit review played it, saving stored linked media and reset recording consent for the next attempt. This verifies generated-video plumbing, not physical device/clinical recording quality. The initial fixture's preview clock advanced without encoded chunks; the production capture code correctly reported no recording. |
+| Lint/types | Repository ESLint; web, API and shared TypeScript passed. Web/lint repeated after final interface fixes. |
+| Web build | Vite/PWA passed. Main entry 672.74 kB / 200.82 kB gzip, lazy Practice 18.68 kB / 6.78 kB gzip, lazy Therapist 59.51 kB / 17.72 kB gzip. PWA precaches 72 entries / 2804.08 KiB. Original 200 kB entry target remains slightly exceeded; no performance acceptance claim. Existing TensorFlow chunk warning remains. |
+| API build | tsup passed, 194.50 kB ESM. First sandbox attempt failed on parent-directory access; authorized local build outside that restriction passed. |
+| Offline production | [Script](rehab-offline.mjs) against temporary loopback 8792: previously unvisited practice and therapist routes opened with network disabled, reviewed practice saved and survived dashboard reload. Temporary server stopped; original dev app retained. |
+| Visual/accessibility | [Results](rehab-visual-checks.json), [script](rehab-visual.mjs). 390×844 and 1440×1000; no page overflow, serious/critical Axe issues, console/page errors, automatic speech or inference calls in tested views. Found and fixed mobile grid overflow and focus access to scrollable charts/tables. |
+| Evidence integrity | Reviewed transcript only in score aggregates; empty measures not zero; provenance/scoring version retained. Included scores recompute on import, misleading privacy flags rejected, imported clinician identity remains unverified and imported media IDs do not resolve local media. |
+| Data lifecycle | Mid-attempt plan change preserves initial target/language/method. Practice deletion cascades media/reviews; global erase clears both databases. Recording permission, async cancellation, rest/stop and late permission grant are covered. |
+
+Screenshots: [practice mobile](practice-review-mobile.png), [practice desktop](practice-review-desktop.png), [dashboard desktop](therapist-overview-desktop.png), [dashboard mobile](therapist-overview-mobile.png), [plan mobile](therapist-plan-mobile.png), [plan desktop](therapist-plan-desktop.png).
+
+Remaining acceptance: qualified SLP review by condition/stage, native-language review (new interface primarily English; Tamil personal targets supported), real device audio/video/recognition testing, accessible patient/partner testing and formal clinical validation. No acoustic-model fine-tuning, clinical intelligibility scale, diagnostic assessment, authenticated clinician service, remote delivery or causal rehabilitation benefit is claimed. See [research](../../REHABILITATION_RESEARCH.md) and [implementation boundaries](../../REHABILITATION.md).

@@ -13,6 +13,7 @@ import {
 import { db } from "../db";
 import { attemptsCsv, download, isStruggle, metrics } from "../lib/metrics";
 import { Back, Empty, PageTitle, TapButton } from "../ui";
+import TherapyDashboard from "../features/rehab/TherapyDashboard";
 
 const localDate = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -25,6 +26,43 @@ const dateTime = (at: number) =>
   });
 
 export default function Therapist() {
+  const [view, setView] = useState<"rehab" | "log">("rehab");
+  return (
+    <section className="therapist-page">
+      <Back to="/settings" label="Caregiver settings" />
+      <PageTitle
+        title="Therapist dashboard"
+        subtitle="Review communication, personal practice and evidence together."
+        action={
+          <TapButton
+            className="secondary-button print-hide"
+            onActivate={() => window.print()}
+          >
+            <Printer size={20} />
+            Print current view
+          </TapButton>
+        }
+      />
+      <div className="rehab-actions print-hide" aria-label="Dashboard views">
+        <TapButton
+          aria-pressed={view === "rehab"}
+          onActivate={() => setView("rehab")}
+        >
+          Rehabilitation review
+        </TapButton>
+        <TapButton
+          aria-pressed={view === "log"}
+          onActivate={() => setView("log")}
+        >
+          Communication log
+        </TapButton>
+      </div>
+      {view === "rehab" ? <TherapyDashboard /> : <CommunicationLog />}
+    </section>
+  );
+}
+
+function CommunicationLog() {
   const attempts = useLiveQuery(
     () => db.attempts.orderBy("startedAt").reverse().toArray(),
     [],
@@ -110,7 +148,6 @@ export default function Therapist() {
 
   return (
     <section className="therapist-page">
-      <Back to="/settings" label="Caregiver settings" />
       <PageTitle
         eyebrow="Small moments, useful patterns"
         title="Communication log."

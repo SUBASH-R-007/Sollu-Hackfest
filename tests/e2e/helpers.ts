@@ -364,7 +364,7 @@ export async function unlockCaregiver(page: Page) {
   await expect(
     pin.or(
       page.getByRole("heading", {
-        name: /A little more personal|Communication log/,
+        name: /A little more personal|Communication log|Therapist dashboard/,
       }),
     ),
   ).toBeVisible();
