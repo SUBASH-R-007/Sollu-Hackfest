@@ -1,0 +1,269 @@
+.rehab-dashboard {
+  min-width: 0;
+  display: grid;
+  gap: 22px;
+  margin: 28px 0 48px;
+}
+.rehab-dashboard > *,
+.rehab-dashboard .rehab-form-grid > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.rehab-dashboard .table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.rehab-dashboard input,
+.rehab-dashboard select,
+.rehab-dashboard textarea {
+  min-width: 0;
+}
+.rehab-dashboard p,
+.rehab-dashboard h3,
+.rehab-dashboard h4 {
+  overflow-wrap: anywhere;
+}
+.rehab-dashboard-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+.rehab-dashboard-heading h2 {
+  font-size: clamp(1.8rem, 3vw, 2.65rem);
+  margin: 8px 0;
+}
+.rehab-dashboard h3 {
+  margin-top: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rehab-dashboard h4 {
+  margin: 16px 0 10px;
+  font-size: 1.1rem;
+}
+.rehab-dashboard p {
+  line-height: 1.6;
+}
+.rehab-dashboard label:not(.checkbox-label) {
+  display: grid;
+  gap: 8px;
+  font-weight: 600;
+}
+.rehab-dashboard input:not([type="checkbox"]),
+.rehab-dashboard select,
+.rehab-dashboard textarea {
+  width: 100%;
+  min-height: 54px;
+  border: 1px solid var(--border, #cbd5ce);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--surface, white);
+  color: inherit;
+  font: inherit;
+}
+.rehab-dashboard textarea {
+  resize: vertical;
+}
+.rehab-dashboard input[type="checkbox"] {
+  width: 23px;
+  height: 23px;
+  flex-shrink: 0;
+}
+.rehab-dashboard summary {
+  cursor: pointer;
+  min-height: 52px;
+  padding: 10px 0;
+  font-weight: 700;
+  font-size: 1.12rem;
+}
+.rehab-dashboard summary svg {
+  vertical-align: middle;
+  margin-right: 8px;
+}
+.rehab-dashboard details[open] > summary {
+  margin-bottom: 14px;
+}
+.rehab-profile-editor > label,
+.rehab-review-form > label {
+  margin: 18px 0;
+}
+.rehab-form-grid,
+.rehab-exercise-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.rehab-form-grid {
+  margin: 22px 0;
+}
+.rehab-profile-editor fieldset {
+  padding: 18px;
+  border: 1px solid var(--border, #cbd5ce);
+  border-radius: 14px;
+  margin: 18px 0;
+}
+.rehab-profile-editor legend {
+  padding: 0 10px;
+  font-weight: 700;
+}
+.rehab-exercise-picker .checkbox-label {
+  align-items: flex-start;
+  min-height: 60px;
+}
+.rehab-exercise-picker small {
+  display: block;
+  margin-top: 5px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.rehab-date-filter {
+  display: flex;
+  gap: 18px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.rehab-date-filter > label {
+  flex: 1;
+  min-width: 200px;
+}
+.rehab-stats {
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  gap: 14px;
+}
+.rehab-stat {
+  align-items: flex-start;
+  text-align: left;
+}
+.rehab-stat small {
+  margin-top: 8px;
+  line-height: 1.5;
+  font-size: 0.82rem;
+}
+.rehab-week-chart {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  overflow-x: auto;
+  padding: 15px 0 22px;
+}
+.rehab-week-column {
+  min-width: 64px;
+  flex: 1;
+  display: grid;
+  gap: 7px;
+  text-align: center;
+  font-size: 0.85rem;
+}
+.rehab-week-track {
+  height: 110px;
+  border-radius: 10px;
+  display: flex;
+  align-items: flex-end;
+  background: var(--surface-alt, #eef2ed);
+  overflow: hidden;
+}
+.rehab-week-track > span {
+  min-height: 0;
+  display: block;
+  width: 100%;
+  background: var(--primary, #246953);
+  border-radius: 8px 8px 0 0;
+}
+.rehab-two-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 30px;
+}
+.rehab-word-list {
+  padding-left: 24px;
+}
+.rehab-word-list li {
+  padding: 9px 0;
+}
+.rehab-word-list li strong {
+  float: right;
+  font-size: 0.85rem;
+  margin-left: 12px;
+}
+.rehab-session {
+  border-top: 1px solid var(--border, #d8dfd9);
+  padding: 10px 0;
+}
+.rehab-session summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+}
+.rehab-session summary::before {
+  content: "+";
+  font-size: 1.4rem;
+  margin-right: 4px;
+}
+.rehab-session[open] summary::before {
+  content: "−";
+}
+.rehab-session summary > span:first-of-type {
+  flex: 1;
+}
+.rehab-review-note {
+  border-left: 4px solid var(--primary, #246953);
+  margin: 18px 0;
+  padding: 12px 18px;
+  background: var(--surface-alt, #eef2ed);
+  border-radius: 0 12px 12px 0;
+}
+.rehab-evidence {
+  border: 1px solid var(--border, #d8dfd9);
+  border-radius: 16px;
+  padding: 18px;
+  margin: 16px 0;
+}
+.rehab-evidence video {
+  max-width: 100%;
+  border-radius: 12px;
+}
+.rehab-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0;
+}
+.rehab-transfer > label,
+.rehab-transfer details > label {
+  margin: 16px 0;
+}
+.rehab-dashboard .checkbox-label {
+  gap: 12px;
+  line-height: 1.5;
+}
+@media (max-width: 700px) {
+  .rehab-form-grid,
+  .rehab-exercise-picker,
+  .rehab-two-columns {
+    grid-template-columns: 1fr;
+  }
+  .rehab-dashboard-heading > svg {
+    display: none;
+  }
+  .rehab-dashboard .panel {
+    padding: 20px;
+  }
+}
+@media print {
+  .rehab-dashboard {
+    gap: 15px;
+  }
+  .rehab-dashboard .panel {
+    break-inside: avoid;
+    box-shadow: none;
+  }
+  .rehab-session:not([open]) {
+    display: none;
+  }
+  .rehab-week-track > span {
+    print-color-adjust: exact;
+  }
+}

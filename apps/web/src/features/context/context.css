@@ -1,0 +1,39 @@
+.context-summary {
+  margin: 8px 0 18px;
+  padding: 0 16px;
+  border: 1px solid var(--line, #d9d0e7);
+  border-radius: 16px;
+  background: var(--surface, #fff);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.context-summary summary {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.context-summary summary::before {
+  content: "+";
+  font-size: 1.5em;
+}
+.context-summary[open] summary::before {
+  content: "−";
+}
+.context-summary summary:focus-visible {
+  outline: 3px solid currentColor;
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+.context-summary p {
+  margin: 0 0 14px;
+}
+.context-summary ul {
+  padding-left: 22px;
+  margin: 0 0 14px;
+}
+.context-summary li {
+  margin-bottom: 8px;
+}

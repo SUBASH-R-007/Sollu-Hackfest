@@ -1,0 +1,47 @@
+$ pnpm lint && pnpm typecheck && pnpm test && pnpm e2e
+$ eslint .
+$ pnpm -r typecheck
+Scope: 3 of 4 workspace projects
+packages/shared typecheck$ tsc --noEmit
+packages/shared typecheck: Done
+apps/server typecheck$ tsc --noEmit
+apps/web typecheck$ tsc --noEmit
+apps/server typecheck: Done
+apps/web typecheck: Done
+$ vitest run
+
+ RUN  v5.0.2 C:/Users/SUBASH/OneDrive/Documents/GitHub/Sollu-Hackfest
+
+
+ Test Files  8 passed (8)
+      Tests  66 passed (66)
+   Start at  23:37:51
+   Duration  2.80s (import 37%, transform 30%, tests 30%, worker 2%)
+
+$ playwright test
+
+Running 19 tests using 1 worker
+
+(node:26616) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok  1 tests\e2e\caregiver.spec.ts:16:1 › two isolated devices pair, exchange encrypted words/receipts/questions and acknowledge Help (20.0s)
+  ok  2 tests\e2e\caregiver.spec.ts:108:1 › therapist metrics reflect actual rejected sets and study CSV excludes raw text (3.7s)
+  ok  3 tests\e2e\caregiver.spec.ts:165:1 › stage overlay uses the saved attempt tap count and elapsed audio-start time (2.1s)
+  ok  4 tests\e2e\patient.spec.ts:18:1 › rehearsal warm-up stays silent and cached Type suggestions work offline (4.3s)
+  ok  5 tests\e2e\patient.spec.ts:62:1 › Home has four inputs, no autoplay, accessible names, contrast and large touch targets (2.1s)
+  ok  6 tests\e2e\patient.spec.ts:101:1 › Type → three guesses → explicit neutral preview → chosen sentence only (2.0s)
+  ok  7 tests\e2e\patient.spec.ts:130:1 › fewer valid candidates have no invented filler (1.3s)
+  ok  8 tests\e2e\patient.spec.ts:147:1 › rejected candidates are excluded and saved as a struggle (1.6s)
+  ok  9 tests\e2e\patient.spec.ts:170:1 › Topics pain templates work before AI, including side and round-two recovery (3.1s)
+  ok 10 tests\e2e\patient.spec.ts:196:1 › speech starts on the input tile and simulated recognition reaches confirmation without Done (4.9s)
+  ok 11 tests\e2e\patient.spec.ts:223:1 › labelled speech and camera demo inputs never claim a real transcription or image upload (1.6s)
+  ok 12 tests\e2e\patient.spec.ts:251:1 › offline Help speaks a local device phrase without AI and offers SMS (1.3s)
+  ok 13 tests\e2e\patient.spec.ts:276:1 › a chosen photo stays local when the on-device model cannot download (2.3s)
+  ok 14 tests\e2e\patient.spec.ts:313:1 › synthetic untrusted activation never authorizes speech (1.7s)
+  ok 15 tests\e2e\patient.spec.ts:333:1 › Stop cancels queued output and it never starts later (2.8s)
+  ok 16 tests\e2e\patient.spec.ts:353:1 › audio queued beyond the tap window requires a new exact-sentence tap (3.9s)
+  ok 17 tests\e2e\patient.spec.ts:377:1 › changing the addressee on confirmation regenerates in the doctor’s language (1.5s)
+  ok 18 tests\e2e\patient.spec.ts:405:1 › baseline counts word choices plus the final exact-sentence tap (1.5s)
+  ok 19 tests\e2e\patient.spec.ts:438:1 › keyboard activation confirms one exact sentence once (1.6s)
+
+  19 passed (1.1m)

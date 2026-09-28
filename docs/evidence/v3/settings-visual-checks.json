@@ -1,0 +1,30 @@
+{
+  "checkedAt": "2026-09-28T08:06:12.642Z",
+  "checks": [
+    {
+      "label": "engine mobile",
+      "viewport": 390,
+      "content": 390
+    },
+    {
+      "label": "personalize mobile",
+      "viewport": 390,
+      "content": 390
+    },
+    {
+      "label": "engine desktop",
+      "viewport": 1440,
+      "content": 1440
+    },
+    {
+      "label": "personalize desktop",
+      "viewport": 1440,
+      "content": 1440
+    }
+  ],
+  "keyboardTabs": "ArrowLeft/Right,Home,End supported; selected tab has tabindex0",
+  "password": "empty, masked, labeled",
+  "errors": [],
+  "providerRequests": "settings/test stubbed; no keys or external provider requests",
+  "audioCalls": 0
+}
