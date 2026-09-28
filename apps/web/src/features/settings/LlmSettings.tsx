@@ -3,6 +3,12 @@ import { FlaskConical, RefreshCw, Save, Trash2 } from "lucide-react";
 import { api } from "../../lib/api";
 import { TapButton } from "../../ui";
 import { SettingsCard, SettingsField, SettingsToggle } from "./Controls";
+import { useApp } from "../../state";
+import {
+  cloudSentencePermission,
+  setCloudSentencePermission,
+  subscribeCloudSentencePermission,
+} from "../privacy/sentencePolicy";
 
 type ProviderId =
   "mock" | "openai" | "anthropic" | "gemini" | "groq" | "ollama";
@@ -13,6 +19,8 @@ type Provider = {
   keyConfigured: boolean;
   keySource: "environment" | "session" | "none";
   requiresKey: boolean;
+  available?: boolean;
+  disabledReason?: string;
 };
 export type LlmConfiguration = {
   provider: ProviderId;
@@ -22,6 +30,7 @@ export type LlmConfiguration = {
   cloudConsent: boolean;
   sessionExpiresAt?: number;
   providers: Provider[];
+  policy?: { mode: "local-only" | "cloud-permitted"; allowCloudAI: boolean };
 };
 const environmentKeys: Partial<Record<ProviderId, string>> = {
   openai: "OPENAI_API_KEY",
@@ -31,6 +40,10 @@ const environmentKeys: Partial<Record<ProviderId, string>> = {
 };
 
 export function LlmSettings({ onChanged }: { onChanged: () => void }) {
+  const { settings } = useApp();
+  const [sentenceAllowed, setSentenceAllowed] = useState(
+    cloudSentencePermission,
+  );
   const [saved, setSaved] = useState<LlmConfiguration>();
   const [provider, setProvider] = useState<ProviderId>("mock");
   const [model, setModel] = useState("");
@@ -45,6 +58,7 @@ export function LlmSettings({ onChanged }: { onChanged: () => void }) {
   const request = useRef<AbortController | null>(null);
   const selected = saved?.providers.find((item) => item.id === provider);
   const isCloud = selected?.requiresKey === true;
+  const cloudBlocked = saved?.policy?.allowCloudAI !== true || !sentenceAllowed;
   const dirty = Boolean(
     saved &&
     (saved.provider !== provider ||
@@ -98,6 +112,37 @@ export function LlmSettings({ onChanged }: { onChanged: () => void }) {
       request.current?.abort();
     };
   }, []);
+  useEffect(
+    () =>
+      subscribeCloudSentencePermission(() => {
+        setSentenceAllowed(cloudSentencePermission());
+        request.current?.abort();
+        setApiKey("");
+        setBusy(null);
+      }),
+    [],
+  );
+  // Keep the legacy online-device opt-in reflected when a caregiver changes it.
+  useEffect(() => {
+    setSentenceAllowed(cloudSentencePermission());
+  }, [settings.localProcessingOnly]);
+
+  function allowSentences(allowed: boolean) {
+    try {
+      setCloudSentencePermission(allowed);
+      setSentenceAllowed(cloudSentencePermission());
+      setMessage(
+        allowed
+          ? "Cloud sentence APIs are available. Choose a provider, add its key and enable that provider's text sharing. Microphone and voice settings have not changed."
+          : "Cloud sentence requests are off on this device. Free vocabulary and local Ollama remain available.",
+      );
+    } catch {
+      setSentenceAllowed(false);
+      setMessage(
+        "The sentence permission could not be saved. Cloud requests remain blocked.",
+      );
+    }
+  }
 
   function selectProvider(value: ProviderId) {
     const next = saved?.providers.find((item) => item.id === value);
@@ -172,7 +217,11 @@ export function LlmSettings({ onChanged }: { onChanged: () => void }) {
         provider: string;
         model: string;
         latencyMs: number;
-      }>("llm/test", {}, controller.signal);
+      }>(
+        "llm/test",
+        { localOnly: !cloudSentencePermission() },
+        controller.signal,
+      );
       if (mounted.current)
         setMessage(
           `${result.ok ? "Connection test passed" : "Connection test did not pass"}: ${result.message} (${Math.round(result.latencyMs)} ms)`,
@@ -189,6 +238,43 @@ export function LlmSettings({ onChanged }: { onChanged: () => void }) {
   return (
     <div className="settings-feature-stack">
       <SettingsCard title="A sentence engine that understands context">
+        <p className="notice">
+          {saved?.policy?.allowCloudAI === false
+            ? "Cloud sentence providers are blocked by server privacy policy. Use free vocabulary or Ollama on the local server computer."
+            : !sentenceAllowed
+              ? "Cloud sentence APIs are off on this device. Enable the text-only permission below to use them."
+              : saved?.policy?.allowCloudAI === true
+                ? "This server permits cloud providers. Explicit device sharing permission is still required."
+                : "Checking server privacy policy. Cloud providers remain unavailable until verified."}
+        </p>
+        <SettingsToggle
+          checked={sentenceAllowed}
+          disabled={
+            !saved || saved.policy?.allowCloudAI !== true || busy !== null
+          }
+          onChange={allowSentences}
+        >
+          Allow cloud sentence APIs on this device
+        </SettingsToggle>
+        <p className="settings-feature-muted">
+          This permits sentence text to reach your chosen provider after you
+          save its sharing permission. It does not enable online microphone
+          recognition, remote speaking voices or camera model downloads. Saved
+          recordings are not uploaded.
+        </p>
+        {saved?.policy?.allowCloudAI === false && (
+          <p className="notice">
+            The server operator must set <code>ALLOW_CLOUD_AI=1</code> in the
+            server environment and restart the API server. Then refresh engine
+            settings below.
+          </p>
+        )}
+        {saved && (
+          <TapButton disabled={busy !== null} onActivate={() => void load()}>
+            <RefreshCw />
+            Refresh engine settings
+          </TapButton>
+        )}
         <p>
           Help turn a short fragment into a complete sentence. Suggestions still
           need the person’s exact-sentence tap before speaking. The engine never
@@ -223,8 +309,19 @@ export function LlmSettings({ onChanged }: { onChanged: () => void }) {
                   }
                 >
                   {saved.providers.map((item) => (
-                    <option key={item.id} value={item.id}>
+                    <option
+                      key={item.id}
+                      value={item.id}
+                      disabled={
+                        item.available === false ||
+                        (item.requiresKey && cloudBlocked)
+                      }
+                    >
                       {item.label}
+                      {item.available === false ||
+                      (item.requiresKey && cloudBlocked)
+                        ? " — blocked by privacy protection"
+                        : ""}
                     </option>
                   ))}
                 </select>
@@ -320,6 +417,14 @@ export function LlmSettings({ onChanged }: { onChanged: () => void }) {
                   retention and account policies apply. Choose Free vocabulary
                   or Local Ollama to stop cloud sentence requests.
                 </p>
+                <p className="settings-feature-muted">
+                  Fragments and questions can contain names or health
+                  information. Sharing permission and context filtering do not
+                  anonymize them. A provider’s no-training policy does not mean
+                  no retention. Review the intended service and account terms
+                  before sharing; clinical use requires a separate privacy and
+                  security review.
+                </p>
                 <details>
                   <summary>Use a server environment key instead</summary>
                   <p>
@@ -342,6 +447,8 @@ export function LlmSettings({ onChanged }: { onChanged: () => void }) {
                 className="primary"
                 disabled={
                   busy !== null ||
+                  selected?.available === false ||
+                  (isCloud && cloudBlocked) ||
                   (isCloud && !cloudConsent) ||
                   (provider !== "mock" && !model.trim())
                 }
@@ -392,6 +499,9 @@ export function LlmSettings({ onChanged }: { onChanged: () => void }) {
             disabled={
               busy !== null ||
               dirty ||
+              (saved.providers.find((item) => item.id === saved.provider)
+                ?.requiresKey === true &&
+                cloudBlocked) ||
               (saved.providers.find((item) => item.id === saved.provider)
                 ?.requiresKey === true &&
                 !saved.providers.find((item) => item.id === saved.provider)

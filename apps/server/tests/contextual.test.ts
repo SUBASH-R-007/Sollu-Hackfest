@@ -16,6 +16,7 @@ import type { ServerConfig } from "../src/config";
 import type { generateStructured } from "../src/providers/cloud";
 
 const config: ServerConfig = {
+  allowCloudAI: true,
   secret: "fictional-test-secret-for-local-engine-tests",
   port: 0,
   host: "127.0.0.1",
@@ -557,6 +558,167 @@ describe("contextual sentence generation", () => {
     );
     expect(result.model).toContain("contextual suggestions");
     expect(result.fallback).toBe(false);
+  });
+
+  it("offers multiple distinct choices by combining a valid model draft with grounded prepared alternatives", async () => {
+    const c = context("table"),
+      text = "I want the table.",
+      adapter = vi
+        .fn()
+        .mockResolvedValue(response(sentence(c, { text, gloss_en: text })));
+    const result = await selectIntent(c, config, undefined, undefined, adapter);
+    expect(result.candidates.map((candidate) => candidate.text)).toEqual([
+      text,
+      "Please clean the table.",
+      "Please move the table here.",
+    ]);
+    expect(result.candidates.map((candidate) => candidate.source)).toEqual([
+      "model",
+      "catalog",
+      "catalog",
+    ]);
+    expect(new Set(result.candidates.map(candidateMeaningKey)).size).toBe(3);
+    expect(result.model).toContain(
+      "contextual suggestions + prepared alternatives",
+    );
+    expect(result.fallback).toBe(false);
+    expect(adapter).toHaveBeenCalledTimes(1);
+    const prompt = adapter.mock.calls[0][1].system as string;
+    expect(prompt).toContain(
+      "two or three distinct grounded possible meanings",
+    );
+    expect(prompt).not.toContain("Prefer one short useful sentence");
+  });
+
+  it("does not refill choices with model paraphrases or a prepared duplicate of the same meaning", async () => {
+    const c = context("table", {
+        recentTurns: [
+          { speaker: "person", text: "clean table", minutesAgo: 1 },
+        ],
+      }),
+      evidence = [
+        { path: "fragment.raw", quote: "table", translation_en: "" },
+        {
+          path: "recentTurns.0.text",
+          quote: "clean table",
+          translation_en: "",
+        },
+      ],
+      text = "I want to clean the table.",
+      alternate = "Please let me clean the table.",
+      adapter = vi
+        .fn()
+        .mockResolvedValue(
+          response(
+            sentence(c, { text, gloss_en: text, evidence }),
+            sentence(c, { text: alternate, gloss_en: alternate, evidence }),
+          ),
+        );
+    const result = await selectIntent(c, config, undefined, undefined, adapter);
+    expect(result.candidates.map((candidate) => candidate.text)).toEqual([
+      text,
+      "Please move the table here.",
+      "What's on the table?",
+    ]);
+    expect(result.validationDrops).toBeGreaterThanOrEqual(2);
+    expect(adapter).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not supplement with excluded sentences or rejected prepared meanings", async () => {
+    const c = context("table"),
+      clean = getMockCandidates(c).find(
+        (candidate) => candidate.intentId === "table.clean",
+      )!,
+      current = {
+        ...c,
+        exclude: ["Please move the table here."],
+        rejectedMeaningKeys: [candidateMeaningKey(clean)],
+      },
+      text = "I want the table.",
+      adapter = vi
+        .fn()
+        .mockResolvedValue(
+          response(sentence(current, { text, gloss_en: text })),
+        );
+    const result = await selectIntent(
+      current,
+      config,
+      undefined,
+      undefined,
+      adapter,
+    );
+    expect(result.candidates.map((candidate) => candidate.text)).toEqual([
+      text,
+      "What's on the table?",
+    ]);
+    expect(adapter).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a refusal as one distinct choice rather than adding contradictory options or filler", async () => {
+    const c = context("no water"),
+      text = "I do not want water.",
+      adapter = vi
+        .fn()
+        .mockResolvedValue(
+          response(
+            sentence(c, {
+              text,
+              gloss_en: text,
+              speechAct: "refuse",
+              polarity: "negative",
+            }),
+          ),
+        );
+    const result = await selectIntent(c, config, undefined, undefined, adapter);
+    expect(result.candidates.map((candidate) => candidate.text)).toEqual([
+      text,
+    ]);
+    expect(result.candidates[0].polarity).toBe("negative");
+    expect(result.model).not.toContain("prepared alternatives");
+    expect(adapter).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a specific noncatalog message as one choice when no other meaning is grounded", async () => {
+    const c = context(),
+      item = sentence(c),
+      adapter = vi.fn().mockResolvedValue(response(item));
+    const result = await selectIntent(c, config, undefined, undefined, adapter);
+    expect(result.candidates.map((candidate) => candidate.text)).toEqual([
+      item.text,
+    ]);
+    expect(result.model).not.toContain("prepared alternatives");
+    expect(adapter).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves explicit model abstention even when prepared alternatives are available", async () => {
+    const c = context("table"),
+      adapter = vi.fn().mockResolvedValue(response());
+    expect(
+      applyCandidatePolicy(getMockCandidates(c), c).candidates,
+    ).toHaveLength(3);
+    const result = await selectIntent(c, config, undefined, undefined, adapter);
+    expect(result.candidates).toEqual([]);
+    expect(result.clarification).toBeTruthy();
+    expect(result.fallback).toBe(false);
+    expect(adapter).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains the prepared fallback when every model suggestion fails validation", async () => {
+    const c = context("table"),
+      text = "I want an invented spaceship.",
+      adapter = vi
+        .fn()
+        .mockResolvedValue(response(sentence(c, { text, gloss_en: text })));
+    const result = await selectIntent(c, config, undefined, undefined, adapter);
+    expect(result.candidates).toEqual(
+      applyCandidatePolicy(getMockCandidates(c), c).candidates,
+    );
+    expect(result.candidates).toHaveLength(3);
+    expect(
+      result.candidates.every((candidate) => candidate.source === "catalog"),
+    ).toBe(true);
+    expect(result.fallback).toBe(true);
+    expect(adapter).toHaveBeenCalledTimes(1);
   });
 
   it("supports a noncatalog Tamil fragment and sentence with explicitly unverified translation evidence", () => {

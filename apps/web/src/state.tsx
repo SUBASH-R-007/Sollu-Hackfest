@@ -19,6 +19,7 @@ import {
   candidateMeaningKey,
   getPainCandidates,
   getControlledCandidates,
+  requiresPredefinedCommunication,
 } from "@sollu/shared";
 import {
   db,
@@ -49,11 +50,24 @@ import {
 } from "./features/demo/service";
 import { parseStoredDraft } from "./lib/draft";
 import { memoryIdentity } from "./lib/memory";
+import {
+  persistLocalProcessingPreference,
+  localProcessingPreferenceVersion,
+  readLocalProcessingPreference,
+  setLocalProcessingOnly,
+  subscribeLocalProcessingPolicy,
+} from "./features/privacy/browserPolicy";
+import { setRecognitionPreference } from "./features/privacy/recognitionPreference";
+import {
+  setCloudSentencePermission,
+  subscribeCloudSentencePermission,
+} from "./features/privacy/sentencePolicy";
 
 export interface Session {
   attempt: Attempt;
   context: ContextPacket;
   candidates: Candidate[];
+  moreCandidates?: Candidate[];
   loading: boolean;
   error: string;
   model: string;
@@ -84,6 +98,7 @@ type AppState = {
   stop: () => void;
   abandon: () => void;
   retry: () => void;
+  showMoreChoices: () => void;
   question: { text: string; at: number; lang?: Lang } | null;
   setQuestion: (text: string) => void;
   caregiverUnlocked: boolean;
@@ -131,6 +146,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const questionRef = useRef(question);
   const speechEpoch = useRef(0);
   const draftWrites = useRef(Promise.resolve());
+  const settingsWrites = useRef(Promise.resolve());
   const sessionRef = useRef<Session | null>(null),
     abort = useRef<AbortController | null>(null),
     relay = useRef<RelayClient | null>(null),
@@ -160,6 +176,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...s,
       loading: false,
       candidates: [],
+      moreCandidates: [],
       model: "",
       error:
         settingsRef.current.lang === "ta"
@@ -225,6 +242,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!active) return;
         if (s) {
           const next = { ...defaultSettings, ...s };
+          next.localProcessingOnly =
+            s.localProcessingOnly !== false || readLocalProcessingPreference();
+          setLocalProcessingOnly(next.localProcessingOnly);
           settingsRef.current = next;
           setSettings(next);
         }
@@ -253,6 +273,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, []);
   useEffect(() => {
+    let active = true;
+    const unsubscribe = subscribeLocalProcessingPolicy(
+      (protectedMode, source) => {
+        if (source !== "storage") return;
+        if (protectedMode) {
+          applyPrivacyMode(true);
+        } else {
+          // An intentional relaxation is accepted only after BOTH stores confirm it.
+          void getKV<Settings>("settings")
+            .then((stored) => {
+              if (active)
+                applyPrivacyMode(
+                  stored?.localProcessingOnly !== false ||
+                    readLocalProcessingPreference(),
+                );
+            })
+            .catch(() => {
+              if (active) applyPrivacyMode(true);
+            });
+        }
+      },
+    );
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
+  useEffect(() => {
     audio.setRate(settings.speechRate);
   }, [settings.speechRate]);
   useEffect(() => {
@@ -264,6 +312,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       changeSession((s) => ({
         ...s,
         candidates: [],
+        moreCandidates: [],
         loading: false,
         chosen: undefined,
         model: "",
@@ -273,7 +322,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener("sollu:llm-settings-changed", changed);
     window.addEventListener("sollu:communication-settings-changed", changed);
+    const unsubscribeSentences = subscribeCloudSentencePermission(() =>
+      changed(new Event("sollu:llm-settings-changed")),
+    );
     return () => {
+      unsubscribeSentences();
       window.removeEventListener("sollu:llm-settings-changed", changed);
       window.removeEventListener(
         "sollu:communication-settings-changed",
@@ -353,12 +406,86 @@ export function AppProvider({ children }: { children: ReactNode }) {
       relay.current = null;
     };
   }, [pairingVersion]);
+  function applyPrivacyMode(protectedMode: boolean) {
+    const changed = settingsRef.current.localProcessingOnly !== protectedMode;
+    setLocalProcessingOnly(protectedMode);
+    settingsRef.current = {
+      ...settingsRef.current,
+      localProcessingOnly: protectedMode,
+    };
+    setSettings(settingsRef.current);
+    if (changed || protectedMode) {
+      generation.current++;
+      speechEpoch.current++;
+      abort.current?.abort();
+      audio.stop();
+      window.dispatchEvent(new Event("sollu:stop"));
+      changeSession((s) => ({
+        ...s,
+        candidates: [],
+        moreCandidates: [],
+        loading: false,
+        chosen: undefined,
+        model: "",
+        error: "",
+      }));
+    }
+  }
   async function updateSettings(patch: Partial<Settings>) {
-    const next = { ...settingsRef.current, ...patch };
-    settingsRef.current = next;
-    setSettings(next);
-    await setKV("settings", next);
-    window.dispatchEvent(new Event("sollu:communication-settings-changed"));
+    const privacyVersion = localProcessingPreferenceVersion();
+    if (patch.localProcessingOnly === true) {
+      try {
+        setCloudSentencePermission(false);
+      } catch {
+        /* Failed writes still revoke the current tab. */
+      }
+      // Forget an online input choice when protection is explicitly restored.
+      try {
+        setRecognitionPreference("local");
+      } catch {
+        // The preference module revokes locally even if browser storage fails.
+      }
+      // Revoke pending requests and speech immediately, even if persistence fails.
+      applyPrivacyMode(true);
+      persistLocalProcessingPreference(true);
+    }
+    const save = settingsWrites.current
+      .catch(() => {})
+      .then(async () => {
+        const next = await db.transaction("rw", db.kv, async () => {
+          const latest = await getKV<Settings>("settings");
+          const merged = {
+            ...defaultSettings,
+            ...(latest ?? settingsRef.current),
+            ...patch,
+          };
+          if (patch.localProcessingOnly === undefined)
+            merged.localProcessingOnly =
+              latest?.localProcessingOnly !== false ||
+              readLocalProcessingPreference();
+          await setKV("settings", merged);
+          return merged;
+        });
+        if (
+          patch.localProcessingOnly === false &&
+          localProcessingPreferenceVersion() !== privacyVersion
+        ) {
+          applyPrivacyMode(true);
+          throw new Error(
+            "Privacy protection changed while saving. Review the setting and try again.",
+          );
+        }
+        if (patch.localProcessingOnly !== undefined)
+          persistLocalProcessingPreference(patch.localProcessingOnly);
+        next.localProcessingOnly =
+          next.localProcessingOnly !== false || readLocalProcessingPreference();
+        applyPrivacyMode(next.localProcessingOnly);
+        settingsRef.current = next;
+        setSettings(next);
+        window.dispatchEvent(new Event("sollu:communication-settings-changed"));
+      });
+    settingsWrites.current = save;
+    await save;
   }
   function begin(fragment: Fragment, preserveAudio = false) {
     pendingReceipt.current = null;
@@ -403,6 +530,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attempt,
       context,
       candidates: [],
+      moreCandidates: [],
       loading: false,
       error: "",
       model: "",
@@ -451,6 +579,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       context,
       loading: true,
       candidates: [],
+      moreCandidates: [],
       error: "",
       chosen: undefined,
       audioStatus: "",
@@ -514,6 +643,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .slice(0, 10);
       context.recentTurns = recentConfirmedTurns(recentAttempts, context);
       const path = input.topicPath ?? [];
+      const predefined = requiresPredefinedCommunication(context);
       const pain =
         path[0] === "pain" && round === 1
           ? getPainCandidates(path[1], path[2], context.outputLang)
@@ -533,6 +663,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (pain.length) {
         candidates = pain;
         model = "Pain templates";
+      } else if (predefined) {
+        // Prepared health/help wording must also bypass network and rehearsal caches.
+        candidates = getControlledCandidates(context);
+        model = "Prepared health/help wording";
       } else if (!navigator.onLine) {
         const cached = settingsRef.current.demo
           ? await getRehearsal(context)
@@ -596,7 +730,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           r.m.timeBucket === context.now?.timeBucket &&
           !context.exclude.includes(r.m.sentence),
       );
-      if (usual && round === 1) {
+      if (usual && round === 1 && !predefined) {
         const m = usual.m;
         const stored =
           m.candidate ?? (await getKV<Candidate>(`memory-candidate:${m.id}`));
@@ -618,8 +752,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ? inferenceContext(context, settingsRef.current)
           : undefined,
       });
+      const moreCandidates = checked.candidates.slice(
+        settingsRef.current.choiceCount,
+      );
       candidates = checked.candidates.slice(0, settingsRef.current.choiceCount);
       const usualShown = Boolean(
+        !predefined &&
         usual &&
         candidates.some(
           (c) => normalize(c.text) === normalize(usual.m.sentence),
@@ -629,6 +767,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...s,
         context,
         candidates,
+        moreCandidates,
         model,
         usual: usualShown ? usual?.m.sentence : undefined,
         loading: false,
@@ -673,8 +812,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
         loading: false,
         error: error instanceof Error ? error.message : "Please try again.",
         candidates: [],
+        moreCandidates: [],
       }));
     }
+  }
+  function showMoreChoices() {
+    changeSession((s) => {
+      if (s.loading || s.chosen || !s.moreCandidates?.length) return s;
+      const candidates = [...s.candidates, ...s.moreCandidates].slice(0, 3);
+      return {
+        ...s,
+        candidates,
+        moreCandidates: [],
+        attempt: {
+          ...s.attempt,
+          // A choice is logged as shown (and eligible for rejection) only after it is revealed.
+          rounds: s.attempt.rounds.map((round, index) =>
+            index === s.attempt.rounds.length - 1
+              ? { ...round, candidates }
+              : round,
+          ),
+        },
+      };
+    });
   }
   function retry() {
     const s = sessionRef.current;
@@ -960,9 +1120,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
             );
         },
         updateDraft: (fragment) => {
+          const current = sessionRef.current;
+          if (
+            !current ||
+            JSON.stringify(current.context.fragment) ===
+              JSON.stringify(fragment)
+          )
+            return;
+          generation.current++;
+          speechEpoch.current++;
+          abort.current?.abort();
+          audio.stop();
           changeSession((s) => ({
             ...s,
             context: { ...s.context, fragment },
+            candidates: [],
+            moreCandidates: [],
+            loading: false,
+            chosen: undefined,
+            usual: undefined,
+            model: "",
+            error: "",
             attempt: { ...s.attempt, fragmentRaw: fragment.raw },
           }));
         },
@@ -986,6 +1164,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         stop,
         abandon,
         retry,
+        showMoreChoices,
         question,
         setQuestion: (text) =>
           changeQuestion({

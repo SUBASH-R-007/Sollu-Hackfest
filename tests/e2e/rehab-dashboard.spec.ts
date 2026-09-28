@@ -6,7 +6,10 @@ async function openDashboard(page: Page) {
   await page.goto("/therapist");
   await unlockCaregiver(page);
   await expect(
-    page.getByRole("heading", { name: "Rehabilitation review", exact: true }),
+    page.getByRole("heading", {
+      name: "Communication Progress Report",
+      exact: true,
+    }),
   ).toBeVisible();
 }
 
@@ -158,6 +161,35 @@ test("therapist metrics, reviewer observations, consented redacted export and is
 }) => {
   await openDashboard(page);
   await seedPractice(page);
+  const scope = page.getByLabel("Report purpose and limitations", {
+    exact: true,
+  });
+  await expect(scope).toContainText(
+    "not a diagnostic assessment or treatment recommendation",
+  );
+  await expect(scope).toContainText("not clinically validated endpoints");
+  await page.emulateMedia({ media: "print" });
+  await expect(scope).toBeVisible();
+  await page.emulateMedia({ media: "screen" });
+  await page
+    .getByLabel("Dashboard views")
+    .getByRole("button", { name: "Communication log", exact: true })
+    .click();
+  await expect(
+    page
+      .locator(".stat-card")
+      .filter({ hasText: "Median seconds to audio start" })
+      .locator("strong"),
+  ).toHaveText("—");
+  await expect(
+    page.getByText(
+      "Time measured for 0 of 4 speech-started attempts; 4 missing.",
+      { exact: false },
+    ),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Rehabilitation review", exact: true })
+    .click();
   const communication = page.locator(
     'section[aria-labelledby="rehab-communication-title"]',
   );
@@ -188,6 +220,9 @@ test("therapist metrics, reviewer observations, consented redacted export and is
     .getByRole("button", { name: "Save reviewer observation", exact: true })
     .click();
   await expect(page.locator(".rehab-review-note")).toContainText("SLT test");
+  await page
+    .getByText("Unencrypted JSON / CSV export", { exact: true })
+    .click();
   await expect(
     page.getByRole("button", { name: "Download report JSON", exact: true }),
   ).toBeDisabled();
@@ -204,6 +239,13 @@ test("therapist metrics, reviewer observations, consented redacted export and is
   const file = await downloadPromise;
   const parsed = JSON.parse(await readFile((await file.path())!, "utf8"));
   expect(parsed.scoringVersion).toBe("text-match-v1");
+  expect(parsed.interpretation.title).toBe("Communication Progress Report");
+  expect(parsed.interpretation.purpose).toContain(
+    "not a diagnostic assessment or treatment recommendation",
+  );
+  expect(parsed.interpretation.validation).toContain(
+    "not clinically validated endpoints",
+  );
   expect(parsed.sessions[0].transcriptSource).toBe("browser");
   expect(parsed.sessions[0].textMatch).toBe(66.7);
   expect(parsed.sessions[0]).not.toHaveProperty("target");
@@ -218,7 +260,12 @@ test("therapist metrics, reviewer observations, consented redacted export and is
   await expect(
     page.getByRole("button", { name: "Download report JSON", exact: true }),
   ).toBeDisabled();
-  await page.locator(".rehab-transfer details > summary").click();
+  await page
+    .getByText("Import a report for local review", { exact: true })
+    .click();
+  await page
+    .getByRole("combobox", { name: "Report file protection", exact: true })
+    .selectOption("plain");
   parsed.participant = "Imported patient code";
   await page
     .getByLabel("Choose Sollu report JSON (maximum 2 MB)", { exact: true })
@@ -274,6 +321,224 @@ test("therapist metrics, reviewer observations, consented redacted export and is
       .getByRole("combobox", { name: "Patient / report snapshot", exact: true })
       .locator("option"),
   ).toHaveCount(1);
+  expect(await spokenCalls(page)).toEqual([]);
+});
+
+test("reviewed word denominators and encrypted report preview preserve privacy and import separation", async ({
+  page,
+}) => {
+  await openDashboard(page);
+  await seedPractice(page);
+  const words = page.locator(
+    'section[aria-labelledby="rehab-word-accuracy-title"]',
+  );
+  await expect(words).toContainText("2 matched / 3 target-word occurrences");
+  await expect(words).toContainText(
+    "1 omissions · 0 substitutions · 0 extra transcript words",
+  );
+  const wordRow = words
+    .getByRole("region", {
+      name: "Reviewed word accuracy measurements",
+      exact: true,
+    })
+    .getByRole("row")
+    .filter({ hasText: "water" });
+  await expect(wordRow).toContainText("0 / 1");
+  await expect(wordRow).toContainText("0.0%");
+  await expect(
+    words.getByRole("link", { name: "Practise water", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByLabel(
+      "Include practice words, transcripts, goals, notes and reviewer names.",
+      { exact: true },
+    )
+    .check();
+  await page
+    .getByLabel(
+      "The person agrees to download this report for their chosen recipient.",
+      { exact: true },
+    )
+    .check();
+  const passphrase = "fictional encrypted report passphrase";
+  await page.getByLabel("Report passphrase", { exact: true }).fill(passphrase);
+  await page
+    .getByLabel("Repeat report passphrase", { exact: true })
+    .fill(passphrase);
+  const downloadPromise = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Download encrypted report", exact: true })
+    .click();
+  const downloaded = await downloadPromise;
+  expect(downloaded.suggestedFilename()).toBe("sollu-encrypted-report.json");
+  const content = await readFile((await downloaded.path())!, "utf8");
+  expect(content).not.toContain("I need water");
+  expect(content).not.toContain("participant-001");
+  expect(JSON.parse(content).format).toBe(
+    "sollu-encrypted-rehabilitation-report",
+  );
+  await expect(
+    page.getByLabel("Report passphrase", { exact: true }),
+  ).toHaveValue("");
+  await expect(
+    page.getByLabel("Repeat report passphrase", { exact: true }),
+  ).toHaveValue("");
+  await page
+    .getByText("Import a report for local review", { exact: true })
+    .click();
+  await page
+    .getByLabel("Choose encrypted Sollu report JSON (maximum 3 MB)", {
+      exact: true,
+    })
+    .setInputFiles({
+      name: "report.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(content),
+    });
+  await page
+    .getByLabel("Passphrase to open report", { exact: true })
+    .fill("incorrect fictional passphrase");
+  await page
+    .getByRole("button", { name: "Decrypt and preview report", exact: true })
+    .click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "The passphrase is incorrect" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: "Import read-only snapshot",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await page
+    .getByLabel("Passphrase to open report", { exact: true })
+    .fill(passphrase);
+  await page.waitForTimeout(425); // A deliberate second action clears the repeated-tap guard.
+  await page
+    .getByRole("button", { name: "Decrypt and preview report", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", {
+      name: "Import read-only snapshot",
+      exact: true,
+    }),
+  ).toBeDisabled();
+  await expect(
+    page.getByLabel("Passphrase to open report", { exact: true }),
+  ).toHaveValue("");
+  await page
+    .getByLabel("I have permission to keep this report on this device.", {
+      exact: true,
+    })
+    .check();
+  await page
+    .getByRole("button", { name: "Import read-only snapshot", exact: true })
+    .click();
+  await expect(page.locator(".rehab-report-profile")).toContainText(
+    "Imported · unverified",
+  );
+  await expect(words).toContainText("2 matched / 3 target-word occurrences");
+  await expect(
+    words.getByRole("link", { name: "Practise water", exact: true }),
+  ).toHaveCount(0);
+  expect(await spokenCalls(page)).toEqual([]);
+});
+
+test("a reviewed dashboard word preselects a manual word practice without recording or speech", async ({
+  page,
+}) => {
+  await openDashboard(page);
+  await seedPractice(page);
+  await page.evaluate(() => {
+    const state = window as unknown as { testMediaRequests: number };
+    state.testMediaRequests = 0;
+    Object.defineProperty(navigator.mediaDevices, "getUserMedia", {
+      configurable: true,
+      value: () => {
+        state.testMediaRequests++;
+        return Promise.reject(
+          new Error("No device capture is allowed in this test."),
+        );
+      },
+    });
+  });
+  await page.getByRole("link", { name: "Practise water", exact: true }).click();
+  await expect(page).toHaveURL("http://localhost:5173/practice");
+  await expect(page.locator(".rehab-target")).toHaveText("water");
+  await expect(
+    page.getByRole("button", { name: "Start this practice", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole("status").filter({ hasText: "A reviewed word is ready" }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => history.state?.usr ?? null)).toBeNull();
+  expect(
+    await page.evaluate(
+      () =>
+        (window as unknown as { testMediaRequests: number }).testMediaRequests,
+    ),
+  ).toBe(0);
+  expect(await spokenCalls(page)).toEqual([]);
+  await page
+    .getByRole("button", { name: "Start this practice", exact: true })
+    .click();
+  await page
+    .getByLabel("Words actually heard (optional)", { exact: true })
+    .fill("water");
+  await page
+    .getByRole("checkbox", {
+      name: "A person checked that this transcript reflects what was said",
+      exact: true,
+    })
+    .check();
+  await page
+    .getByRole("button", { name: "Save practice", exact: true })
+    .click();
+  await expect(
+    page.getByText("Practice saved on this device.", { exact: false }),
+  ).toBeVisible();
+  const records = await page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open("sollu-rehab");
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const rows = await new Promise<
+      {
+        id: string;
+        target: string;
+        kind: string;
+        language: string;
+        communicationMethod: string;
+        mediaIds: string[];
+      }[]
+    >((resolve, reject) => {
+      const request = database
+        .transaction("practice")
+        .objectStore("practice")
+        .getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    database.close();
+    return rows;
+  });
+  expect(records).toHaveLength(2);
+  expect(
+    records.find((record) => record.id !== "dashboard-fixture"),
+  ).toMatchObject({
+    target: "water",
+    kind: "word",
+    language: "en",
+    communicationMethod: "mixed",
+    mediaIds: [],
+  });
+  expect(
+    await page.evaluate(
+      () =>
+        (window as unknown as { testMediaRequests: number }).testMediaRequests,
+    ),
+  ).toBe(0);
   expect(await spokenCalls(page)).toEqual([]);
 });
 

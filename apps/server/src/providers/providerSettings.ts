@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  assertProviderAllowed,
   defaultModels,
   isCloudProvider,
   llmProviders,
@@ -105,19 +106,52 @@ export class ProviderSettingsStore {
     this.prune();
     const saved = this.sessions.get(deviceId);
     if (!saved) return this.defaults();
+    if (
+      this.config.allowCloudAI !== true &&
+      (isCloudProvider(saved.provider) || Object.keys(saved.keys).length > 0)
+    ) {
+      // Revoke stale cloud selection, permission and credentials even after a policy change.
+      const local = isCloudProvider(saved.provider) ? this.defaults() : saved;
+      const sanitized = {
+        ...local,
+        keys: {},
+        cloudConsent: false,
+        revision: ++this.revision,
+        expiresAt: this.now() + providerSessionTtlMs,
+      };
+      this.sessions.set(deviceId, sanitized);
+      return sanitized;
+    }
     saved.expiresAt = this.now() + providerSessionTtlMs;
     return saved;
   }
   private environmentKey(provider: CloudProvider) {
+    if (this.config.allowCloudAI !== true) return undefined;
     return (
       this.config.apiKeys?.[provider] ??
       (provider === this.config.intentProvider ? this.config.apiKey : undefined)
     );
   }
-  resolve(deviceId: string): ServerConfig {
-    const state = this.read(deviceId);
+  resolve(deviceId: string, options?: { localOnly?: boolean }): ServerConfig {
+    const saved = this.read(deviceId);
+    const state =
+      options?.localOnly && isCloudProvider(saved.provider)
+        ? {
+            ...saved,
+            provider: "mock" as const,
+            model: defaultModels.mock,
+            cloudConsent: false,
+          }
+        : saved;
     return {
       ...this.config,
+      allowCloudAI: options?.localOnly
+        ? false
+        : this.config.allowCloudAI === true,
+      apiKeys:
+        options?.localOnly || this.config.allowCloudAI !== true
+          ? {}
+          : this.config.apiKeys,
       intentProvider: state.provider,
       llmModel: state.model,
       ollamaModel:
@@ -132,6 +166,13 @@ export class ProviderSettingsStore {
   view(deviceId: string) {
     const state = this.read(deviceId);
     return {
+      policy: {
+        mode:
+          this.config.allowCloudAI === true
+            ? ("cloud-permitted" as const)
+            : ("local-only" as const),
+        allowCloudAI: this.config.allowCloudAI === true,
+      },
       provider: state.provider,
       model: state.model,
       timeoutMs: state.timeoutMs,
@@ -145,6 +186,10 @@ export class ProviderSettingsStore {
           : undefined;
         return {
           id,
+          available: !isCloudProvider(id) || this.config.allowCloudAI === true,
+          ...(isCloudProvider(id) && this.config.allowCloudAI !== true
+            ? { disabledReason: "Disabled by server privacy policy" }
+            : {}),
           label: labels[id],
           defaultModel: this.model(id),
           requiresKey: isCloudProvider(id),
@@ -160,6 +205,8 @@ export class ProviderSettingsStore {
   }
   update(deviceId: string, input: unknown) {
     const update = providerSettingsUpdate.parse(input);
+    if (!update.removeKey)
+      assertProviderAllowed(update.provider, this.config.allowCloudAI);
     const old = this.read(deviceId);
     const keys = { ...old.keys };
     if (isCloudProvider(update.provider)) {

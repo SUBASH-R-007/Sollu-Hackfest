@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { numberWords, painParts } from "./phrases";
-import { vocabularyCatalog } from "./vocabulary";
+import { prepareCatalogFragment, vocabularyCatalog } from "./vocabulary";
 import { deriveContextSignals } from "./contextEngine";
 import {
   CandidateSchema,
@@ -155,6 +155,9 @@ export function catalogFitsExplicitContext(
   candidate: Candidate,
   context: ContextPacket,
 ): boolean {
+  const prepared = prepareCatalogFragment(context);
+  if (prepared.ambiguous) return false;
+  const matchingFragment = prepared.text;
   // Exact curated aliases already have an authored bilingual interpretation. Applying English
   // verb/tense heuristics to untranslated Tanglish (e.g. appuram → later) would reject it.
   // Match the whole fragment and this exact catalog meaning, never a substring of a longer claim.
@@ -171,14 +174,41 @@ export function catalogFitsExplicitContext(
       ...canonicalEntry.aliases.en,
       ...canonicalEntry.aliases.ta,
       ...canonicalEntry.aliases.tanglish,
-    ].some((alias) => normalize(alias) === normalize(context.fragment.raw))
+    ].some((alias) => normalize(alias) === normalize(matchingFragment))
   )
     return true;
   const current = [
-    context.fragment.raw,
+    matchingFragment,
     context.fragment.objectLabel ?? "",
     ...(context.fragment.topicPath ?? []),
   ].join(" ");
+  // Generic cards do not render quantities. Never erase a stated number when
+  // completing a broken word; Tamil number words need the same protection.
+  if (
+    digits(current).length ||
+    [...numberWords.en, ...numberWords.ta].some((value) =>
+      contains(current, value),
+    )
+  )
+    return false;
+  if (prepared.reading && /\p{Script=Tamil}/u.test(matchingFragment)) {
+    // English content-word checks below cannot validate an unknown Tamil
+    // remainder. Repairs require every Tamil token to belong to this meaning's
+    // authored wording, rather than silently dropping a name/qualifier/symptom.
+    if (!canonicalEntry) return false;
+    const supported = new Set(
+      [
+        canonicalEntry.ta,
+        canonicalEntry.taSentence,
+        ...canonicalEntry.aliases.ta,
+      ].flatMap((form) => form.match(/[\p{L}\p{M}]+/gu) ?? []),
+    );
+    const tamilTokens =
+      matchingFragment
+        .match(/[\p{L}\p{M}]+/gu)
+        ?.filter((token) => /\p{Script=Tamil}/u.test(token)) ?? [];
+    if (tamilTokens.some((token) => !supported.has(token))) return false;
+  }
   const item: GeneratedSentence = {
     text: candidate.text,
     // The authored pain-repair choice "I'll show you where..." describes the immediate

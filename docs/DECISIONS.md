@@ -1,5 +1,15 @@
 # Decisions
 
+## 28 September: attached jury guidance
+
+The user authorized reviewing the new attachment and implementing necessary changes. Recognized health/help wording now bypasses model generation and rehearsal caches, using prepared catalog sentences or clarification; no emergency detection/triage claim is added. Report scope travels with exported files, and missing timing does not become zero. Outgoing contacts/vocabulary are minimized to relevant explicit context. Settings explains selection support and actual retention. The preserved master brief's aphasia-subtype restriction is superseded by the later multi-condition request and individualized AAC support; no diagnosis-based exclusion is introduced. See [JURY_READINESS.md](JURY_READINESS.md). No hosting or new GitHub push was requested.
+
+## 28 September: jury privacy review and fragmented communication
+
+The user asked to avoid OpenAI because of privacy concerns and strengthen broken-word interpretation, missed-word/accuracy reporting and multi-condition rehabilitation. This supersedes the earlier immediately selectable cloud configuration: cloud adapters are retained for future reviewed use, but server policy blocks them by default (`ALLOW_CLOUD_AI=1` is required to opt in). Device local-only protection defaults on, applies to browser speech services and external vision model downloads, and does not remove consented recording, typing, AAC or local Ollama. Same-origin server requests and explicit caregiver sharing remain disclosed. Encrypted report transfer protects exported JSON, not active IndexedDB or separate clips.
+
+Reviewed word statistics distinguish target opportunities from insertions and missing data; conservative fragment proposals preserve original input, refusals and ambiguity. Personalization remains explicit correction/practice selection, not acoustic training. HIPAA/PHI/CDSCO/DPDP interpretation and clinical-validation limits are recorded in [PRIVACY_AND_VALIDATION.md](PRIVACY_AND_VALIDATION.md); no compliance or clinical-grade claim is made.
+
 Date: 2026-09-27. [SPEC.md](SPEC.md) remains unchanged. This document records the brief's deliberate differences and the user's approved changes.
 
 ## 28 September: contextual generation and caregiver customization

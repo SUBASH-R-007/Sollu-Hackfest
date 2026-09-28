@@ -36,8 +36,8 @@ test("rehearsal warm-up stays silent and cached Type suggestions work offline", 
   ).toContainText("2 of 3 local vocabulary sets stored");
   expect(inferenceRequests).toEqual([]);
   expect(await spokenCalls(page)).toEqual([]);
-  await startTyped(page, "tablet… raathiri");
-  await expect(candidates(page)).toHaveCount(3);
+  await startTyped(page, "water");
+  await expect(candidates(page)).toHaveCount(1);
   const onlineSentence = await sentenceAt(page, 0);
   await page
     .locator(".mobile-nav")
@@ -45,7 +45,7 @@ test("rehearsal warm-up stays silent and cached Type suggestions work offline", 
     .click();
   await context.setOffline(true);
   await page.getByRole("button", { name: /^Type / }).click();
-  await page.getByLabel(/Your words/).fill("tablet… raathiri");
+  await page.getByLabel(/Your words/).fill("water");
   await page.getByRole("button", { name: "Find my words" }).click();
   await expect(page.locator(".heard-row .mode-badge")).toContainText("CACHED");
   expect(await sentenceAt(page, 0)).toBe(onlineSentence);
@@ -195,8 +195,10 @@ test("Topics pain templates work before AI, including side and round-two recover
   expect(intentRequests).toHaveLength(0);
   expect(await sentenceAt(page, 0)).toContain("இடது");
   await page.getByRole("button", { name: /None of these/ }).click();
-  await expect(page.locator(".heard-row .mode-badge")).toContainText("mock");
-  expect(intentRequests).toHaveLength(1);
+  await expect(page.locator(".heard-row .mode-badge")).toContainText(
+    "Prepared health/help wording",
+  );
+  expect(intentRequests).toHaveLength(0);
   await clickAndWaitForSpeech(page, candidates(page).first());
   await assertTrustedPlayback(page);
 });
@@ -309,7 +311,9 @@ test("a chosen photo stays local when the on-device model cannot download", asyn
     page.getByAltText("Your photo, processed only on this device"),
   ).toBeVisible();
   await expect(
-    page.getByText(/The object recogniser is unavailable/),
+    page.getByText(
+      /Local-only protection blocks the external object-model download/,
+    ),
   ).toBeVisible({ timeout: 20_000 });
   expect(
     uploads.some((body) =>
@@ -391,8 +395,8 @@ test("changing the addressee on confirmation regenerates in the doctor’s langu
     if (request.url().endsWith("/api/intent"))
       contexts.push(request.postDataJSON().context);
   });
-  await startTyped(page, "tablet night");
-  await expect(candidates(page)).toHaveCount(3);
+  await startTyped(page, "water");
+  await expect(candidates(page)).toHaveCount(1);
   const tamilSentence = await sentenceAt(page, 0);
   expect(tamilSentence).toMatch(/[\u0B80-\u0BFF]/);
   await page.getByRole("button", { name: /^To: Priya/ }).click();
@@ -401,7 +405,7 @@ test("changing the addressee on confirmation regenerates in the doctor’s langu
   await expect(
     page.getByRole("button", { name: /^To: Dr\. Rao/ }),
   ).toBeVisible();
-  await expect(candidates(page).first()).toContainText("night tablets");
+  await expect(candidates(page).first()).toContainText("water");
   expect(await sentenceAt(page, 0)).not.toMatch(/[\u0B80-\u0BFF]/);
   expect(contexts.at(-1)?.outputLang).toBe("en");
   // The listener controls output language locally; their name stays private by default.

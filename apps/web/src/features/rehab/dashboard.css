@@ -235,6 +235,22 @@
 .rehab-transfer details > label {
   margin: 16px 0;
 }
+.rehab-encrypted-transfer {
+  border: 1px solid var(--border, #cbd5ce);
+  border-radius: 14px;
+  padding: 18px;
+  margin: 20px 0;
+}
+.rehab-encrypted-transfer > label {
+  margin: 16px 0;
+}
+.rehab-encrypted-transfer h4 svg {
+  vertical-align: middle;
+}
+.rehab-word-context {
+  display: block;
+  margin-top: 4px;
+}
 .rehab-dashboard .checkbox-label {
   gap: 12px;
   line-height: 1.5;

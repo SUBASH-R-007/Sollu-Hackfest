@@ -5,6 +5,8 @@ import {
   openCaregiverSettings,
   unlockCaregiver,
   spokenCalls,
+  startTyped,
+  candidates,
 } from "./helpers";
 
 async function fakeEngineSettings(page: Page) {
@@ -24,6 +26,7 @@ async function fakeEngineSettings(page: Page) {
     requiresKey: id !== "mock" && id !== "ollama",
   }));
   let config = {
+    policy: { mode: "cloud-permitted", allowCloudAI: true },
     provider: "mock",
     model: "catalog",
     timeoutMs: 15000,
@@ -49,6 +52,7 @@ async function fakeEngineSettings(page: Page) {
       config = body.removeKey
         ? { ...config, revision: config.revision + 1 }
         : {
+            policy: { mode: "cloud-permitted", allowCloudAI: true },
             provider: String(body.provider),
             model:
               typeof body.model === "string"
@@ -83,6 +87,7 @@ test("cloud engine requires sharing consent and never persists a pasted key in b
   const engine = await fakeEngineSettings(page);
   await openCaregiverSettings(page);
   await page.getByRole("tab", { name: "Sentence engine", exact: true }).click();
+  await page.getByLabel("Allow cloud sentence APIs on this device").check();
   await page
     .getByRole("combobox", { name: "Sentence engine", exact: true })
     .selectOption("openai");
@@ -179,11 +184,84 @@ test("cloud engine requires sharing consent and never persists a pasted key in b
   expect(await spokenCalls(page)).toEqual([]);
 });
 
+test("sentence API opt-in preserves local media and revocation applies across tabs", async ({
+  page,
+  context,
+}) => {
+  await fakeEngineSettings(page);
+  await openCaregiverSettings(page);
+  await page.getByRole("tab", { name: "Sentence engine", exact: true }).click();
+  const permission = page.getByLabel(
+    "Allow cloud sentence APIs on this device",
+  );
+  await expect(permission).not.toBeChecked();
+  await permission.check();
+  await expect(page.locator('select option[value="openai"]')).toHaveJSProperty(
+    "disabled",
+    false,
+  );
+  await page.getByRole("tab", { name: "Privacy", exact: true }).click();
+  await expect(
+    page.getByLabel("Require local speech, voices and camera models"),
+  ).toBeChecked();
+  await expect(
+    page.getByText("Cloud sentence APIs: permitted by this device", {
+      exact: false,
+    }),
+  ).toBeVisible();
+  const second = await context.newPage();
+  try {
+    await fakeEngineSettings(second);
+    await second.goto("/settings?tab=llm");
+    await unlockCaregiver(second);
+    await expect(
+      second.getByLabel("Allow cloud sentence APIs on this device"),
+    ).toBeChecked();
+    let localOnly: unknown;
+    page.on("request", (request) => {
+      if (request.url().endsWith("/api/intent"))
+        localOnly = request.postDataJSON()?.localOnly;
+    });
+    await page.goto("/");
+    await startTyped(page, "water please");
+    await expect(candidates(page).first()).toBeVisible();
+    expect(localOnly).toBe(false);
+    await second
+      .getByLabel("Allow cloud sentence APIs on this device")
+      .uncheck();
+    await expect(candidates(page)).toHaveCount(0);
+    await page.goto("/");
+    await page
+      .getByRole("button", { name: "Start a new message", exact: true })
+      .click();
+    await page.getByRole("button", { name: /^Type / }).click();
+    await page.getByLabel(/Your words/).fill("water please");
+    await page.getByRole("button", { name: "Find my words" }).click();
+    await expect(candidates(page).first()).toBeVisible();
+    expect(localOnly).toBe(true);
+    await second.reload();
+    await unlockCaregiver(second);
+    await expect(
+      second.getByLabel("Allow cloud sentence APIs on this device"),
+    ).not.toBeChecked();
+    expect(await spokenCalls(page)).toEqual([]);
+  } finally {
+    await second.close();
+  }
+});
+
 test("unsaved engine keys clear on provider switch and leaving the settings section", async ({
   page,
 }) => {
   const engine = await fakeEngineSettings(page);
   await openCaregiverSettings(page);
+  await page.getByRole("tab", { name: "Privacy", exact: true }).click();
+  await page
+    .getByLabel("Require local speech, voices and camera models")
+    .click();
+  await expect(
+    page.getByLabel("Require local speech, voices and camera models"),
+  ).not.toBeChecked();
   await page.getByRole("tab", { name: "Sentence engine", exact: true }).click();
   await page
     .getByRole("combobox", { name: "Sentence engine", exact: true })

@@ -15,6 +15,8 @@ import {
 } from "../src/config";
 
 const config: ServerConfig = {
+  // Explicit fixture opt-in exercises retained cloud adapters; production defaults are tested separately.
+  allowCloudAI: true,
   secret: "fictional-server-test-secret-at-least-32-bytes",
   port: 0,
   host: "127.0.0.1",
@@ -28,6 +30,7 @@ const config: ServerConfig = {
   production: false,
 };
 const options: StructuredOptions = {
+  allowCloudAI: true,
   model: "test-model",
   apiKey: "fictional-test-key",
   timeoutMs: 1000,
@@ -382,21 +385,17 @@ describe("provider settings API", () => {
       ],
       clarification: false,
     };
-    const fetch = vi
-      .fn()
-      .mockResolvedValue(
-        Response.json({
-          status: "completed",
-          output: [
-            {
-              type: "message",
-              content: [
-                { type: "output_text", text: JSON.stringify(generated) },
-              ],
-            },
-          ],
-        }),
-      );
+    const fetch = vi.fn().mockResolvedValue(
+      Response.json({
+        status: "completed",
+        output: [
+          {
+            type: "message",
+            content: [{ type: "output_text", text: JSON.stringify(generated) }],
+          },
+        ],
+      }),
+    );
     vi.stubGlobal("fetch", fetch);
     const saved = await app.inject({
       method: "POST",
@@ -413,6 +412,7 @@ describe("provider settings API", () => {
       url: "/api/intent",
       headers,
       payload: {
+        localOnly: false,
         context: { fragment: { modality: "text", raw }, outputLang: "en" },
       },
     });
@@ -490,7 +490,7 @@ describe("provider settings API", () => {
       method: "POST",
       url: "/api/llm/test",
       headers,
-      payload: {},
+      payload: { localOnly: false },
     });
     expect(response.json().ok).toBe(true);
     expect(response.body).not.toContain("fictional-secret-key");
@@ -512,7 +512,7 @@ describe("provider settings API", () => {
       method: "POST",
       url: "/api/llm/test",
       headers,
-      payload: {},
+      payload: { localOnly: false },
     });
     expect(response.json().ok).toBe(false);
     expect(fetch).not.toHaveBeenCalled();

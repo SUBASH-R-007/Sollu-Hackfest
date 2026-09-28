@@ -193,16 +193,20 @@ export async function installSpeechHarness(
         configurable: true,
       });
       class Recognition {
+        // This harness models a recognizer with an installed on-device language pack.
+        processLocally = false;
         lang = "";
         continuous = false;
         interimResults = false;
         maxAlternatives = 1;
+        onstart: (() => void) | null = null;
         onresult: ((event: unknown) => void) | null = null;
         onerror: ((event: unknown) => void) | null = null;
         onend: (() => void) | null = null;
         private timer?: number;
         start() {
           state.recognitionStarts++;
+          this.onstart?.();
           this.timer = window.setTimeout(
             () =>
               this.onresult?.({
@@ -364,7 +368,7 @@ export async function unlockCaregiver(page: Page) {
   await expect(
     pin.or(
       page.getByRole("heading", {
-        name: /A little more personal|Communication log|Therapist dashboard/,
+        name: /A little more personal|Communication log|Therapist dashboard|Clinician dashboard/,
       }),
     ),
   ).toBeVisible();

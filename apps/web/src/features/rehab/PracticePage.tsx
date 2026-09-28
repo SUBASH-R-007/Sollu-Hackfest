@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Mic, Video, BookOpen, Coffee, Check, Volume2 } from "lucide-react";
 import { db } from "../../db";
 import { useApp } from "../../state";
@@ -27,6 +27,7 @@ import {
 import { scoreTranscript, suggestPracticeTargets } from "./analysis";
 import { captureEvidence, type EvidenceCapture } from "./capture";
 import { startPracticeTranscript } from "./recognition";
+import { useSpeechRecognitionMode } from "../privacy/useSpeechRecognitionMode";
 import EvidencePlayer from "./EvidencePlayer";
 import "./rehab.css";
 
@@ -107,7 +108,9 @@ function Practice({
   records: PracticeRecord[];
 }) {
   const { settings } = useApp();
+  const recognitionMode = useSpeechRecognitionMode();
   const navigate = useNavigate();
+  const location = useLocation();
   const condition = CONDITION_PROFILES.find(
     (item) => item.id === profile.condition,
   )!;
@@ -132,13 +135,17 @@ function Practice({
   );
   const [selected, setSelected] = useState(targets[0]?.id ?? "personal");
   const [custom, setCustom] = useState("");
+  const [customKind, setCustomKind] = useState<PracticeKind>("sentence");
   const [snapshot, setSnapshot] = useState<Pick<
     PracticeRecord,
     "target" | "kind" | "language" | "communicationMethod" | "place"
   > | null>(null);
   const exercise = targets.find((item) => item.id === selected);
   const target = snapshot?.target ?? exercise?.target ?? custom.trim();
-  const kind = snapshot?.kind ?? exercise?.kind ?? "sentence";
+  const kind = snapshot?.kind ?? exercise?.kind ?? customKind;
+  const usesCommunicationAid =
+    kind === "aac" ||
+    (snapshot?.communicationMethod ?? profile.communicationMethod) === "aac";
   const language = snapshot?.language ?? profile.language;
   const [began, setBegan] = useState<number | null>(null);
   const [response, setResponse] = useState<number | null>(null);
@@ -162,6 +169,7 @@ function Practice({
     "idle" | "requesting" | "recording" | "stopping"
   >("idle");
   const [listening, setListening] = useState(false);
+  const [transcriptStarting, setTranscriptStarting] = useState(false);
   const [resting, setResting] = useState(false),
     [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
@@ -174,10 +182,38 @@ function Practice({
   const finishRecording = useRef<() => void>(() => undefined);
   const practiceId = useRef(crypto.randomUUID());
   const realStart = useRef(0);
-  const active = captureState !== "idle" || listening;
+  const active = captureState !== "idle" || listening || transcriptStarting;
+  useEffect(() => {
+    const state = location.state as { practiceTarget?: unknown } | null;
+    const requested = state?.practiceTarget;
+    if (!requested || typeof requested !== "object" || began !== null) return;
+    const value = requested as Record<string, unknown>;
+    if (
+      value.language === profile.language &&
+      value.method === profile.communicationMethod &&
+      value.kind === "word" &&
+      typeof value.target === "string" &&
+      value.target.length <= 80 &&
+      /^[\p{L}\p{M}\p{N}'’-]+$/u.test(value.target)
+    ) {
+      setSelected("personal");
+      setCustom(value.target);
+      setCustomKind("word");
+      setStatus("A reviewed word is ready. Start when you are comfortable.");
+    }
+    // Do not put the word into a shareable URL or auto-start a performance.
+    navigate(location.pathname, { replace: true, state: null });
+  }, [
+    location.state,
+    location.pathname,
+    navigate,
+    profile.language,
+    profile.communicationMethod,
+    began,
+  ]);
   const textScore = useMemo(
-    () => scoreTranscript(target, transcript),
-    [target, transcript],
+    () => scoreTranscript(target, usesCommunicationAid ? "" : transcript),
+    [target, transcript, usesCommunicationAid],
   );
   const reviewWords = [
     ...new Set([
@@ -220,6 +256,7 @@ function Practice({
     if (preview.current) preview.current.srcObject = null;
     setCaptureState("idle");
     setListening(false);
+    setTranscriptStarting(false);
   }
   useEffect(() => {
     mounted.current = true;
@@ -388,7 +425,7 @@ function Practice({
   }
   return (
     <section className="rehab-page">
-      <Back to="/tools" label="My tools" />
+      <Back to="/rehabilitation" label="My rehabilitation" />
       <PageTitle
         eyebrow="YOUR WORDS, YOUR PACE"
         title="Communication practice"
@@ -418,11 +455,14 @@ function Practice({
           ))}
         </ul>
         <p>
-          {records.length} saved attempts. Weekly charts and reports are in the
-          caregiver dashboard.
+          {records.length} saved attempts. Follow your weekly activity in My
+          rehabilitation, or review the plan and evidence with your clinician.
         </p>
-        <TapButton onActivate={() => navigate("/therapist")}>
-          Therapist dashboard
+        <TapButton onActivate={() => navigate("/rehabilitation?tab=progress")}>
+          View my progress
+        </TapButton>
+        <TapButton onActivate={() => navigate("/clinician?view=rehab")}>
+          Open clinician review
         </TapButton>
       </details>
       <section className="panel rehab-task">
@@ -449,7 +489,11 @@ function Practice({
               maxLength={300}
               value={custom}
               disabled={began !== null}
-              onChange={(event) => setCustom(event.target.value)}
+              onChange={(event) => {
+                setCustom(event.target.value);
+                if (/\s/u.test(event.target.value.trim()))
+                  setCustomKind("sentence");
+              }}
             />
           </label>
         )}
@@ -462,6 +506,7 @@ function Practice({
                 onActivate={() => {
                   setSelected("personal");
                   setCustom(text);
+                  setCustomKind("sentence");
                 }}
               >
                 {text}
@@ -483,6 +528,7 @@ function Practice({
               onActivate={() => {
                 setSelected("personal");
                 setCustom(item.target);
+                setCustomKind("word");
               }}
             >
               Practise this word: {item.target}
@@ -661,13 +707,23 @@ function Practice({
                 )}
                 <details>
                   <summary>Optional browser transcript</summary>
+                  {recognitionMode === "local" && (
+                    <p className="notice">
+                      Local speech recognition is selected. This requires a
+                      browser with supported on-device recognition and an
+                      installed language pack. Otherwise, enter the words while
+                      reviewing your recording. No online fallback or automatic
+                      language-pack download is used.
+                    </p>
+                  )}
                   <p>
-                    Your browser may send microphone audio to its
-                    speech-recognition service. Availability and accuracy vary.
-                    Use a partner-entered transcript to keep this step local.
-                    This transcribes a new live attempt, not a saved recording.
-                    With a saved clip, use a transcript entered while reviewing
-                    it.
+                    {recognitionMode === "browser"
+                      ? "Your browser may send microphone audio to its speech-recognition service. "
+                      : "Only a supported on-device recognizer can run. "}
+                    Availability and accuracy vary. Use a partner-entered
+                    transcript to keep this step local. This transcribes a new
+                    live attempt, not a saved recording. With a saved clip, use
+                    a transcript entered while reviewing it.
                   </p>
                   <label className="rehab-check">
                     <input
@@ -677,7 +733,9 @@ function Practice({
                         setTranscriptConsent(event.target.checked);
                         if (!event.target.checked) {
                           stopTranscript.current?.();
+                          stopTranscript.current = null;
                           setListening(false);
+                          setTranscriptStarting(false);
                         }
                       }}
                     />
@@ -686,11 +744,16 @@ function Practice({
                   <TapButton
                     disabled={!transcriptConsent || active || Boolean(clip)}
                     onActivate={() => {
+                      let ended = false;
                       try {
                         audio.stop();
+                        stopTranscript.current?.();
+                        stopTranscript.current = null;
                         noteResponse();
-                        setListening(true);
-                        stopTranscript.current = startPracticeTranscript(
+                        setStatus("");
+                        setListening(false);
+                        setTranscriptStarting(true);
+                        const stop = startPracticeTranscript(
                           language,
                           (text) => {
                             setTranscript(text);
@@ -700,12 +763,22 @@ function Practice({
                             setMisses([]);
                           },
                           (error) => {
+                            ended = true;
+                            stopTranscript.current = null;
                             setListening(false);
+                            setTranscriptStarting(false);
                             if (error) setStatus(error);
                           },
+                          () => {
+                            setTranscriptStarting(false);
+                            setListening(true);
+                          },
                         );
+                        // An implementation can end synchronously inside start().
+                        if (!ended) stopTranscript.current = stop;
                       } catch (error) {
                         setListening(false);
+                        setTranscriptStarting(false);
                         setStatus(
                           error instanceof Error
                             ? error.message
@@ -716,11 +789,19 @@ function Practice({
                   >
                     Start browser transcript
                   </TapButton>
-                  {listening && (
+                  {transcriptStarting && (
+                    <p role="status">
+                      Starting speech recognition. Waiting for the browser…
+                    </p>
+                  )}
+                  {listening && <p role="status">Listening for your words.</p>}
+                  {(listening || transcriptStarting) && (
                     <TapButton
                       onActivate={() => {
                         stopTranscript.current?.();
+                        stopTranscript.current = null;
                         setListening(false);
+                        setTranscriptStarting(false);
                       }}
                     >
                       Stop transcript
@@ -777,14 +858,16 @@ function Practice({
             </label>
             <div className="rehab-score">
               <strong>
-                {textScore.matchPct === null
-                  ? "Not scored"
-                  : `${Math.round(textScore.matchPct)}% text match${reviewed ? "" : " · awaiting transcript review"}`}
+                {usesCommunicationAid
+                  ? "Not scored · communication aid"
+                  : textScore.matchPct === null
+                    ? "Not scored"
+                    : `${Math.round(textScore.matchPct)}% text match${reviewed ? "" : " · awaiting transcript review"}`}
               </strong>
               <p>
-                Compares words in the transcript with the prompt. This is not
-                pronunciation, intelligibility, diagnosis or a recovery score.
-                Recognition can make mistakes.
+                {usesCommunicationAid
+                  ? "Communication-aid practice is tracked through participation and reported understanding, without transcript scoring."
+                  : "Compares words in the transcript with the prompt. This is not pronunciation, intelligibility, diagnosis or a recovery score. Recognition can make mistakes."}
               </p>
             </div>
             {reviewWords.length > 0 && (
@@ -859,6 +942,11 @@ function Practice({
       <p className="rehab-status" role="status">
         {status}
       </p>
+      {saved && (
+        <TapButton onActivate={() => navigate("/rehabilitation?tab=progress")}>
+          See my updated progress
+        </TapButton>
+      )}
       {began !== null && (
         <TapButton onActivate={reset}>
           {saved
@@ -868,7 +956,7 @@ function Practice({
       )}
       <p className="muted">
         Personalization uses your confirmed practice choices on this device. It
-        does not retrain an acoustic model. Use the therapist dashboard to
+        does not retrain an acoustic model. Use the clinician dashboard to
         review the plan, recordings and reports.
       </p>
     </section>

@@ -22,6 +22,25 @@ export const isCloudProvider = (
   provider: LlmProvider,
 ): provider is CloudProvider => provider !== "mock" && provider !== "ollama";
 
+export class CloudAIBlockedError extends Error {
+  readonly statusCode = 403;
+  readonly code = "CLOUD_AI_DISABLED";
+  constructor() {
+    super(
+      "Cloud sentence providers are disabled by this server's privacy policy",
+    );
+  }
+}
+
+/** Missing configuration fails closed, including direct adapter callers. */
+export function assertProviderAllowed(
+  provider: LlmProvider,
+  allowCloudAI?: boolean,
+) {
+  if (isCloudProvider(provider) && allowCloudAI !== true)
+    throw new CloudAIBlockedError();
+}
+
 export function validateLocalOllamaUrl(value: string): URL {
   const url = new URL(value);
   if (
@@ -57,6 +76,7 @@ export type ServerConfig = {
   host: string;
   origin: string;
   intentProvider: LlmProvider;
+  allowCloudAI?: boolean;
   llmModel?: string;
   apiKey?: string;
   apiKeys?: Partial<Record<CloudProvider, string>>;
@@ -80,12 +100,17 @@ export function configFromEnv(): ServerConfig {
       "Set SERVER_SECRET to at least 32 random bytes for production",
     );
   const envProvider = process.env.LLM_PROVIDER ?? "mock";
-  const intentProvider: LlmProvider =
+  const allowCloudAI = process.env.ALLOW_CLOUD_AI === "1";
+  const configuredProvider: LlmProvider =
     process.env.MOCK_PROVIDERS === "1"
       ? "mock"
       : llmProviders.includes(envProvider as LlmProvider)
         ? (envProvider as LlmProvider)
         : "mock";
+  const intentProvider =
+    !allowCloudAI && isCloudProvider(configuredProvider)
+      ? "mock"
+      : configuredProvider;
   const accessCode = process.env.ACCESS_CODE ?? "";
   if (production && !accessCode)
     throw new Error("Set ACCESS_CODE for a shared production server");
@@ -103,6 +128,7 @@ export function configFromEnv(): ServerConfig {
     host: process.env.HOST ?? "127.0.0.1",
     origin: process.env.PUBLIC_ORIGIN ?? "http://localhost:5173",
     intentProvider,
+    allowCloudAI,
     llmModel: validateModel(
       intentProvider,
       intentProvider === "ollama"
@@ -111,12 +137,14 @@ export function configFromEnv(): ServerConfig {
           ? defaultModels.mock
           : process.env.LLM_MODEL || defaultModels[intentProvider],
     ),
-    apiKeys: {
-      openai: process.env.OPENAI_API_KEY,
-      anthropic: process.env.ANTHROPIC_API_KEY,
-      gemini: process.env.GEMINI_API_KEY,
-      groq: process.env.GROQ_API_KEY,
-    },
+    apiKeys: allowCloudAI
+      ? {
+          openai: process.env.OPENAI_API_KEY,
+          anthropic: process.env.ANTHROPIC_API_KEY,
+          gemini: process.env.GEMINI_API_KEY,
+          groq: process.env.GROQ_API_KEY,
+        }
+      : {},
     ollamaUrl,
     ollamaModel,
     timeoutMs: Math.max(

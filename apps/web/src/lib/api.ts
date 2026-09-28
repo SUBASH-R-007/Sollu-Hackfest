@@ -5,6 +5,7 @@ import {
 } from "@sollu/shared";
 import { getKV, setKV, type Settings } from "../db";
 import { inferenceContext } from "./context";
+import { cloudSentencePermission } from "../features/privacy/sentencePolicy";
 type Device = { deviceId: string; token: string };
 let devicePromise: Promise<Device> | undefined;
 async function register(): Promise<Device> {
@@ -39,13 +40,45 @@ export async function api<T>(
     throw e;
   });
   const device = await devicePromise;
+  signal?.throwIfAborted();
+  // Registration can yield while another tab revokes sharing permission.
+  // Recheck at the actual dispatch boundary, never weaken the request flag.
+  if (
+    path === "llm/settings" &&
+    method === "POST" &&
+    body &&
+    typeof body === "object"
+  ) {
+    const update = body as { provider?: string; removeKey?: boolean };
+    if (
+      ["openai", "anthropic", "gemini", "groq"].includes(
+        update.provider ?? "",
+      ) &&
+      !update.removeKey &&
+      !cloudSentencePermission()
+    )
+      throw new Error(
+        "Allow cloud sentence APIs in Sentence engine settings before saving a cloud provider.",
+      );
+  }
+  const guardedBody =
+    (path === "intent" || path === "llm/test") &&
+    body &&
+    typeof body === "object"
+      ? {
+          ...body,
+          localOnly:
+            (body as { localOnly?: unknown }).localOnly !== false ||
+            !cloudSentencePermission(),
+        }
+      : body;
   const res = await fetch(`/api/${path}`, {
     method,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${device.token}`,
     },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: guardedBody === undefined ? undefined : JSON.stringify(guardedBody),
     signal,
   });
   if (res.status === 401 && retry) {
@@ -74,7 +107,17 @@ export const getIntent = async (
     latencyMs: number;
     mock?: boolean;
     fallback?: boolean;
-  }>("intent", { context: inferenceContext(context, settings) }, signal);
+  }>(
+    "intent",
+    {
+      context: inferenceContext(context, settings),
+      localOnly:
+        !cloudSentencePermission() ||
+        (settings.localProcessingOnly !== false &&
+          !cloudSentencePermission(true)),
+    },
+    signal,
+  );
   if (
     !Array.isArray(result.candidates) ||
     result.candidates.length > 3 ||

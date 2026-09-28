@@ -1,0 +1,428 @@
+.rehabilitation-hub {
+  max-width: 1180px;
+  margin: 0 auto;
+  --hub-green: #285245;
+  --hub-muted: #62586f;
+}
+.rehabilitation-hub p,
+.rehabilitation-hub li,
+.rehabilitation-hub dd {
+  overflow-wrap: anywhere;
+}
+.rehabilitation-hub h2 {
+  font-size: clamp(21px, 2vw, 26px);
+}
+.rehabilitation-hub h2 svg {
+  vertical-align: middle;
+  margin-right: 0.55rem;
+}
+.hub-view-tabs {
+  display: flex;
+  gap: 0.75rem;
+  margin: 1.25rem 0;
+}
+.hub-view-tabs a {
+  min-height: 72px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0.8rem 1.4rem;
+  border: 1px solid #c6bdd0;
+  border-radius: 16px;
+  font-weight: 650;
+  background: white;
+}
+.hub-view-tabs a[aria-current] {
+  color: #fff;
+  background: #583279;
+  border-color: #583279;
+}
+.hub-hero {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 1.5rem;
+  background: #edf3ef;
+  color: #203e33;
+  padding: clamp(1.2rem, 3vw, 2.3rem);
+  border: 1px solid #c4d5c9;
+  border-radius: 26px;
+  margin: 1.25rem 0;
+}
+.hub-hero-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+}
+.hub-hero-copy h2 {
+  font-size: clamp(28px, 3vw, 39px);
+  line-height: 1.22;
+  letter-spacing: -1px;
+}
+.hub-kicker {
+  font-size: 14px;
+  font-weight: 650;
+}
+.hub-primary-link {
+  display: inline-flex;
+  min-height: 88px;
+  min-width: 72px;
+  justify-content: center;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1rem 1.3rem;
+  background: #285245;
+  color: white;
+  border-radius: 16px;
+  font-weight: 650;
+  text-align: center;
+}
+.hub-caption {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--hub-muted);
+}
+.hub-week {
+  background: #fff;
+  border: 1px solid #ced9d0;
+  border-radius: 20px;
+  padding: 1.4rem;
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+}
+.hub-week-total {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.hub-week progress {
+  appearance: none;
+  width: 100%;
+  height: 12px;
+  border: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #e6ece7;
+  accent-color: #285245;
+}
+.hub-week progress::-webkit-progress-bar {
+  background: #e6ece7;
+}
+.hub-week progress::-webkit-progress-value {
+  background: #285245;
+  border-radius: 8px;
+}
+.hub-week progress::-moz-progress-bar {
+  background: #285245;
+}
+.hub-card {
+  border: 1px solid #ded6e6;
+  background: #fff;
+  border-radius: 22px;
+  padding: clamp(1.1rem, 2.5vw, 1.75rem);
+  margin: 1.25rem 0;
+}
+.hub-card > h2,
+.hub-card > p,
+.hub-card > details {
+  margin-bottom: 0.8rem;
+}
+.hub-two-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+.hub-two-columns .hub-card {
+  margin: 0;
+}
+.hub-text-link {
+  display: inline-flex;
+  gap: 0.6rem;
+  align-items: center;
+  min-height: 72px;
+  min-width: 72px;
+  padding: 0.6rem 0;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.hub-goals,
+.hub-plan-targets {
+  padding-left: 1.3rem;
+  line-height: 1.65;
+}
+.hub-goals li,
+.hub-plan-targets li {
+  margin: 0.8rem 0;
+}
+.hub-card details summary {
+  min-height: 72px;
+  padding: 1rem 0;
+  cursor: pointer;
+  font-weight: 650;
+}
+.hub-preserve-lines {
+  white-space: pre-wrap;
+}
+.hub-rest-note {
+  display: flex;
+  gap: 1rem;
+  margin: 1.25rem 0;
+  padding: 1.4rem;
+  background: #f9f1e3;
+  border: 1px solid #e5d1b2;
+  color: #4c3c22;
+  border-radius: 20px;
+}
+.hub-rest-note h2 {
+  margin-bottom: 0.5rem;
+}
+.hub-rest-note p + p {
+  margin-top: 0.6rem;
+}
+.hub-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+.hub-filters label {
+  display: grid;
+  gap: 0.5rem;
+  font-weight: 650;
+}
+.hub-filters select {
+  min-height: 72px;
+  width: 100%;
+  min-width: 0;
+  padding: 0.8rem;
+  border: 1px solid #9a8da8;
+  background: white;
+  color: var(--ink);
+  border-radius: 12px;
+}
+.hub-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1.25rem 0;
+}
+.hub-metric {
+  background: #fff;
+  border: 1px solid #ded6e6;
+  border-radius: 18px;
+  padding: 1.15rem;
+}
+.hub-metric h3 {
+  min-height: 2.8em;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+  margin-bottom: 0.6rem;
+}
+.hub-metric > strong {
+  display: block;
+  font-size: clamp(24px, 2.4vw, 33px);
+  line-height: 1.25;
+  margin-bottom: 0.5rem;
+  overflow-wrap: anywhere;
+}
+.hub-metric p {
+  font-size: 13px;
+  color: var(--hub-muted);
+}
+.hub-section-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+.hub-section-heading h2 {
+  margin-bottom: 0.55rem;
+}
+.hub-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.55rem;
+  padding: 0;
+  margin: 1rem 0 0;
+  list-style: none;
+}
+.hub-calendar li {
+  text-align: center;
+  padding: 0.9rem 0.3rem;
+  background: #f6f4f8;
+  border: 1px solid #dfd9e6;
+  border-radius: 13px;
+}
+.hub-calendar li.has-practice {
+  color: #203e33;
+  background: #e3eee6;
+  border-color: #8caa96;
+}
+.hub-calendar time {
+  display: block;
+  font-size: 13px;
+}
+.hub-calendar time strong {
+  display: block;
+  font-size: 15px;
+  margin: 0.3rem 0;
+}
+.hub-calendar li > span {
+  font-size: 12px;
+}
+.hub-ratings {
+  margin: 1rem 0;
+}
+.hub-ratings > div {
+  padding: 0.9rem 0;
+  border-top: 1px solid #e4deeb;
+}
+.hub-ratings dt {
+  font-size: 15px;
+  margin-bottom: 0.4rem;
+}
+.hub-ratings dd {
+  margin: 0;
+  font-weight: 650;
+  line-height: 1.6;
+}
+.hub-ratings dd small {
+  display: block;
+  font-weight: 400;
+  color: var(--hub-muted);
+}
+.hub-word-rate {
+  flex: 0 0 180px;
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.8rem;
+  border-radius: 12px;
+  background: #f2edf8;
+}
+.hub-word-rate strong {
+  font-size: 28px;
+}
+.hub-word-rate span {
+  font-size: 13px;
+}
+.hub-word-list {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+}
+.hub-word-list li {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #e4deeb;
+  padding: 1rem 0;
+}
+.hub-word-list strong {
+  font-size: 24px;
+}
+.hub-word-list p {
+  font-size: 14px;
+}
+.hub-small-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 72px;
+  min-width: 110px;
+  padding: 0.7rem;
+  border: 1px solid #b7a9c7;
+  border-radius: 12px;
+  font-weight: 650;
+}
+.hub-timeline {
+  list-style: none;
+  margin: 1rem 0;
+  padding: 0 0 0 1rem;
+  border-left: 3px solid #d8ccdf;
+}
+.hub-timeline li {
+  padding: 0.6rem 0 1.25rem 0.4rem;
+}
+.hub-timeline time {
+  font-size: 13px;
+  color: var(--hub-muted);
+}
+.hub-timeline h3 {
+  margin: 0.45rem 0;
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+.hub-timeline p,
+.hub-timeline span {
+  font-size: 14px;
+}
+.hub-empty {
+  display: grid;
+  justify-items: start;
+  gap: 0.5rem;
+  padding: 1.5rem;
+  border: 1px dashed #c7b9d3;
+  border-radius: 20px;
+  margin: 1rem 0;
+}
+.hub-empty-copy {
+  margin-top: 1rem;
+}
+.hub-footer {
+  color: var(--hub-muted);
+  padding: 0.5rem 0 1rem;
+  font-size: 14px;
+}
+@media (max-width: 1050px) {
+  .hub-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .hub-hero {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 650px) {
+  .hub-two-columns,
+  .hub-filters {
+    grid-template-columns: 1fr;
+  }
+  .hub-view-tabs a {
+    flex: 1;
+    padding: 0.7rem;
+  }
+  .hub-section-heading {
+    flex-direction: column;
+  }
+  .hub-calendar {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .hub-word-rate {
+    flex-basis: auto;
+    width: 100%;
+  }
+  .hub-word-list li {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .hub-primary-link {
+    width: 100%;
+  }
+  .hub-metric {
+    padding: 1rem;
+  }
+  .hub-rest-note {
+    padding: 1.1rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rehabilitation-hub * {
+    scroll-behavior: auto;
+  }
+}

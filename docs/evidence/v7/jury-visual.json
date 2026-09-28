@@ -1,0 +1,78 @@
+[
+  {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "views": [
+      {
+        "name": "supported-selection",
+        "serious": [],
+        "overflow": false,
+        "speech": 0,
+        "recognition": 0
+      },
+      {
+        "name": "privacy",
+        "serious": [],
+        "overflow": false,
+        "speech": 0,
+        "recognition": 0
+      },
+      {
+        "name": "communication-report",
+        "serious": [],
+        "overflow": false,
+        "speech": 0,
+        "recognition": 0
+      },
+      {
+        "name": "prepared-help",
+        "serious": [],
+        "overflow": false,
+        "speech": 0,
+        "recognition": 0
+      }
+    ],
+    "errors": [],
+    "externalRequests": 0
+  },
+  {
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "views": [
+      {
+        "name": "supported-selection",
+        "serious": [],
+        "overflow": false,
+        "speech": 0,
+        "recognition": 0
+      },
+      {
+        "name": "privacy",
+        "serious": [],
+        "overflow": false,
+        "speech": 0,
+        "recognition": 0
+      },
+      {
+        "name": "communication-report",
+        "serious": [],
+        "overflow": false,
+        "speech": 0,
+        "recognition": 0
+      },
+      {
+        "name": "prepared-help",
+        "serious": [],
+        "overflow": false,
+        "speech": 0,
+        "recognition": 0
+      }
+    ],
+    "errors": [],
+    "externalRequests": 0
+  }
+]

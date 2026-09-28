@@ -1,0 +1,102 @@
+.clinician-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+.clinician-hero h2 {
+  margin: 10px 0;
+}
+.clinician-hero > svg {
+  flex-shrink: 0;
+  color: var(--primary, #246953);
+}
+.clinician-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.clinician-period button[aria-pressed="true"] {
+  background: var(--primary, #246953);
+  color: white;
+}
+.clinician-overview .stat-card > span,
+.clinician-overview .stat-card > small {
+  display: block;
+}
+.clinician-overview .stat-card > span {
+  font-weight: 650;
+}
+.clinician-measures {
+  margin: 0;
+}
+.clinician-measures > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px 24px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--border, #d8dfd9);
+}
+.clinician-measures dt {
+  flex: 1 1 210px;
+}
+.clinician-measures dd {
+  font-weight: 700;
+  margin: 0;
+}
+.clinician-goal strong {
+  display: block;
+  font-size: 2rem;
+}
+.clinician-overview progress {
+  width: 100%;
+  height: 16px;
+  accent-color: var(--primary, #246953);
+}
+.clinician-queue-filter {
+  max-width: 420px;
+  margin: 20px 0;
+}
+.clinician-queue {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.clinician-queue > li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 0;
+  border-top: 1px solid var(--border, #d8dfd9);
+}
+.clinician-queue > li > div {
+  min-width: 0;
+}
+.clinician-queue > li > button {
+  flex-shrink: 0;
+}
+.clinician-queue h4 {
+  margin: 6px 0;
+}
+.clinician-queue p {
+  margin: 6px 0;
+}
+.clinician-overview li {
+  line-height: 1.6;
+}
+.clinician-review-focus:focus {
+  outline: 3px solid var(--primary, #246953);
+  outline-offset: 5px;
+}
+@media (max-width: 700px) {
+  .clinician-hero > svg {
+    display: none;
+  }
+  .clinician-queue > li {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

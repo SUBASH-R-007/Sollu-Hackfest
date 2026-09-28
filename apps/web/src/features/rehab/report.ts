@@ -7,6 +7,21 @@ import type {
   ReviewRecord,
 } from "./model";
 import { scoreTranscript, speechWords } from "./analysis";
+import { REPORT_INTERPRETATION } from "./reportScope";
+export { REPORT_INTERPRETATION } from "./reportScope";
+const ReportInterpretationSchema = z
+  .object({
+    title: z.literal(REPORT_INTERPRETATION.title),
+    purpose: z.literal(REPORT_INTERPRETATION.purpose),
+    validation: z.literal(REPORT_INTERPRETATION.validation),
+    scoring: z.literal(REPORT_INTERPRETATION.scoring),
+    timing: z.literal(REPORT_INTERPRETATION.timing),
+    understanding: z.literal(REPORT_INTERPRETATION.understanding),
+    reviewerAuthority: z.literal(REPORT_INTERPRETATION.reviewerAuthority),
+    comparability: z.literal(REPORT_INTERPRETATION.comparability),
+  })
+  // Older v1 snapshots did not carry scope metadata. Never infer validation.
+  .default(REPORT_INTERPRETATION);
 
 const boundedText = z.string().max(3000);
 const timestamp = z.number().finite().min(0).max(8640000000000000);
@@ -82,6 +97,7 @@ export const ReportSchema = z.object({
   format: z.literal("sollu-rehabilitation-report"),
   version: z.literal(1),
   scoringVersion: z.literal("text-match-v1"),
+  interpretation: ReportInterpretationSchema,
   createdAt: timestamp,
   participant: z.string().trim().min(1).max(80),
   from: calendarDay,
@@ -189,7 +205,8 @@ export function parseReport(text: string): TherapyReport {
         s.textMatch !== null &&
         (!s.transcriptReviewed ||
           s.transcriptSource === "none" ||
-          s.kind === "aac"),
+          s.kind === "aac" ||
+          s.method === "aac"),
     )
   )
     throw new Error(
@@ -204,7 +221,8 @@ export function parseReport(text: string): TherapyReport {
       const score =
         s.transcriptReviewed &&
         s.transcriptSource !== "none" &&
-        s.kind !== "aac"
+        s.kind !== "aac" &&
+        s.method !== "aac"
           ? scoreTranscript(s.target, s.transcript).matchPct
           : null;
       return score !== s.textMatch;
@@ -255,6 +273,7 @@ export function buildReport(input: {
       transcriptSource: s.transcriptSource,
       textMatch:
         s.kind !== "aac" &&
+        s.communicationMethod !== "aac" &&
         s.transcriptSource !== "none" &&
         s.transcriptReviewed &&
         s.transcript.trim()
@@ -296,6 +315,7 @@ export function buildReport(input: {
     format: "sollu-rehabilitation-report",
     version: 1,
     scoringVersion: "text-match-v1",
+    interpretation: REPORT_INTERPRETATION,
     createdAt: Date.now(),
     participant: input.participant.trim() || "participant-001",
     from: input.from,
@@ -446,6 +466,7 @@ export function reportCsv(report: TherapyReport): string {
       .replace(/^[\s]*[=+@-]/u, " '$&")
       .replaceAll('"', '""')}"`;
   const header = [
+    "record_type",
     "participant",
     "practice_id",
     "date",
@@ -471,8 +492,18 @@ export function reportCsv(report: TherapyReport): string {
     "raw_recognition",
     "confirmed_missed_words",
     "notes",
+    "report_title",
+    "intended_use",
+    "validation_limitations",
+    "score_limitations",
+    "timing_definitions",
+    "understanding_denominator",
+    "reviewer_authority",
+    "comparison_limitations",
   ];
+  const scope = Object.values(REPORT_INTERPRETATION);
   const rows = report.sessions.map((s) => [
+    "practice",
     report.participant,
     s.id,
     new Date(s.at).toISOString(),
@@ -498,9 +529,18 @@ export function reportCsv(report: TherapyReport): string {
     s.rawTranscript,
     s.missedWords.join(" | "),
     s.notes,
+    ...scope.map(() => ""),
   ]);
+  // Keep the limitations in an empty export too, without inventing practice.
+  const metadata = [
+    "report_metadata",
+    ...Array.from({ length: header.length - scope.length - 1 }, () => ""),
+    ...scope,
+  ];
   return (
     "\uFEFF" +
-    [header, ...rows].map((row) => row.map(cell).join(",")).join("\r\n")
+    [header, metadata, ...rows]
+      .map((row) => row.map(cell).join(","))
+      .join("\r\n")
   );
 }

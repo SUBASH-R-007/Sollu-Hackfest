@@ -216,7 +216,12 @@ test("therapist metrics reflect actual rejected sets and study CSV excludes raw 
   expect(csv).toContain("participant-001");
   expect(csv).not.toContain("left shoulder pain");
   expect(csv).not.toContain("Priya");
-  expect(csv.trim().split(/\r?\n/)).toHaveLength(2);
+  expect(csv.trim().split(/\r?\n/)).toHaveLength(3);
+  expect(csv).toContain('"report_metadata"');
+  expect(csv).toContain('"communication_attempt"');
+  expect(csv).toContain(
+    "not a diagnostic assessment or treatment recommendation",
+  );
   expect(await spokenCalls(page)).toEqual([]); // Reloading this local log never plays an unpicked sentence.
 });
 

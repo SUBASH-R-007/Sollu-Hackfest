@@ -13,6 +13,7 @@ import {
   parseReport,
   proportion,
   reportCsv,
+  REPORT_INTERPRETATION,
   weeklyReport,
   type TherapyReport,
 } from "./report";
@@ -98,6 +99,45 @@ const row = (
 });
 
 suite("rehabilitation report honesty and safe transfer", () => {
+  it("carries non-diagnostic interpretation in exports and safely upgrades legacy v1 snapshots", () => {
+    const current = report();
+    expect(current.interpretation).toEqual(REPORT_INTERPRETATION);
+    const legacy = { ...current } as Partial<TherapyReport>;
+    delete legacy.interpretation;
+    const parsed = parseReport(JSON.stringify(legacy));
+    expect(parsed.version).toBe(1);
+    expect(parsed.interpretation).toEqual(REPORT_INTERPRETATION);
+    expect(parsed.sessions).toEqual(current.sessions);
+    expect(() =>
+      parseReport(
+        JSON.stringify({
+          ...current,
+          interpretation: {
+            ...current.interpretation,
+            validation: "Clinically validated",
+          },
+        }),
+      ),
+    ).toThrow(/format/);
+  });
+
+  it("includes report scope even in empty CSV exports without inventing a practice row", () => {
+    const csv = reportCsv(report({ sessions: [] }));
+    expect(csv).toContain('"record_type"');
+    expect(csv).toContain('"report_metadata"');
+    expect(csv).not.toContain('"practice"');
+    expect(csv).toContain(REPORT_INTERPRETATION.title);
+    expect(csv).toContain(REPORT_INTERPRETATION.purpose);
+    expect(csv).toContain(REPORT_INTERPRETATION.validation);
+    expect(csv).toContain(REPORT_INTERPRETATION.scoring);
+    expect(csv).toContain(REPORT_INTERPRETATION.timing);
+    expect(csv).toContain(REPORT_INTERPRETATION.reviewerAuthority);
+    expect(reportCsv(report())).toContain('"practice","P-001"');
+    const rows = reportCsv(report()).slice(1).split("\r\n");
+    const widths = rows.map((row) => row.match(/"(?:[^"]|"")*"/g)?.length);
+    expect(widths).toEqual(Array(rows.length).fill(widths[0]));
+  });
+
   it("omits names, transcript, goals, correction text and reviewer details by default export option", () => {
     const output = report({ includeContent: false });
     const text = JSON.stringify(output);
@@ -125,6 +165,7 @@ suite("rehabilitation report honesty and safe transfer", () => {
     for (const extra of [
       { transcriptReviewed: false },
       { kind: "aac" as const },
+      { communicationMethod: "aac" as const },
       { transcript: "" },
       { transcriptSource: "none" as const },
     ]) {
@@ -261,6 +302,7 @@ suite("rehabilitation report honesty and safe transfer", () => {
         sessions: [{ ...good.sessions[0], transcriptReviewed: false }],
       },
       { ...good, sessions: [{ ...good.sessions[0], kind: "aac" }] },
+      { ...good, sessions: [{ ...good.sessions[0], method: "aac" }] },
       { ...good, sessions: [{ ...good.sessions[0], textMatch: 100 }] },
     ])
       expect(() => parseReport(JSON.stringify(invalid))).toThrow();

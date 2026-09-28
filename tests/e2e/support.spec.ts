@@ -12,9 +12,7 @@ test("comfort messages honor two-step confirmation and repair exits pause", asyn
   page,
 }) => {
   await openCaregiverSettings(page);
-  await page
-    .getByLabel("Select a sentence, then tap it again to speak")
-    .check();
+  await page.getByLabel("Confirm sentence selections before speaking").check();
   await page
     .getByRole("button", { name: "Save settings", exact: true })
     .click();

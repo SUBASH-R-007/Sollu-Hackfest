@@ -203,11 +203,52 @@ export function buildContext(
   };
 }
 
+// Unicode marks belong to the same token as Tamil letters. Prefixes, suffixes and
+// relationship labels alone must not expose unrelated people or custom terms.
+function contextTokens(value: string): string[] {
+  return (
+    value
+      .normalize("NFC")
+      .toLowerCase()
+      .match(/[\p{L}\p{M}\p{N}]+/gu) ?? []
+  );
+}
+function containsContextTerm(clues: string[][], term: string): boolean {
+  const tokens = contextTokens(term);
+  return (
+    tokens.length > 0 &&
+    clues.some((clue) =>
+      clue.some((_, start) =>
+        tokens.every((token, offset) => clue[start + offset] === token),
+      ),
+    )
+  );
+}
+
 /** Explicit allowlist: device settings, keys, raw history and recordings never enter inference. */
 export function inferenceContext(
   context: ContextPacket,
   settings: Settings,
 ): ContextPacket {
+  // Minimize only the outgoing packet. The full local packet still supports
+  // controlled vocabulary/interpretation. This does not de-identify free text.
+  const explicitClues = [
+    context.fragment.raw,
+    context.partnerQuestion?.text ?? "",
+  ].map(contextTokens);
+  const selectedName = context.addressee?.name ?? "";
+  const selectedTokens = contextTokens(selectedName);
+  const people = context.people?.filter(
+    (person) =>
+      [person.name, ...person.aliases].some((term) =>
+        containsContextTerm(explicitClues, term),
+      ) ||
+      (selectedTokens.length > 0 &&
+        contextTokens(person.name).join(" ") === selectedTokens.join(" ")),
+  );
+  const vocabulary = context.vocabulary?.filter((entry) =>
+    containsContextTerm([...explicitClues, selectedTokens], entry.term),
+  );
   return ContextPacketSchema.parse({
     fragment: context.fragment,
     outputLang: context.outputLang,
@@ -229,8 +270,8 @@ export function inferenceContext(
           place: settings.usePlaceContext === false ? undefined : context.place,
           speaker: context.speaker,
           addressee: context.addressee,
-          people: context.people,
-          vocabulary: context.vocabulary,
+          people,
+          vocabulary,
           routine:
             settings.useRoutineContext === false ||
             settings.useTimeContext === false
