@@ -76,6 +76,8 @@ export type ServerConfig = {
   host: string;
   origin: string;
   intentProvider: LlmProvider;
+  /** The device's saved engine before a local-only request replaced it. */
+  requestedProvider?: LlmProvider;
   allowCloudAI?: boolean;
   llmModel?: string;
   apiKey?: string;
@@ -88,6 +90,10 @@ export type ServerConfig = {
   logging: boolean;
   production: boolean;
   webRoot?: string;
+  /** Persistent server state (voice revocations). Unset = memory only. */
+  dataDir?: string;
+  /** OpenAI speech-to-text model for the Flow page (OPENAI_TRANSCRIBE_MODEL). */
+  transcribeModel?: string;
 };
 export function configFromEnv(): ServerConfig {
   const production = process.env.NODE_ENV === "production";
@@ -121,7 +127,7 @@ export function configFromEnv(): ServerConfig {
   validateLocalOllamaUrl(ollamaUrl);
   const ollamaModel = process.env.OLLAMA_MODEL ?? "gemma3:4b";
   validateModel("ollama", ollamaModel);
-  const timeout = Number(process.env.LLM_TIMEOUT_MS ?? 8000);
+  const timeout = Number(process.env.LLM_TIMEOUT_MS ?? 15000);
   return {
     secret: process.env.SERVER_SECRET || randomBytes(48).toString("base64url"),
     port: Number(process.env.PORT ?? 8787),
@@ -149,11 +155,17 @@ export function configFromEnv(): ServerConfig {
     ollamaModel,
     timeoutMs: Math.max(
       1000,
-      Math.min(Number.isFinite(timeout) ? Math.floor(timeout) : 8000, 30000),
+      Math.min(Number.isFinite(timeout) ? Math.floor(timeout) : 15000, 30000),
     ),
     accessCode,
     logging: true,
     production,
     webRoot: process.env.WEB_ROOT,
+    // Voice grants survive restarts in production (fixed secret), so must deletions.
+    transcribeModel: process.env.OPENAI_TRANSCRIBE_MODEL
+      ? validateModel("openai", process.env.OPENAI_TRANSCRIBE_MODEL)
+      : undefined,
+    dataDir:
+      process.env.SOLLU_DATA_DIR || (production ? ".sollu-data" : undefined),
   };
 }

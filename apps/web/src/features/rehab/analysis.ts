@@ -33,6 +33,31 @@ export function speechWords(value: string): string[] {
   );
 }
 
+/** The target's words as written (for tap-to-mark chips). Same tokens and
+ * order as `speechWords`, without lowercasing, so indices line up. */
+export function targetWordTokens(value: string): string[] {
+  return (
+    value
+      .normalize("NFKC")
+      .replaceAll("’", "'")
+      .match(/[\p{L}\p{M}\p{N}]+(?:'[\p{L}\p{M}\p{N}]+)*/gu) ?? []
+  );
+}
+
+/** A partner-marked result: the target words heard, in order, and the
+ * scoring-form words the person tapped as not said clearly. */
+export function markedTranscript(
+  target: string,
+  notSaid: ReadonlySet<number>,
+): { transcript: string; missed: string[] } {
+  const shown = targetWordTokens(target),
+    scored = speechWords(target);
+  return {
+    transcript: shown.filter((_, index) => !notSaid.has(index)).join(" "),
+    missed: [...new Set(scored.filter((_, index) => notSaid.has(index)))],
+  };
+}
+
 /** Token edit similarity only. It cannot measure intelligibility, articulation, diagnosis or recovery. */
 export function scoreTranscript(
   target: string,

@@ -1,4 +1,5 @@
 import type { ContextInput } from "./schemas";
+import { hasNegation } from "./lexicon";
 
 export interface FragmentRepair {
   /** Matching aid only. The original fragment remains the evidence/audit text. */
@@ -50,7 +51,8 @@ export function confirmedFragmentCorrection(context: ContextInput): {
 export interface FragmentLexicon {
   /** Complete everyday words from the authored catalog; never names, drugs or body slots. */
   repairable: ReadonlySet<string>;
-  /** All known tokens, including clinical words and refusals, prevent prefix collisions. */
+  /** All known tokens, including clinical words, refusals and complete words, prevent prefix
+   * collisions and are never themselves completed. */
   known: ReadonlySet<string>;
 }
 
@@ -136,9 +138,12 @@ export function repairFragment(
   // A sufficiently long unique prefix can propose an everyday catalog word.
   // Uniqueness considers *all* catalog tokens, including refusal forms and
   // clinical vocabulary. Short or competing prefixes remain unresolved.
+  // Complete words in `known` (including health terms, body parts and ordinary English words
+  // such as pill/glass) are never extended into a different catalog word.
   text = text.replace(/[\p{L}\p{M}]+/gu, (token) => {
     if (
       protectedWord.test(token) ||
+      hasNegation(token) ||
       lexicon.known.has(token) ||
       letterCount(token) < 3
     )

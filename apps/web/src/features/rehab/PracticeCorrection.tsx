@@ -3,7 +3,7 @@ import { db } from "../../db";
 import { useApp } from "../../state";
 import { TapButton } from "../../ui";
 import { correctionPrefill, preparePracticeCorrection } from "./correction";
-import type { PracticeRecord } from "./model";
+import { friendlyError, type PracticeRecord } from "./model";
 
 export default function PracticeCorrection({
   record,
@@ -86,11 +86,7 @@ export default function PracticeCorrection({
         setConfirmed(false);
       });
     } catch (error) {
-      setStatus(
-        error instanceof Error
-          ? error.message
-          : "The correction could not be saved.",
-      );
+      setStatus(friendlyError(error, "The correction could not be saved."));
     } finally {
       setBusy(false);
     }

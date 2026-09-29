@@ -1,6 +1,12 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Link } from "react-router-dom";
-import { SettingsCard } from "./Controls";
+import { SettingsCard, SettingsToggle } from "./Controls";
+import { transcriptionStatus } from "../../lib/api";
+import {
+  cloudTranscriptionPermission,
+  setCloudTranscriptionPermission,
+  subscribeCloudTranscriptionPermission,
+} from "../privacy/transcriptionPolicy";
 import { useApp } from "../../state";
 import { isLocalProcessingOnly } from "../privacy/browserPolicy";
 import {
@@ -21,6 +27,32 @@ export function SpeechRecognitionSettings() {
   } | null>(null);
   const id = useId();
   const protectedMode = settings.localProcessingOnly !== false;
+  const [cloudAudio, setCloudAudio] = useState(cloudTranscriptionPermission);
+  const [server, setServer] = useState<string>("");
+  useEffect(() => {
+    setCloudAudio(cloudTranscriptionPermission());
+    return subscribeCloudTranscriptionPermission(() =>
+      setCloudAudio(cloudTranscriptionPermission()),
+    );
+  }, [settings.localProcessingOnly]);
+  useEffect(() => {
+    let active = true;
+    void transcriptionStatus()
+      .then((status) => {
+        if (!active) return;
+        setServer(
+          status.available
+            ? `Server ready (${status.model}).`
+            : status.reason === "server-policy"
+              ? "Blocked by the server privacy policy (ALLOW_CLOUD_AI)."
+              : "No OpenAI key is configured for this device or server.",
+        );
+      })
+      .catch(() => active && setServer("Server status unavailable."));
+    return () => {
+      active = false;
+    };
+  }, [cloudAudio]);
   function choose(next: RecognitionMode) {
     try {
       if (next === "browser" && isLocalProcessingOnly())
@@ -114,6 +146,36 @@ export function SpeechRecognitionSettings() {
           downloads; the server’s cloud-AI block remains separate.
         </p>
       )}
+      <SettingsToggle
+        checked={cloudAudio}
+        disabled={protectedMode}
+        onChange={(value) => {
+          try {
+            setCloudTranscriptionPermission(value);
+            setMessage(
+              value
+                ? "High-accuracy transcription is allowed in Voice flow. Each recording is sent to OpenAI only when you tap Stop there."
+                : "Audio is no longer sent to a cloud service.",
+            );
+          } catch (error) {
+            setMessage(
+              error instanceof Error
+                ? error.message
+                : "The permission could not be saved.",
+            );
+          }
+          setCloudAudio(cloudTranscriptionPermission());
+        }}
+      >
+        Allow high-accuracy transcription in Voice flow (sends that recording to
+        OpenAI)
+      </SettingsToggle>
+      <p className="settings-feature-muted">
+        Separate from sentence sharing and browser recognition. Needs local-only
+        protection off, the server policy and an OpenAI key. Recordings are held
+        only in server memory for that request; OpenAI’s own retention terms
+        apply. {server}
+      </p>
       <p className="settings-feature-muted">
         Applies to this browser only. Selecting a mode does not start the
         microphone, upload saved recordings or change the sentence engine.

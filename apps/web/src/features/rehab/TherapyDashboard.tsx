@@ -17,6 +17,9 @@ import {
   CONDITION_PROFILES,
   COMMUNICATION_METHODS,
   EXERCISES,
+  exerciseInLanguage,
+  friendlyError,
+  planTextProblem,
   rehabProfileSchema,
   rehabPlanSchema,
   type RehabProfile,
@@ -133,7 +136,14 @@ function ProfileEditor({
   const [draft, setDraft] = useState(profile);
   const [goals, setGoals] = useState(profile.goals.join("\n"));
   const [targets, setTargets] = useState(plan.customTargets.join("\n"));
-  const [exerciseIds, setExerciseIds] = useState(plan.exerciseIds);
+  // Show the planned exercises in the profile language (see exerciseInLanguage).
+  const [exerciseIds, setExerciseIds] = useState(() => [
+    ...new Set(
+      plan.exerciseIds.flatMap(
+        (id) => exerciseInLanguage(id, profile.language)?.id ?? [],
+      ),
+    ),
+  ]);
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
   const condition = CONDITION_PROFILES.find((c) => c.id === draft.condition)!;
@@ -147,6 +157,8 @@ function ProfileEditor({
         throw new Error(
           "Choose at least one exercise or add a personal practice target.",
         );
+      const problem = planTextProblem(lines(goals), lines(targets));
+      if (problem) throw new Error(problem);
       const updatedAt = Date.now();
       const nextProfile = rehabProfileSchema.parse({
         ...draft,
@@ -170,9 +182,7 @@ function ProfileEditor({
       );
       setStatus("Individual practice plan saved on this device.");
     } catch (error) {
-      setStatus(
-        error instanceof Error ? error.message : "The plan could not be saved.",
-      );
+      setStatus(friendlyError(error, "The plan could not be saved."));
     } finally {
       setSaving(false);
     }
@@ -221,13 +231,18 @@ function ProfileEditor({
             value={draft.language}
             onChange={(e) => {
               set("language", e.target.value as "en" | "ta");
-              setExerciseIds((old) =>
-                old.filter((id) =>
-                  EXERCISES.some(
-                    (ex) => ex.id === id && ex.language === e.target.value,
-                  ),
+              // Keep the chosen exercises by switching to their counterparts.
+              setExerciseIds((old) => [
+                ...new Set(
+                  old.flatMap((id) => {
+                    const match = exerciseInLanguage(
+                      id,
+                      e.target.value as "en" | "ta",
+                    );
+                    return match ? [match.id] : [];
+                  }),
                 ),
-              );
+              ]);
             }}
           >
             <option value="en">English</option>
@@ -1248,11 +1263,7 @@ export default function TherapyDashboard({
         `${format.toUpperCase()} report downloaded. Media stays separate. Review the file and share only with your chosen recipient.`,
       );
     } catch (error) {
-      setStatus(
-        error instanceof Error
-          ? error.message
-          : "The report could not be exported.",
-      );
+      setStatus(friendlyError(error, "The report could not be exported."));
     }
   }
   if (!data || !cases)

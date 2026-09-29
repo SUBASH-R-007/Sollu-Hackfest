@@ -47,12 +47,43 @@ const boundedText = (max: number, min = 0) =>
     );
 const identifier = boundedText(100, 1);
 const timestamp = z.number().finite().nonnegative();
-const seconds = z
-  .number()
-  .finite()
-  .min(0)
-  .max(24 * 60 * 60)
-  .nullable();
+export const MAX_MEASURED_SECONDS = 24 * 60 * 60;
+const seconds = z.number().finite().min(0).max(MAX_MEASURED_SECONDS).nullable();
+
+/**
+ * Elapsed time in seconds for a practice measure. Anything that cannot be a
+ * valid measurement (negative, non-finite or beyond 24 hours, for example a
+ * practice left open overnight) is missing, never zero or clamped.
+ */
+export function measuredSeconds(elapsedMs: number): number | null {
+  const value = elapsedMs / 1000;
+  return Number.isFinite(value) && value >= 0 && value <= MAX_MEASURED_SECONDS
+    ? value
+    : null;
+}
+
+export const MAX_PLAN_LINES = 20;
+/** Friendly limits for the plan editor, checked before schema validation. */
+export function planTextProblem(
+  goals: string[],
+  targets: string[],
+): string | null {
+  if (goals.length > MAX_PLAN_LINES)
+    return `Keep participation goals to ${MAX_PLAN_LINES} lines or fewer (${goals.length} entered).`;
+  if (goals.some((goal) => goal.length > 160))
+    return "Keep each participation goal to 160 characters or fewer.";
+  if (targets.length > MAX_PLAN_LINES)
+    return `Keep personal practice targets to ${MAX_PLAN_LINES} lines or fewer (${targets.length} entered).`;
+  if (targets.some((target) => target.length > 300))
+    return "Keep each personal practice target to 300 characters or fewer.";
+  return null;
+}
+
+/** Caregiver-readable message: the first validation issue, never raw JSON. */
+export function friendlyError(error: unknown, fallback: string): string {
+  if (error instanceof z.ZodError) return error.issues[0]?.message ?? fallback;
+  return error instanceof Error && error.message ? error.message : fallback;
+}
 const rating = z.number().int().min(0).max(10).nullable();
 const understanding = z.enum(UNDERSTANDING_OPTIONS);
 const communicationMethod = z.enum(COMMUNICATION_METHODS);
@@ -366,7 +397,122 @@ export const EXERCISES: Exercise[] = [
     instruction:
       "Practise directing your partner to a way you can respond comfortably.",
   },
+  // Tamil counterparts (`<id>-ta`) of the starter library, in everyday spoken
+  // Tamil. Pending native-speaker review (docs/LANGUAGE_REVIEW.md).
+  {
+    id: "word-water-ta",
+    kind: "word",
+    title: "பயனுள்ள சொல்",
+    target: "தண்ணி",
+    language: "ta",
+    conditions: allConditions,
+    instruction:
+      "உங்களுக்கு வசதியான முறையில் சொல்லுங்கள், எழுதுங்கள் அல்லது சுட்டிக்காட்டுங்கள். தேவைப்படும்போது ஓய்வெடுங்கள்.",
+  },
+  {
+    id: "word-help-ta",
+    kind: "word",
+    title: "உதவி கேளுங்கள்",
+    target: "உதவி",
+    language: "ta",
+    conditions: allConditions,
+    instruction:
+      "விருப்பமானால் துணையுடன் பயிற்சி செய்யுங்கள். நேர வரம்பு இல்லை.",
+  },
+  {
+    id: "sentence-time-ta",
+    kind: "sentence",
+    title: "நேரம் கேளுங்கள்",
+    target: "கொஞ்சம் நேரம் குடுங்க.",
+    language: "ta",
+    conditions: allConditions,
+    instruction:
+      "உங்களுக்கு வசதியான முறையைப் பயன்படுத்துங்கள். இடையில் நிறுத்தலாம் அல்லது AAC-க்கு மாறலாம்.",
+  },
+  {
+    id: "sentence-water-ta",
+    kind: "sentence",
+    title: "ஒரு கோரிக்கை",
+    target: "எனக்கு தண்ணி வேணும்.",
+    language: "ta",
+    conditions: allConditions,
+    instruction:
+      "கோரிக்கையைச் சொல்லிப் பழகுங்கள். இது பேசும் பயிற்சி மட்டும்; குடிக்கச் சொல்லும் அறிவுரை அல்ல.",
+  },
+  {
+    id: "sentence-break-ta",
+    kind: "sentence",
+    title: "ஓய்வு கேளுங்கள்",
+    target: "எனக்கு கொஞ்சம் ஓய்வு வேணும்.",
+    language: "ta",
+    conditions: allConditions,
+    instruction:
+      "உங்கள் வேகத்தில் சிறிய செய்தியைப் பழகுங்கள். எப்போது வேண்டுமானாலும் நிறுத்தலாம்.",
+  },
+  {
+    id: "script-repair-ta",
+    kind: "script",
+    title: "உரையாடலைச் சரிசெய்யுங்கள்",
+    target: "நான் சொல்ல வந்தது அது இல்ல. மறுபடி சொல்றேன்.",
+    language: "ta",
+    conditions: allConditions,
+    instruction:
+      "துணையுடன் பழகுங்கள், அல்லது AAC செய்தியாகப் பயன்படுத்துங்கள். உங்கள் பொருள் புரிந்ததா என்று கேளுங்கள்.",
+  },
+  {
+    id: "script-introduce-ta",
+    kind: "script",
+    title: "உங்கள் தேவையைச் சொல்லுங்கள்",
+    target: "நான் என் வழியில பேசுவேன். கொஞ்சம் பொறுமையா கேளுங்க.",
+    language: "ta",
+    conditions: allConditions,
+    instruction:
+      "பேச்சு, எழுத்து, சுட்டுதல் அல்லது உங்கள் உதவிக் கருவியைப் பயன்படுத்துங்கள். உங்கள் பொருள் புரிவதே வெற்றி.",
+  },
+  {
+    id: "aac-choice-ta",
+    kind: "aac",
+    title: "ஒரு செய்தியைத் தேர்ந்தெடுங்கள்",
+    target: "நான் தேர்ந்தெடுக்கணும்.",
+    language: "ta",
+    conditions: allConditions,
+    instruction:
+      "உங்கள் உதவிக் கருவியில் இந்தச் செய்தியைத் தேடுங்கள் அல்லது எழுதுங்கள். உங்கள் பொருளைத் துணையிடம் உறுதிசெய்யுங்கள்.",
+  },
+  {
+    id: "aac-repeat-ta",
+    kind: "aac",
+    title: "மீண்டும் சொல்லச் சொல்லுங்கள்",
+    target: "மறுபடி சொல்லுங்க.",
+    language: "ta",
+    conditions: allConditions,
+    instruction:
+      "இந்தச் செய்தியைத் தேர்ந்தெடுங்கள் அல்லது எழுதுங்கள். பேச்சுப் பதிவு விருப்பத்துக்குரியது.",
+  },
+  {
+    id: "aac-yes-no-ta",
+    kind: "aac",
+    title: "உங்கள் பொருளை உறுதிசெய்யுங்கள்",
+    target: "ஆமா இல்லன்னு பதில் சொல்ற மாதிரி கேளுங்க.",
+    language: "ta",
+    conditions: allConditions,
+    instruction:
+      "நீங்கள் வசதியாகப் பதில் சொல்லும் வழியைத் துணைக்குக் காட்டிப் பழகுங்கள்.",
+  },
 ];
+
+/** The planned exercise in the practice language: a plan saved with English
+ * IDs still gives a Tamil profile its Tamil counterparts (and vice versa). */
+export function exerciseInLanguage(
+  id: string,
+  language: "en" | "ta",
+): Exercise | undefined {
+  const base = id.endsWith("-ta") ? id.slice(0, -3) : id;
+  const wanted = language === "ta" ? `${base}-ta` : base;
+  return EXERCISES.find(
+    (exercise) => exercise.id === wanted && exercise.language === language,
+  );
+}
 
 export function createDefaultProfile(now = Date.now()): RehabProfile {
   return {

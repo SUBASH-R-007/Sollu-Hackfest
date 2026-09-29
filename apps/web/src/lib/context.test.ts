@@ -218,10 +218,10 @@ describe("context timing and grounding", () => {
     expect(packet.routine?.justPassed).toEqual([]);
     expect(ContextPacketSchema.safeParse(packet).success).toBe(true);
   });
-  it("uses the addressee language and sends only supported relevant context", () => {
+  it("uses the addressee language when opted in and sends only supported relevant context", () => {
     const now = new Date(2026, 8, 27, 20, 58).getTime();
     const packet = buildContext(
-      { ...settings, addressee: "rao" },
+      { ...settings, addressee: "rao", followListenerLanguage: true },
       { modality: "speech", raw: "table" },
       {
         now,
@@ -289,6 +289,15 @@ describe("context timing and grounding", () => {
       { now, question: { text: "Old question", at: now - 300_000 } },
     );
     expect(expired.partnerQuestion).toBeUndefined();
+  });
+  it("keeps the chosen language by default whoever the listener is", () => {
+    const english = { ...settings, lang: "en" as const, addressee: "priya" };
+    const packet = buildContext(english, { modality: "text", raw: "water" });
+    expect(packet.outputLang).toBe("en");
+    const tamil = { ...settings, lang: "ta" as const, addressee: "rao" };
+    expect(
+      buildContext(tamil, { modality: "text", raw: "water" }).outputLang,
+    ).toBe("ta");
   });
   it("gives familiar exact wording a reproducible score and rejects unrelated memory", () => {
     const now = 1_000_000;

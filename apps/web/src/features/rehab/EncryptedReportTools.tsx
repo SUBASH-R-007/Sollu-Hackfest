@@ -3,6 +3,7 @@ import { LockKeyhole } from "lucide-react";
 import { download } from "../../lib/metrics";
 import { TapButton } from "../../ui";
 import type { TherapyReport } from "./report";
+import { friendlyError } from "./model";
 import {
   decryptTherapyReport,
   encryptTherapyReport,
@@ -79,9 +80,7 @@ export function EncryptedReportExport({
     } catch (error) {
       if (token === operation.current)
         state.setStatus(
-          error instanceof Error
-            ? error.message
-            : "The report could not be encrypted.",
+          friendlyError(error, "The report could not be encrypted."),
         );
     } finally {
       if (token === operation.current) {
@@ -173,9 +172,7 @@ export function EncryptedReportImport({
     } catch (error) {
       if (token === state.operation.current)
         state.setStatus(
-          error instanceof Error
-            ? error.message
-            : "The report could not be opened.",
+          friendlyError(error, "The report could not be opened."),
         );
     } finally {
       if (token === state.operation.current) {

@@ -463,7 +463,7 @@ test("a reviewed dashboard word preselects a manual word practice without record
     });
   });
   await page.getByRole("link", { name: "Practise water", exact: true }).click();
-  await expect(page).toHaveURL("http://localhost:5173/practice");
+  await expect(page).toHaveURL("/practice");
   await expect(page.locator(".rehab-target")).toHaveText("water");
   await expect(
     page.getByRole("button", { name: "Start this practice", exact: true }),
@@ -482,6 +482,7 @@ test("a reviewed dashboard word preselects a manual word practice without record
   await page
     .getByRole("button", { name: "Start this practice", exact: true })
     .click();
+  await page.getByText("Type what was heard instead", { exact: true }).click();
   await page
     .getByLabel("Words actually heard (optional)", { exact: true })
     .fill("water");

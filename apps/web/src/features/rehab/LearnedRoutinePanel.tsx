@@ -6,6 +6,7 @@ import { db } from "../../db";
 import { useApp } from "../../state";
 import { TapButton } from "../../ui";
 import { timeBucket } from "../../lib/context";
+import { friendlyError } from "./model";
 import {
   SettingsCard,
   SettingsField,
@@ -127,9 +128,7 @@ export function LearnedRoutines() {
       );
     } catch (error) {
       setMessage(
-        error instanceof Error
-          ? error.message
-          : "The routine could not be saved. Try again.",
+        friendlyError(error, "The routine could not be saved. Try again."),
       );
     } finally {
       setBusy(false);

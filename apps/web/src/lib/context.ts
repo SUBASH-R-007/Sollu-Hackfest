@@ -2,6 +2,7 @@ import type {
   Attempt,
   ContextPacket,
   Fragment,
+  Lang,
   MemoryEntry,
   TimeBucket,
   WordSubstitution,
@@ -94,6 +95,12 @@ export function getNearbyRoutines(
         a.routine.id.localeCompare(b.routine.id),
     );
 }
+/** The chosen language wins unless the caregiver opted into listener languages. */
+export function sentenceLanguage(settings: Settings): Lang {
+  if (settings.followListenerLanguage !== true) return settings.lang;
+  const contact = settings.contacts.find((c) => c.id === settings.addressee);
+  return contact?.lang ?? settings.lang;
+}
 export function buildContext(
   settings: Settings,
   fragment: Fragment,
@@ -132,7 +139,7 @@ export function buildContext(
       : undefined;
   return {
     fragment,
-    outputLang: contact?.lang ?? settings.lang,
+    outputLang: sentenceLanguage(settings),
     round: opts.round ?? 1,
     exclude: opts.exclude ?? [],
     now:
@@ -172,7 +179,7 @@ export function buildContext(
       .filter(
         (s) =>
           s.confirmed === true &&
-          (!s.lang || s.lang === (contact?.lang ?? settings.lang)) &&
+          (!s.lang || s.lang === sentenceLanguage(settings)) &&
           (!s.place || s.place === settings.place) &&
           (!s.addresseeId || s.addresseeId === settings.addressee) &&
           fragment.raw.toLowerCase().includes(s.heard.toLowerCase()),
@@ -182,7 +189,7 @@ export function buildContext(
       .filter(
         (m) =>
           m.confirmed === true &&
-          m.lang === (contact?.lang ?? settings.lang) &&
+          m.lang === sentenceLanguage(settings) &&
           m.placeLabel === settings.place &&
           m.addresseeId === settings.addressee &&
           memoryScore(m, fragment.raw, timeBucket(now.getHours()), realNow) > 0,

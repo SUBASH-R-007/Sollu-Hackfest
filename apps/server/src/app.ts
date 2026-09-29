@@ -19,6 +19,7 @@ import {
 } from "@sollu/shared";
 import { Signer } from "./lib/signing.js";
 import { selectIntent } from "./lib/intent.js";
+import { VoiceRevocations } from "./lib/revocations.js";
 import { mockWav } from "./providers/mock.js";
 import {
   CloudAIBlockedError,
@@ -27,6 +28,11 @@ import {
 } from "./config.js";
 import { ProviderSettingsStore } from "./providers/providerSettings.js";
 import { generateStructured } from "./providers/cloud.js";
+import {
+  defaultTranscribeModel,
+  transcribeAudio,
+  transcribeMimeTypes,
+} from "./providers/transcribe.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -170,6 +176,9 @@ export async function createApp(
       paidProviders: config.allowCloudAI === true,
       encryptedRelay: true,
     },
+    // `mode`/`providers.intent` describe the server default only. Each device
+    // can choose its own engine in Sentence engine settings.
+    intentSelection: "per-device",
     privacy: {
       mode: config.allowCloudAI === true ? "cloud-permitted" : "local-only",
       allowCloudAI: config.allowCloudAI === true,
@@ -206,6 +215,20 @@ export async function createApp(
       localOnly: input.localOnly,
     });
     const start = performance.now();
+    // A cloud choice blocked by this device's permission must not "pass" as
+    // Free vocabulary.
+    if (
+      selected.requestedProvider &&
+      selected.requestedProvider !== selected.intentProvider
+    )
+      return {
+        ok: false,
+        message:
+          "Cloud sentences are off on this device, so the saved engine was not contacted. Allow cloud sentence APIs above, then test again.",
+        provider: selected.requestedProvider,
+        model: selected.llmModel,
+        latencyMs: 0,
+      };
     const controller = new AbortController();
     const cancelled = () => {
       if (!reply.raw.writableEnded) controller.abort();
@@ -261,7 +284,12 @@ export async function createApp(
   });
   app.post("/api/intent", { config: limited(30) }, async (request, reply) => {
     const body = z
-      .object({ context: z.unknown(), localOnly: z.boolean().default(true) })
+      .object({
+        context: z.unknown(),
+        localOnly: z.boolean().default(true),
+        // Omitted by older clients: keep the previous mixed behaviour for them.
+        preparedAlternatives: z.boolean().default(true),
+      })
       .strict()
       .parse(request.body);
     const input = body.context as Record<string, unknown>;
@@ -280,7 +308,31 @@ export async function createApp(
       const selected = providerSettings.resolve(request.deviceId!, {
         localOnly: body.localOnly,
       });
-      const result = await selectIntent(context, selected, controller.signal);
+      const requestedProvider =
+        selected.requestedProvider ?? selected.intentProvider;
+      const selectedResult = await selectIntent(
+        context,
+        selected,
+        controller.signal,
+        undefined,
+        undefined,
+        { preparedAlternatives: body.preparedAlternatives },
+      );
+      // AI-only mode: a device that chose a cloud engine but has since blocked
+      // cloud text must not silently receive vocabulary phrases instead.
+      const deviceBlocked =
+        !body.preparedAlternatives &&
+        requestedProvider !== selected.intentProvider &&
+        selectedResult.model !== "predefined-health-help";
+      const result = deviceBlocked
+        ? {
+            ...selectedResult,
+            candidates: [],
+            clarification: false,
+            fallback: true,
+            failure: "device-permission" as const,
+          }
+        : selectedResult;
       const candidates = result.candidates.map((c) => ({
         ...c,
         sig: signer.signText(
@@ -298,8 +350,17 @@ export async function createApp(
             ? "catalog"
             : selected.intentProvider,
         configuredProvider: selected.intentProvider,
-        mock: selected.intentProvider === "mock",
+        requestedProvider,
+        mock: selected.intentProvider === "mock" && !deviceBlocked,
         fallback: "fallback" in result ? result.fallback : false,
+        ...("failure" in result && result.failure
+          ? { failure: result.failure }
+          : {}),
+        ...("failureDetail" in result && result.failureDetail
+          ? { failureDetail: result.failureDetail }
+          : {}),
+        // Lets the notice say how long the engine was given.
+        timeoutMs: selected.timeoutMs,
         revision: selected.revision,
         latencyMs: result.latencyMs,
         validationDrops: result.validationDrops,
@@ -357,7 +418,7 @@ export async function createApp(
       sig: signer.signText(deviceId, body.lang, body.text, body.source),
     };
   });
-  const deletedVoices = new Map<string, number>();
+  const deletedVoices = new VoiceRevocations(config.dataDir);
   app.post("/api/tts", { config: limited(90) }, async (request, reply) => {
     const body = TtsRequestSchema.parse(request.body);
     try {
@@ -419,9 +480,98 @@ export async function createApp(
     } catch {
       throw new HttpError(403, "Invalid voice grant");
     }
-    deletedVoices.set(grant.voiceId, grant.expires * 1000);
+    deletedVoices.add(grant.voiceId, grant.expires * 1000);
     return { deleted: true, provider: "mock", mock: true };
   });
+  // Flow page: optional high-accuracy transcription. Audio is sent to OpenAI
+  // only when the server permits cloud AI, the device sent an explicit
+  // non-local request after its own audio-sharing permission, and a key exists.
+  // The upload is held in memory for this request only.
+  app.get("/api/transcribe/status", async (request) => {
+    const key = providerSettings.transcriptionKey(request.deviceId!);
+    return {
+      available: config.allowCloudAI === true && Boolean(key),
+      reason:
+        config.allowCloudAI !== true
+          ? "server-policy"
+          : key
+            ? undefined
+            : "no-key",
+      provider: "openai",
+      model: config.transcribeModel ?? defaultTranscribeModel,
+    };
+  });
+  app.post(
+    "/api/transcribe",
+    { config: limited(20), bodyLimit: 6 * 1024 * 1024 },
+    async (request, reply) => {
+      if (!request.isMultipart())
+        throw new HttpError(400, "Send audio as multipart form data");
+      const fields: Record<string, string> = {};
+      let audio: Buffer | undefined;
+      let mimeType: (typeof transcribeMimeTypes)[number] | undefined;
+      for await (const part of request.parts()) {
+        if (part.type === "file") {
+          const type = part.mimetype.split(";")[0].trim().toLowerCase();
+          if (
+            audio ||
+            !(transcribeMimeTypes as readonly string[]).includes(type)
+          ) {
+            await part.toBuffer();
+            throw new HttpError(415, "Audio format not supported");
+          }
+          mimeType = type as (typeof transcribeMimeTypes)[number];
+          audio = await part.toBuffer();
+        } else fields[part.fieldname] = String(part.value);
+      }
+      const input = z
+        .object({
+          lang: z.enum(["ta", "en"]),
+          localOnly: z.enum(["true", "false"]).default("true"),
+        })
+        .parse(fields);
+      if (config.allowCloudAI !== true) throw new CloudAIBlockedError();
+      if (input.localOnly !== "false")
+        throw new HttpError(403, "Cloud transcription is off on this device");
+      const apiKey = providerSettings.transcriptionKey(request.deviceId!);
+      if (!apiKey) throw new HttpError(503, "No transcription key");
+      if (!audio || !mimeType) throw new HttpError(400, "Audio is required");
+      const controller = new AbortController();
+      const cancelled = () => {
+        if (!reply.raw.writableEnded) controller.abort();
+      };
+      request.raw.once("aborted", cancelled);
+      reply.raw.once("close", cancelled);
+      const start = performance.now();
+      const model = config.transcribeModel ?? defaultTranscribeModel;
+      try {
+        const text = await transcribeAudio({
+          allowCloudAI: true,
+          apiKey,
+          model,
+          audio,
+          mimeType,
+          language: input.lang,
+          timeoutMs: 60_000,
+          signal: controller.signal,
+        });
+        return {
+          text,
+          provider: "openai",
+          model,
+          latencyMs: Math.round(performance.now() - start),
+        };
+      } catch {
+        return reply.code(503).send({
+          error: "Transcription unavailable. Use on-device speech or type.",
+        });
+      } finally {
+        audio = undefined;
+        request.raw.off("aborted", cancelled);
+        reply.raw.off("close", cancelled);
+      }
+    },
+  );
   app.post(
     "/api/stt",
     { config: limited(30), bodyLimit: 5 * 1024 * 1024 },
@@ -553,6 +703,12 @@ export async function createApp(
           role: "patient" | "care";
           alive: boolean;
         }>();
+      // Re-check seats now: two simultaneous upgrades can both pass preValidation.
+      const taken = [...sockets].filter((s) => s.role === query.role).length;
+      if (taken >= (query.role === "patient" ? 1 : 5)) {
+        socket.close(1008, "Room is full");
+        return;
+      }
       const entry = { socket, role: query.role, alive: true };
       sockets.add(entry);
       rooms.set(query.r, sockets);
@@ -615,8 +771,7 @@ export async function createApp(
     providerSettings.prune();
     for (const [id, value] of caregiverCounts)
       if (value.expires < now) caregiverCounts.delete(id);
-    for (const [id, expiry] of deletedVoices)
-      if (expiry < now) deletedVoices.delete(id);
+    deletedVoices.prune(now);
     for (const sockets of rooms.values())
       for (const entry of sockets) {
         if (!entry.alive) {

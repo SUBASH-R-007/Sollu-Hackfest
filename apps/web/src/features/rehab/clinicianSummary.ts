@@ -5,7 +5,12 @@ import {
   type ReviewRecord,
 } from "./model";
 import { speechWords } from "./analysis";
-import { communicationSummary, describe, localDay } from "./report";
+import {
+  attemptSeconds,
+  communicationSummary,
+  describe,
+  localDay,
+} from "./report";
 
 /** Calendar-day windows use the device's local clock, including today so far. */
 export function clinicianWindow(days: 7 | 28, now: number) {
@@ -73,8 +78,7 @@ export function clinicianSummary(input: {
         spoken: row.outcome === "spoken",
         outcome: row.communicationOutcome ?? "unconfirmed",
         taps: row.taps,
-        seconds:
-          row.timeToSpeechMs === undefined ? null : row.timeToSpeechMs / 1000,
+        seconds: attemptSeconds(row.timeToSpeechMs),
         excluded: row.demoClock || row.demoCached,
       })),
   );

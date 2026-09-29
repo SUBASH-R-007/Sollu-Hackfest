@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   distribution,
+  markedTranscript,
   scoreTranscript,
   speechWords,
   suggestPracticeTargets,
   summarizePractice,
   summarizeUnderstanding,
+  targetWordTokens,
   wilsonInterval,
 } from "./analysis";
 import {
@@ -365,5 +367,36 @@ describe("practice record validation", () => {
     expect(daypartAt(new Date(2026, 8, 28, 11))).toBe("afternoon");
     expect(daypartAt(new Date(2026, 8, 28, 17))).toBe("evening");
     expect(daypartAt(new Date(2026, 8, 28, 20))).toBe("night");
+  });
+});
+
+describe("tap-marked practice results", () => {
+  it("keep the scoring tokens and order, without lowercasing the display", () => {
+    const target = "Please give me time.";
+    expect(targetWordTokens(target)).toEqual(["Please", "give", "me", "time"]);
+    expect(targetWordTokens(target).map((w) => w.toLocaleLowerCase())).toEqual(
+      speechWords(target),
+    );
+    const tamil = "எனக்கு தண்ணி வேணும்.";
+    expect(targetWordTokens(tamil)).toEqual(speechWords(tamil));
+  });
+  it("score a tapped omission exactly like the equivalent typed transcript", () => {
+    const target = "Please give me time.";
+    const marked = markedTranscript(target, new Set([1]));
+    expect(marked).toEqual({ transcript: "Please me time", missed: ["give"] });
+    expect(scoreTranscript(target, marked.transcript)).toEqual(
+      scoreTranscript(target, "Please me time"),
+    );
+    expect(scoreTranscript(target, marked.transcript).matchPct).toBe(75);
+  });
+  it("leave a fully missed attempt unscored rather than zero", () => {
+    const marked = markedTranscript("water", new Set([0]));
+    expect(marked).toEqual({ transcript: "", missed: ["water"] });
+    expect(scoreTranscript("water", marked.transcript).matchPct).toBeNull();
+  });
+  it("record a repeated word once", () => {
+    expect(markedTranscript("very very good", new Set([0, 1])).missed).toEqual([
+      "very",
+    ]);
   });
 });

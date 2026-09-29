@@ -4,9 +4,7 @@ test("an active practice keeps its reference when the caregiver plan changes and
   page,
 }) => {
   await page.goto("/practice");
-  await page
-    .getByRole("button", { name: "Start this practice", exact: true })
-    .click();
+  await page.getByRole("button", { name: /Please give me time./ }).click();
   await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve) => {
       const req = indexedDB.open("sollu-rehab");
@@ -42,6 +40,7 @@ test("an active practice keeps its reference when the caregiver plan changes and
   await expect(page.locator(".rehab-target")).toHaveText(
     "Please give me time.",
   );
+  await page.getByText("Type what was heard instead", { exact: true }).click();
   await page
     .getByLabel("Words actually heard (optional)", { exact: true })
     .fill("Please give me time");
@@ -87,7 +86,7 @@ test("an active practice keeps its reference when the caregiver plan changes and
   await page
     .getByRole("button", { name: "Erase all local data", exact: true })
     .click();
-  await expect(page).toHaveURL("http://localhost:5173/");
+  await expect(page).toHaveURL("/");
   const counts = await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve) => {
       const req = indexedDB.open("sollu-rehab");

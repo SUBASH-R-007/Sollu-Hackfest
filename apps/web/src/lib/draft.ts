@@ -12,6 +12,7 @@ const StoredDraftSchema = z.object({
   candidates: z.array(CandidateSchema).max(3),
   chosen: CandidateSchema.optional(),
   model: z.string().max(200).optional(),
+  langOverride: z.enum(["ta", "en"]).optional(),
 });
 /** Restoring input never restores playback authority or stale suggested sentences. */
 export function parseStoredDraft(
@@ -20,7 +21,7 @@ export function parseStoredDraft(
 ): Session | null {
   const p = StoredDraftSchema.safeParse(value);
   if (!p.success) return null;
-  const { attempt, context } = p.data;
+  const { attempt, context, langOverride } = p.data;
   if (
     attempt.endedAt !== undefined ||
     !Number.isFinite(attempt.startedAt) ||
@@ -33,6 +34,7 @@ export function parseStoredDraft(
   return {
     attempt,
     context,
+    ...(langOverride ? { langOverride } : {}),
     candidates: [],
     loading: false,
     error: "",

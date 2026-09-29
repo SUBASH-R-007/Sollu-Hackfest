@@ -217,6 +217,21 @@ export function WordsPage() {
   const categories = [
     ...new Set(vocabularyCatalog.map((entry) => entry.category)),
   ];
+  // The chosen word's message sits above the word grid; on a phone that is
+  // off-screen, so bring it into view after each new choice.
+  const selectedPanel = useRef<HTMLElement>(null);
+  const selectedId = entry?.id ?? "";
+  useEffect(() => {
+    if (!selectedId) return;
+    const still =
+      settings.reducedMotion ||
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    selectedPanel.current?.scrollIntoView({
+      block: "start",
+      behavior: still ? "auto" : "smooth",
+    });
+    // Only a new choice scrolls; changing motion settings must not jump.
+  }, [selectedId]);
   return (
     <ToolShell
       title={t("சொல்ல ஒரு சொல்", "Find a word")}
@@ -271,25 +286,32 @@ export function WordsPage() {
             />
           </label>
           {tab === "common" && (
-            <label>
-              {t("வகை", "Category")}
-              <select
-                value={category}
-                onChange={(e) => {
-                  setParams({ category: e.target.value, word: "", page: "" });
-                }}
-              >
-                <option value="">{t("அனைத்தும்", "All")}</option>
-                {categories.map((c) => (
-                  <option key={c} value={c}>
-                    {t(...categoryNames[c])}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div
+              className="personal-actions personal-categories"
+              role="group"
+              aria-label={t("வகை", "Category")}
+            >
+              {["", ...categories].map((c) => (
+                <TapButton
+                  key={c || "all"}
+                  aria-pressed={category === c}
+                  onActivate={() => {
+                    setParams({ category: c, word: "", page: "" });
+                  }}
+                >
+                  {c
+                    ? t(...categoryNames[c as VocabularyCategory])
+                    : t("அனைத்தும்", "All")}
+                </TapButton>
+              ))}
+            </div>
           )}
           {selected && (
-            <section className="personal-panel" aria-live="polite">
+            <section
+              ref={selectedPanel}
+              className="personal-panel personal-selected-word"
+              aria-live="polite"
+            >
               <h2>{selected.label}</h2>
               <SpeakLine
                 key={selected.text}

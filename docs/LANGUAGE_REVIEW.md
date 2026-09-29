@@ -1,5 +1,65 @@
 # Language review inventory
 
+## Speech companion, Voice flow and engine messages — 2026-09-29 (third pass)
+
+All entries are **pending native-speaker review**. Lesson phrases reuse the authored catalog/quick-phrase sentences word for word.
+
+**Navigation:** துணை (Companion) · பேச்சுத் துணை (Speech companion) · பேச்சு → எழுத்து (Voice flow).
+
+**Speech companion** (`apps/web/src/features/companion/`): unit title வசதி; குடிக்க, சாப்பாடு (built from existing words); உங்கள் வேகத்தில், கொஞ்சம் பயிற்சி. · வணக்கம் · தினசரி இலக்கு · இன்று {done} / {goal} · இலக்கு முடிந்தது. நல்லது! · தினசரி இலக்கு: {n} · இந்த வாரம் · பயிற்சி செய்தீர்கள் · ஓய்வு நாள் · இன்னும் வரவில்லை · பயிற்சி இல்லை · தொடர்ந்து {n} நாள் — ஓய்வு நாளும் சரி · எந்த நாளும் தொடங்கலாம் — ஓய்வு நாளும் சரி · தொடரலாம் · {n} வாக்கியங்களை மீண்டும் பழகுங்கள் · மீண்டும் பழகு · இன்று {n} தயார் · இன்று எதுவும் இல்லை · பயிற்சி மொழி · பாடங்கள் · {n} வாக்கியங்கள் · {n} பாடங்கள் முடிந்தன · அடுத்து இது · இன்று ஓய்வு · ஓய்வு நாள் சேமிக்கப்பட்டது. ஓய்வும் உதவும். · முன்னேற்றம் இந்தச் சாதனத்தில் மட்டும் இருக்கும். இது பயிற்சி, பேச்சுத் தேர்வு அல்ல. · படி {i} / {n} · பாட முன்னேற்றம் · ஓய்வு · ஓய்வும் பயிற்சியின் பகுதி. விரும்பும்போது தொடருங்கள். · கேட்டு, திரும்பச் சொல்லுங்கள் · சரியான வாக்கியத்தைத் தேர்ந்தெடுங்கள் · வாக்கியத்தை அமையுங்கள் · உங்கள் வழியில் சொல்லுங்கள் · தயாரானதும் சொல்லுங்கள். காட்டியோ உதவிக் கருவியாலோ சொல்லலாம். · இது பயிற்சி மட்டும். உண்மையான உதவிக்கு ‘உதவி’ பொத்தானைத் தொடுங்கள். · சேமித்துத் தொடருங்கள் · மைக் மூலம் சரிபார் · அனுமதித்து ஒருமுறை கேள் · கேட்பதை நிறுத்து · கேட்கிறது… · கேட்டது: · மதிப்பிடப்படவில்லை · பேச்சு அறிதல் இல்லை. · {n}% சொல் பொருத்தம் — வார்த்தைகள் மட்டும், உச்சரிப்பு அல்ல · இந்த எழுத்துடன் தொடருங்கள் · browser/on-device recognition notices · ஆமா, அதுதான்! · படத்துக்குப் பொருந்துவது இது: · அடுத்து · வார்த்தைகளை வரிசையாகத் தொடுங்கள். நீக்க, வைத்த வார்த்தையைத் தொடுங்கள். · உங்கள் வாக்கியம் · வார்த்தைகள் · நீக்கு · சரிபார் · நல்லது — வாக்கியம் சரி. · வாக்கியம் இதுதான்: · மீண்டும் முயலுங்கள் · பேசலாம், எழுதலாம், காட்டலாம் — எல்லாமே சரி. · பேசினேன் · எழுதினேன் · காட்டினேன் · இங்கே எழுதுங்கள் (சேமிக்கப்படாது) · செய்தேன் · தவிர் · நல்லது! · பரவாயில்லை. மீண்டும் பழக வரும். · மாதிரிக் குரல் இல்லை. படிக்கலாம் அல்லது துணையுடன் பழகலாம். · save-failure messages · பாடம் முடிந்தது · இங்கே நிறுத்தினீர்கள். பரவாயில்லை. · பழகிய வாக்கியங்கள்: {n} · மீண்டும் பழக · உங்கள் பயிற்சி முன்னேற்றத்தில் இந்தச் சாதனத்தில் சேமிக்கப்பட்டது. · துணைக்குத் திரும்பு.
+
+**Voice flow** (`apps/web/src/features/flow/FlowPage.tsx`): பேச்சு → எழுத்து · தாராளமாகப் பேசுங்கள். நாங்கள் சீராக்குகிறோம். · எவ்வளவு நேரம் வேண்டுமானாலும் பேசுங்கள். இடைவெளி பரவாயில்லை. · நான் பேசும் மொழி · பேச்சு எழுத்தாகும் வழி · இந்தச் சாதனத்தில் · அதிகத் துல்லியம் (OpenAI) · cloud/on-device/browser notices · பேசத் தொடங்கு · தொடர்ந்து பேசு · நிறுத்து · நிறுத்தி அனுப்பு · பேச்சை எழுத்தாக்குகிறது… · மைக் தொடங்குகிறது… · கேட்கிறது… · உங்கள் வார்த்தைகள் · உங்கள் வார்த்தைகள் இங்கே வரும். · கேட்டது · நீக்கியது · நான் சொல்ல வந்ததைக் கண்டுபிடி · அப்படியே சொல் · நகலெடு · நகலெடுக்கப்பட்டது. · நகலெடுக்க முடியவில்லை. · அழி · எழுத்தாக்க அனுப்பு · பதிவை நீக்கு · two-minute-limit notice · tidy-up explanation · வார்த்தைகள் கேட்கவில்லை. மீண்டும் முயலுங்கள். · மைக் நின்றது. உங்கள் வார்த்தைகள் இருக்கின்றன. Filler matching (input only): ம், ம்ம், ம்ம்ம்.
+
+**Sentence-engine reasons** (`apps/web/src/state.tsx`): timeout, key, model, quota, provider, network and invalid-output messages ({engine} … வினாடிகளில் பதில் தரவில்லை… etc.), and மாற்று வாக்கியங்கள் தானாகச் சேர்க்கப்படவில்லை.
+
+## Easier practice, topics and patient screens — 2026-09-29 (second pass)
+
+All entries are **pending native-speaker review**. Tests confirm rendering and matching only.
+
+**Tamil practice library** (`apps/web/src/features/rehab/model.ts`, spoken targets; titles and instructions in the same entries): தண்ணி (பயனுள்ள சொல்); உதவி (உதவி கேளுங்கள்); கொஞ்சம் நேரம் குடுங்க. (நேரம் கேளுங்கள்); எனக்கு தண்ணி வேணும். (ஒரு கோரிக்கை); எனக்கு கொஞ்சம் ஓய்வு வேணும். (ஓய்வு கேளுங்கள்); நான் சொல்ல வந்தது அது இல்ல. மறுபடி சொல்றேன். (உரையாடலைச் சரிசெய்யுங்கள்); நான் என் வழியில பேசுவேன். கொஞ்சம் பொறுமையா கேளுங்க. (உங்கள் தேவையைச் சொல்லுங்கள்); நான் தேர்ந்தெடுக்கணும். (ஒரு செய்தியைத் தேர்ந்தெடுங்கள்); மறுபடி சொல்லுங்க. (மீண்டும் சொல்லச் சொல்லுங்கள்); ஆமா இல்லன்னு பதில் சொல்ற மாதிரி கேளுங்க. (உங்கள் பொருளை உறுதிசெய்யுங்கள்). Each instruction sentence in that file also needs review.
+
+**Practice screen** (`PracticePage.tsx`): பேச்சுப் பயிற்சி · உங்கள் வார்த்தைகள், உங்கள் வேகம் · தொடங்க ஒரு செய்தியைத் தொடுங்கள். தேவைப்படும்போது ஓய்வெடுங்கள். · ஒரு செய்தியைத் தேர்ந்தெடுங்கள் · நான் பயன்படுத்திய செய்தி · இந்தச் சொல்லை மீண்டும் பழகு · நானே எழுதுகிறேன் · என் சொந்தச் செய்தி · என் பயிற்சி வார்த்தைகள் · பயிற்சியைத் தொடங்கு · இப்போது எவ்வளவு சோர்வாக இருக்கிறீர்கள்? (விருப்பம்) · பயிற்சிக்கு முன் சோர்வு · பயிற்சிக்குப் பின் சோர்வு · முயற்சி · 0 = இல்லை · 10 = மிக அதிகம் · 0 = முயற்சி இல்லை · 10 = மிக அதிகம் · மாதிரியைக் கேளுங்கள் · ஓய்வு எடு · தொடரத் தயார் · ஒப்புக்கொண்டு ஒலிப்பதிவு · ஒப்புக்கொண்டு காணொளிப்பதிவு · பதிவை முடி · பதிவை ரத்து செய் · இந்தப் பதிவை நீக்கு · recording-consent sentence (பதிவு விருப்பத்துக்குரியது; …) · எப்படி இருந்தது? · சொன்னேன் · இன்னும் இல்லை · தெளிவாக வராத சொல்லைத் தொடுங்கள் · என் உதவிக் கருவியுடன் பழகினேன் · கேட்டதை எழுதுங்கள் · என் துணைக்குப் புரிந்ததா? · என் பொருள் புரிந்ததா? · ஆம் / கொஞ்சம் / இல்லை · கூடுதல் விவரங்கள் (விருப்பம்) · எது உதவியது? (விருப்பம்) · பயிற்சியைச் சேமி · சேமிக்கிறது… · அடுத்த பயிற்சி · என் முன்னேற்றத்தைப் பார் · வேறு பயிற்சியைத் தேர்ந்தெடு · இதை விட்டுவிட்டு மீண்டும் தொடங்கு · இந்தப் பயிற்சி பற்றி · rest-threshold notices · saved and reviewed-word statuses.
+
+**Topics** (`Patient.tsx`): feelings சந்தோஷம், சோகம், கவலை, பயம், கோபம், தனிமை, களைப்பு, போரடிக்குது, குழப்பம், நிம்மதி; டிவி, ஃபோன், பாட்டு; வெளியே, வீட்டுக்கு. Default contact alias `டாக்டர் ராவ்` (`db.ts`) now used in Tamil sentences such as `டாக்டர் ராவை எனக்கு ஃபோன் பண்ண சொல்லுங்க.`
+
+**Confirm / Speak / People / Recent / Help / dock** (`Patient.tsx`, `Communication.tsx`, `state.tsx`): 📷 நான் பார்ப்பது · 🎤 நான் கேட்டது · 🗂️ நீங்கள் தேர்ந்தது · 💬 உங்கள் வார்த்தைகள் · நீங்கள் சொல்ல வந்தது இதுவா? · ஒரு வாக்கியத்தைத் தேர்ந்தெடுத்து, ‘சொல்’ தொடுங்கள். · சொல்ல உங்கள் வாக்கியத்தைத் தொடுங்கள். · health-wording notice · யாரிடம் · அருகில் உள்ளவர் · மீண்டும் பேசு · என் வாக்கியங்களைத் திற · சொல் · Speak screen title/eyebrow/subtitles, listening statuses, local-recognition notices, அவர்கள் கேட்டதை எழுதுங்கள் · இந்தக் கேள்வியை வை · எழுது · பேச்சு அறிதல் அமைப்புகள் · என் தேர்வுகளுக்குத் திரும்பு · யாரிடம் பேசுகிறீர்கள்? · listener subtitle · save-failure message · வாக்கியங்களைப் புதுப்பி · சமீபத்திய வார்த்தைகள் · மீண்டும் சொல்ல ஒரு வாக்கியத்தைத் தொடுங்கள். · empty-recent text · SMS no-number note · dock statuses (✓ …, குரல் இல்லை. காட்டுங்கள்: …, ஒலிக்கவில்லை. காட்டுங்கள்: …) · AI clarification notice ({engine}-க்கு இன்னும் கொஞ்சம் தெளிவு வேண்டும்…). Home Topics tile now uses தலைப்புகள் (was வகைகள்).
+
+**Caregiver gate and camera** (`App.tsx`, `Camera.tsx`): குடும்பத்தினர், பராமரிப்பாளர்களுக்கு · மீண்டும் வாருங்கள். · இந்த இடத்தை அமைப்போம். · PIN prompts · all camera errors, privacy/download lines, "இது:" label, object names (பாட்டில், கப், கிண்ணம், வாழைப்பழம், ஆப்பிள், ஆரஞ்சு, சாண்ட்விச், படுக்கை, சோபா, நாற்காலி, கழிவறை, சிங்க், பல் பிரஷ், டிவி, ரிமோட், ஃபோன், புத்தகம், கடிகாரம்) and categories (குடிக்க, சாப்பாடு, ஓய்வு, கழிவறை, குளியல், டிவி, ஃபோன், படிக்க, நேரம்).
+
+**Input matching only** (`packages/shared/src/lexicon.ts`, not spoken): ஆஸ்பத்திரி, மருத்துவமனை, சுகர், stems விழுந், இருமல், வீக்கம்; Tanglish body parts (thalai/thala, vaai, pal/pallu, thondai, nenju, vayiru/vayitru/vayithu/vairu, mudhugu, kazhuthu, kan/kannu, kaadhu, thol, kai, ullangai, manikattu, iduppu, mutti, kaal, paadham, kanukkal), pain endings vali/valikuthu/valikkudhu, udhavi/uthavi, maathirai/mathirai, marunthu/marundhu, vizhunthuten, irumal, veekkam.
+
+## Language, speech and sentence-engine fixes — 2026-09-29
+
+All entries are **pending native-speaker review**. Automated tests confirm rendering and matching only.
+
+New interface wording in `apps/web/src/pages/Patient.tsx`, `apps/web/src/state.tsx` and `apps/web/src/features/personal/BackupPanel.tsx`:
+
+| English | Tamil |
+| --- | --- |
+| Language: Tamil. Switch to English (header switch label) | மொழி: தமிழ். Switch to English |
+| Language: English. Switch to Tamil (header switch label) | தமிழுக்கு மாற்று |
+| I will speak in | நான் பேசும் மொழி |
+| Edit the words | வார்த்தைகளைத் திருத்து |
+| Did you say…? | நீங்கள் சொன்னது இதுவா? |
+| Show prepared phrases instead | தயாரான வாக்கியங்களைக் காட்டு |
+| Sentence engine settings | வாக்கிய இயந்திர அமைப்புகள் |
+| Find new choices | புதிய தேர்வுகள் |
+| The microphone has stopped. Tap Done to use these words, or Keep listening. | மைக் நின்றது. இந்த வார்த்தைகளுக்கு ‘முடிந்தது’ தொடுங்கள், அல்லது தொடர்ந்து கேளுங்கள். |
+| Settings changed, so the earlier choices were cleared. Tap Find new choices to try the same words again. | அமைப்புகள் மாறியதால் முந்தைய தேர்வுகள் நீக்கப்பட்டன. அதே வார்த்தைகளுக்குப் ‘புதிய தேர்வுகள்’ தொடுங்கள். |
+| {engine}'s suggestions did not pass the checks for your words… | {engine} தந்த வாக்கியங்கள் உங்கள் வார்த்தைகளுடன் பொருந்தவில்லை. வேறு வார்த்தைகளை முயலுங்கள். |
+| Cloud sentences are off on this device, so {engine} was not asked… | இந்தச் சாதனத்தில் கிளவுட் வாக்கியங்கள் அணைக்கப்பட்டுள்ளன; {engine} கேட்கப்படவில்லை. அமைப்புகளில் இயக்குங்கள். |
+| The Sollu server restarted and forgot the {engine} choice… | Sollu சர்வர் மீண்டும் தொடங்கியதால் {engine} தேர்வு நீங்கியது. அமைப்புகளில் மீண்டும் தேர்ந்தெடுங்கள். |
+| {engine} could not answer… No vocabulary phrases were substituted. | {engine} பதில் தரவில்லை. மாற்று வாக்கியங்கள் தானாகச் சேர்க்கப்படவில்லை. |
+| {name} is coming ✓ | {name} வருகிறார் ✓ |
+| Help cancelled. | உதவி ரத்து செய்யப்பட்டது. |
+| Waiting for someone to reply… | பதிலுக்குக் காத்திருக்கிறது… |
+| I need help. Please come to me. (SMS body) | எனக்கு உதவி வேணும். தயவுசெய்து என்னிடம் வாருங்கள். |
+| Rehabilitation practice and its recordings use a separate store… (backup panel) | மறுவாழ்வுப் பயிற்சியும் பதிவுகளும் தனிச் சேமிப்பில் உள்ளன; இந்தக் காப்புப் பிரதியில் இல்லை. சாதனத் தரவை அழிக்கும் முன், ‘சிகிச்சை நிபுணர்’ தாவலில் அவற்றை ஏற்றுமதி செய்யவும். |
+
+Changed spoken wording in `packages/shared/src/mock.ts` (accusative case for contact names): `கார்த்திக்கை எனக்கு ஃபோன் பண்ண சொல்லுங்க.` and `கார்த்திக்கை கூட்டிட்டு வாங்க.` (previously `கார்த்திக்யை…`); `ராவை எனக்கு ஃபோன் பண்ண சொல்லுங்க.` and `ராவை கூட்டிட்டு வாங்க.`. Vowel-final names ending in ஆ/ஓ/உ now take `வை` (e.g. லதாவை); இ/ஈ/ஐ/எ/ஏ endings take `யை`. A name with no Tamil-script alias still receives `யை` after Latin letters (e.g. `Karthikயை`) — known, not yet fixed.
+
+New Tamil **matching** terms (input recognition only, not spoken output) in `packages/shared/src/lexicon.ts`: negation இல்ல, வேணா, வேண்டா, முடியாது, மாட்டேன், மாட்டோம், மாட்டாங்க, கூடாது, தெரியாது, suffix rules (-ல after a plain consonant; -லை after ய/க/ட/ர/ங/ச/ப; fused இல்லை); question words எங்கே, எங்க, எப்போ, எப்போது, ஏன், எப்படி, யாரு, யார், என்ன; health stems காய்ச்சல், ஜுரம், மூச்ச, வாந்தி, மயக்க, இரத்த, குமட்ட, ஆம்புலன்ஸ்; body forms வயிற்று, வயித்து, மூக்கு; never-complete words தூக்க, தலைய; neutral grammar words எனக்கு, கொஞ்சம், வேணும், வேண்டும், ப்ளீஸ், தயவுசெய்து, குடுங்க, கொடுங்க. Dialect coverage and false matches need review.
+
 ## Rehabilitation and clinician navigation — 2026-09-28
 
 Added to the shared `apps/web/src/lib/copy.ts` dictionary and applied to mobile/desktop navigation, rehabilitation navigation, and caregiver shortcuts. Native-speaker approval remains pending; runtime verification confirms language selection and rendering only.

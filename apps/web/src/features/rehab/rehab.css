@@ -121,6 +121,80 @@
   border: 1px solid #a6b3aa;
   border-radius: 12px;
 }
+/* Tap-first practice: large cards and buttons instead of dropdowns/typing. */
+.rehab-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+.rehab-page .rehab-card {
+  min-height: 120px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 1rem 1.1rem;
+  text-align: left;
+  background: #fff;
+  border: 2px solid #b9cbbf;
+  border-radius: 18px;
+  color: #203d30;
+}
+.rehab-card small {
+  font-size: 0.95rem;
+  color: #3d5a4a;
+}
+.rehab-card span {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.rehab-page .tap.selected {
+  background: #1f5c43;
+  border-color: #1f5c43;
+  color: #fff;
+}
+.rehab-words {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.75rem 0;
+}
+.rehab-words > small {
+  flex: 1 0 100%;
+  font-weight: 650;
+}
+.rehab-page .rehab-word {
+  font-size: 1.3rem;
+  font-weight: 700;
+  background: #fff;
+  border: 2px solid #b9cbbf;
+}
+.rehab-page .rehab-word.missed {
+  background: #fbe9e4;
+  border-color: #a8412b;
+  color: #7a2513;
+  text-decoration: line-through;
+}
+.rehab-scale {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.9rem 0;
+}
+.rehab-scale small {
+  color: #3d5a4a;
+}
+.rehab-scale-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 0.5rem;
+}
+.rehab-optional {
+  margin: 0.75rem 0;
+}
+
 @media (max-width: 520px) {
   .rehab-actions > .tap {
     width: 100%;

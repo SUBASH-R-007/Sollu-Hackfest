@@ -2,6 +2,7 @@ import { CandidateSchema, type Candidate, type ContextPacket } from "./schemas";
 import { getMockCandidates } from "./mock";
 import { numberWords } from "./phrases";
 import { requiresPredefinedCommunication } from "./predefinedCommunication";
+import { containsTerm, hasNegation, sideMentions } from "./lexicon";
 import {
   catalogFitsExplicitContext,
   modelMeaningKey,
@@ -15,17 +16,8 @@ export const normalizeCandidateText = (text: string) =>
     .toLowerCase()
     .replace(/[\p{P}\p{S}\s]+/gu, " ")
     .trim();
-const escapes = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const contains = (text: string, word: string) =>
-  !!word &&
-  new RegExp(
-    `(^|[^\\p{L}\\p{M}\\p{N}])${escapes(word)}(?=$|[^\\p{L}\\p{M}\\p{N}])`,
-    "iu",
-  ).test(text);
-const negative = (s: string) =>
-  /\b(?:no|not|never|don['’]?t|without|venam|vendam|vendaam|illai)\b|வேணாம்|வேண்டாம்|இல்லை/u.test(
-    s.toLowerCase(),
-  );
+const contains = containsTerm;
+const negative = hasNegation;
 const numbers = (s: string) => s.match(/\p{N}+(?:[.:/]\p{N}+)*/gu) ?? [];
 const dose =
   /\b(?:mg|mcg|ml|milligrams?|micrograms?|millilitres?|milliliters?|dosage)\b|மில்லிகிராம்|மி\.கி/iu;
@@ -169,9 +161,11 @@ export function applyCandidatePolicy(
       .normalize("NFC")
       .toLowerCase();
   const groundedNumbers = new Set(numbers(evidence));
-  const side = /\bleft\b|இடது|\bidathu\b/.test(evidence)
+  // "right now"/"all right"/"he left" are not body sides.
+  const evidenceSides = sideMentions(evidence);
+  const side = evidenceSides.left
     ? "left"
-    : /\bright\b|வலது|\bvalathu\b/.test(evidence)
+    : evidenceSides.right
       ? "right"
       : undefined;
   for (let i = 0; i < Math.min(source.length, 30); i++) {
@@ -274,13 +268,10 @@ export function applyCandidatePolicy(
       drop(i, "polarity");
       continue;
     }
+    const textSides = sideMentions(c.text);
     const candidateSide =
       c.side ??
-      (/\bright\b|வலது/.test(c.text)
-        ? "right"
-        : /\bleft\b|இடது/.test(c.text)
-          ? "left"
-          : undefined);
+      (textSides.right ? "right" : textSides.left ? "left" : undefined);
     if (side && candidateSide && side !== candidateSide) {
       drop(i, "side");
       continue;

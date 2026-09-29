@@ -6,6 +6,7 @@ import {
 import { getKV, setKV, type Settings } from "../db";
 import { inferenceContext } from "./context";
 import { cloudSentencePermission } from "../features/privacy/sentencePolicy";
+import { cloudTranscriptionPermission } from "../features/privacy/transcriptionPolicy";
 type Device = { deviceId: string; token: string };
 let devicePromise: Promise<Device> | undefined;
 async function register(): Promise<Device> {
@@ -96,6 +97,52 @@ export async function api<T>(
     );
   return (await res.json()) as T;
 }
+export type SentenceEngine =
+  "mock" | "openai" | "anthropic" | "gemini" | "groq" | "ollama";
+/** Why the AI engine could not answer (from status codes, never provider text). */
+export type EngineFailureDetail =
+  | "timeout"
+  | "key"
+  | "model"
+  | "quota"
+  | "provider"
+  | "network"
+  | "invalid-output";
+export type EngineFailure =
+  | "unavailable"
+  | "unverified"
+  | "device-permission"
+  | "engine-reset"
+  | "clarify";
+const engines: readonly string[] = [
+  "mock",
+  "openai",
+  "anthropic",
+  "gemini",
+  "groq",
+  "ollama",
+];
+const engineHintKey = "sentence-engine-hint";
+let engineHint: SentenceEngine | undefined;
+const engineHintLoaded = getKV<string>(engineHintKey)
+  .then((value) => {
+    if (engineHint === undefined && engines.includes(value ?? ""))
+      engineHint = value as SentenceEngine;
+  })
+  .catch(() => {});
+/** The engine a caregiver last chose explicitly on this device. The server
+ * keeps selections in memory, so this detects a silent reset after restart. */
+export async function selectedSentenceEngine(): Promise<
+  SentenceEngine | undefined
+> {
+  await engineHintLoaded;
+  return engineHint;
+}
+export function rememberSentenceEngine(provider: string) {
+  if (!engines.includes(provider)) return;
+  engineHint = provider as SentenceEngine;
+  void setKV(engineHintKey, provider).catch(() => {});
+}
 export const getIntent = async (
   context: ContextPacket,
   settings: Settings,
@@ -107,6 +154,10 @@ export const getIntent = async (
     latencyMs: number;
     mock?: boolean;
     fallback?: boolean;
+    failure?: EngineFailure;
+    failureDetail?: EngineFailureDetail;
+    timeoutMs?: number;
+    requestedProvider?: string;
   }>(
     "intent",
     {
@@ -115,6 +166,7 @@ export const getIntent = async (
         !cloudSentencePermission() ||
         (settings.localProcessingOnly !== false &&
           !cloudSentencePermission(true)),
+      preparedAlternatives: settings.mixPreparedWithAi === true,
     },
     signal,
   );
@@ -137,4 +189,62 @@ export async function health(): Promise<{
 }> {
   const res = await fetch("/api/health");
   return res.json();
+}
+
+export function transcriptionStatus() {
+  return api<{ available: boolean; reason?: string; model: string }>(
+    "transcribe/status",
+    undefined,
+    undefined,
+    "GET",
+  );
+}
+/**
+ * Sends one finished recording for high-accuracy transcription. Permission is
+ * rechecked at dispatch, because it can be revoked while the person records.
+ */
+export async function transcribeRecording(
+  audio: Blob,
+  lang: "ta" | "en",
+  signal?: AbortSignal,
+): Promise<string> {
+  const blocked = () =>
+    new Error(
+      "High-accuracy transcription is off on this device. Use on-device speech or type.",
+    );
+  if (!cloudTranscriptionPermission()) throw blocked();
+  devicePromise ??= register().catch((e) => {
+    devicePromise = undefined;
+    throw e;
+  });
+  const device = await devicePromise;
+  signal?.throwIfAborted();
+  if (!cloudTranscriptionPermission()) throw blocked();
+  const form = new FormData();
+  form.append("lang", lang);
+  form.append("localOnly", "false");
+  form.append("file", audio, "speech.webm");
+  const res = await fetch("/api/transcribe", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${device.token}` },
+    body: form,
+    signal,
+  });
+  if (res.status === 401) {
+    devicePromise = undefined;
+    await setKV("device", null);
+    throw new Error("Please try again.");
+  }
+  if (!res.ok)
+    throw new Error(
+      res.status === 403
+        ? "High-accuracy transcription is blocked by privacy settings."
+        : res.status === 429
+          ? "A little pause — please try again."
+          : "High-accuracy transcription is unavailable. Use on-device speech or type.",
+    );
+  const data = (await res.json()) as { text?: unknown };
+  if (typeof data.text !== "string" || data.text.length > 5000)
+    throw new Error("Invalid transcription response");
+  return data.text;
 }

@@ -158,9 +158,7 @@ test("the Rehabilitation tab links practice and live progress without duplicatin
     .getByRole("button", { name: "Practice", exact: true })
     .click();
   await expect(page).toHaveURL(/\/practice$/);
-  await page
-    .getByRole("button", { name: "Start this practice", exact: true })
-    .click();
+  await page.getByRole("button", { name: /Please give me time\./ }).click();
   await page
     .getByRole("button", { name: "Save practice", exact: true })
     .click();
@@ -211,13 +209,10 @@ test("leaving practice for rehabilitation releases an active synthetic recording
       value: async () => stream,
     });
   });
+  await page.getByRole("button", { name: /Please give me time\./ }).click();
   await page
-    .getByRole("button", { name: "Start this practice", exact: true })
+    .getByRole("button", { name: "Agree and record video", exact: true })
     .click();
-  await page
-    .getByRole("checkbox", { name: /I agree to record this practice/ })
-    .check();
-  await page.getByRole("button", { name: "Record video", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Finish recording", exact: true }),
   ).toBeVisible();
@@ -444,12 +439,8 @@ test("a sentence practised with AAC counts participation without creating speech
     }
   });
   await page.goto("/practice");
-  await expect(
-    page.getByRole("combobox", { name: "Practice message", exact: true }),
-  ).toHaveValue("sentence-time");
-  await page
-    .getByRole("button", { name: "Start this practice", exact: true })
-    .click();
+  await page.getByRole("button", { name: /Please give me time\./ }).click();
+  await page.getByText("Type what was heard instead", { exact: true }).click();
   await page
     .getByLabel("Words actually heard (optional)", { exact: true })
     .fill("Please me time");

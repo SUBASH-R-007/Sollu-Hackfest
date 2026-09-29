@@ -1,0 +1,541 @@
+/* Speech companion. Every control is at least 72 × 72 px, primary tiles at
+ * least 120 px tall, text follows --text-scale and nothing animates on its own. */
+.companion-page {
+  --companion-ink: var(--ink, #231040);
+  --companion-brand: var(--brand, #7b1fa2);
+  --companion-soft: #f3edfb;
+  --companion-line: #d9cde3;
+  --companion-good: #1d5e3a;
+  --companion-good-bg: #e6f3eb;
+  --companion-miss: #7a3b00;
+  --companion-miss-bg: #fff1e0;
+  max-width: 980px;
+  margin: auto;
+  color: var(--companion-ink);
+  font-size: calc(17px * var(--text-scale, 1));
+}
+.companion-page .tap {
+  min-width: 72px;
+  min-height: 72px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.companion-page .tap:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.companion-page .tap.selected,
+.companion-page .tap[aria-pressed="true"] {
+  background: var(--companion-brand);
+  border: 2px solid var(--companion-brand);
+  color: #fff;
+}
+.companion-page .secondary {
+  background: #fff;
+  border: 1px solid var(--companion-line);
+  padding: 12px 20px;
+  color: var(--companion-ink);
+}
+.companion-page .primary {
+  background: var(--companion-brand);
+  color: #fff;
+  padding: 14px 24px;
+}
+.companion-page svg {
+  flex: 0 0 auto;
+}
+.companion-loading {
+  padding: 1rem;
+}
+.companion-card {
+  background: #fff;
+  border: 1px solid var(--companion-line);
+  border-radius: 22px;
+  padding: clamp(1rem, 3vw, 1.75rem);
+  margin: 1rem 0;
+}
+.companion-card h2 {
+  margin: 0 0 0.75rem;
+  font-size: calc(22px * var(--text-scale, 1));
+}
+.companion-card h2:focus {
+  outline: none;
+}
+.companion-card h2:focus-visible {
+  outline: 3px solid var(--companion-brand);
+  outline-offset: 4px;
+}
+.companion-greeting {
+  font-size: calc(24px * var(--text-scale, 1));
+  font-weight: 700;
+  margin: 0.25rem 0 0;
+}
+.companion-top {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 1rem;
+}
+.companion-top .companion-card {
+  margin: 1rem 0 0;
+}
+.companion-goal-body {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.companion-goal-body p {
+  margin: 0;
+  font-weight: 650;
+  font-size: calc(19px * var(--text-scale, 1));
+}
+.companion-ring {
+  width: calc(96px * var(--text-scale, 1));
+  height: calc(96px * var(--text-scale, 1));
+}
+.companion-ring circle {
+  fill: none;
+  stroke-width: 10;
+}
+.companion-ring-track {
+  stroke: #e6ddef;
+}
+.companion-ring-fill {
+  stroke: var(--companion-brand);
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.3s ease;
+}
+.companion-ring text {
+  font-size: 22px;
+  font-weight: 700;
+  fill: var(--companion-ink);
+}
+.companion-goal-buttons,
+.companion-lang,
+.companion-row,
+.companion-results,
+.companion-methods,
+.companion-main-actions,
+.companion-lesson-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.companion-goal-buttons .tap,
+.companion-lang .tap {
+  background: #fff;
+  border: 1px solid var(--companion-line);
+  font-weight: 700;
+  justify-content: center;
+  text-align: center;
+  padding: 0 1rem;
+}
+.companion-dots {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.35rem;
+  padding: 0;
+  margin: 0;
+}
+.companion-dot {
+  display: grid;
+  justify-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+}
+.companion-dot-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 2px solid #8a7a98;
+  background: #fff;
+}
+.companion-dot.practised .companion-dot-mark {
+  background: var(--companion-brand);
+  border-color: var(--companion-brand);
+  color: #fff;
+}
+.companion-dot.rest .companion-dot-mark {
+  background: #e7eef8;
+  border-color: #3f5f86;
+  color: #20395a;
+}
+.companion-dot.future .companion-dot-mark {
+  border-style: dashed;
+  border-color: #b3a7bf;
+}
+.companion-dot.today .companion-dot-mark {
+  box-shadow:
+    0 0 0 3px #fff,
+    0 0 0 5px var(--companion-ink);
+}
+.companion-dot-day {
+  font-size: calc(13px * var(--text-scale, 1));
+  color: #574064;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+.companion-streak {
+  margin: 0.9rem 0 0;
+  font-weight: 650;
+}
+.companion-main-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+}
+.companion-continue,
+.companion-review {
+  min-height: 120px;
+  width: 100%;
+  justify-content: flex-start;
+  padding: 1rem 1.5rem;
+  border-radius: 22px;
+}
+.companion-page .companion-review {
+  background: #fff;
+  border: 2px solid var(--companion-line);
+  color: var(--companion-ink);
+}
+.companion-continue svg,
+.companion-review svg {
+  width: 36px;
+  height: 36px;
+}
+.companion-continue-text {
+  display: grid;
+  gap: 0.25rem;
+}
+.companion-continue-text strong {
+  font-size: calc(24px * var(--text-scale, 1));
+}
+.companion-continue-text small {
+  font-size: calc(16px * var(--text-scale, 1));
+}
+.companion-section-heading {
+  font-size: calc(22px * var(--text-scale, 1));
+  margin: 1.5rem 0 0.5rem;
+}
+.companion-units {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: 0.75rem;
+}
+.companion-page .companion-unit {
+  min-height: 120px;
+  width: 100%;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  background: #fff;
+  border: 2px solid var(--companion-line);
+  border-radius: 20px;
+  color: var(--companion-ink);
+}
+.companion-page .companion-unit.suggested {
+  border-color: var(--companion-brand);
+  background: var(--companion-soft);
+}
+.companion-unit-icon {
+  font-size: calc(36px * var(--text-scale, 1));
+  line-height: 1;
+}
+.companion-unit-text {
+  display: grid;
+  gap: 0.25rem;
+}
+.companion-unit-text strong {
+  font-size: calc(19px * var(--text-scale, 1));
+}
+.companion-unit-text small {
+  color: #574064;
+  font-size: calc(15px * var(--text-scale, 1));
+}
+.companion-badge {
+  justify-self: start;
+  background: var(--companion-brand);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0.15rem 0.7rem;
+  font-size: calc(14px * var(--text-scale, 1));
+  font-weight: 650;
+}
+.companion-page .companion-rest {
+  margin-top: 1rem;
+  width: 100%;
+  background: #fff;
+  border: 2px solid var(--companion-line);
+  justify-content: center;
+  font-weight: 650;
+}
+.companion-note,
+.companion-privacy {
+  color: #574064;
+  font-size: calc(15px * var(--text-scale, 1));
+}
+.companion-status {
+  min-height: 1.5em;
+  font-weight: 650;
+}
+
+/* Lesson */
+.companion-lesson-bar {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 1fr;
+  margin-top: 0.5rem;
+}
+.companion-lesson-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  font-weight: 700;
+  font-size: calc(19px * var(--text-scale, 1));
+}
+.companion-lesson-title small {
+  color: #574064;
+  font-weight: 600;
+  font-size: calc(15px * var(--text-scale, 1));
+}
+.companion-steps-bar {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 6px;
+}
+.companion-steps-bar span {
+  height: 12px;
+  border-radius: 6px;
+  background: #e6ddef;
+  border: 1px solid #b3a7bf;
+}
+.companion-steps-bar span.done {
+  background: var(--companion-brand);
+  border-color: var(--companion-brand);
+}
+.companion-steps-bar span.current {
+  background: #c9a6dc;
+  border-color: var(--companion-brand);
+}
+.companion-lesson-actions {
+  margin-top: 0;
+}
+.companion-phrase,
+.companion-cue {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: #f6f1e8;
+  border-radius: 18px;
+  padding: 1rem 1.25rem;
+}
+.companion-phrase-icon {
+  font-size: calc(48px * var(--text-scale, 1));
+  line-height: 1;
+}
+.companion-phrase p,
+.companion-cue p {
+  margin: 0;
+  font-size: calc(28px * var(--text-scale, 1));
+  line-height: 1.4;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.companion-instruction {
+  font-size: calc(18px * var(--text-scale, 1));
+}
+.companion-results .tap,
+.companion-methods .tap {
+  flex: 1 1 200px;
+  justify-content: flex-start;
+  padding: 12px 18px;
+  font-weight: 650;
+}
+.companion-page .companion-result:not(.primary),
+.companion-page .companion-method:not(.selected) {
+  background: #fff;
+  border: 2px solid var(--companion-line);
+}
+.companion-chips {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.5rem;
+}
+.companion-chip-row,
+.companion-bank,
+.companion-built {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.companion-page .companion-chip,
+.companion-page .companion-tile {
+  background: #fff;
+  border: 2px solid var(--companion-line);
+  font-size: calc(20px * var(--text-scale, 1));
+  font-weight: 650;
+  padding: 0 1rem;
+  justify-content: center;
+  text-align: center;
+}
+.companion-page .companion-chip.missed {
+  background: var(--companion-miss-bg);
+  border-color: var(--companion-miss);
+  color: var(--companion-miss);
+  text-decoration: underline wavy;
+}
+.companion-built {
+  min-height: 96px;
+  align-items: center;
+  border: 2px dashed #8a7a98;
+  border-radius: 16px;
+  padding: 0.6rem;
+  margin: 0.75rem 0;
+}
+.companion-built-empty {
+  color: #574064;
+  font-size: calc(22px * var(--text-scale, 1));
+  padding: 0 0.5rem;
+}
+.companion-page .companion-tile.placed {
+  background: var(--companion-soft);
+  border-color: var(--companion-brand);
+}
+.companion-tile-gap {
+  display: inline-block;
+  min-width: 72px;
+  min-height: 72px;
+  border-radius: 15px;
+  border: 2px dotted #d9cde3;
+}
+.companion-options {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.companion-option-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: stretch;
+}
+.companion-page .companion-option {
+  flex: 1 1 auto;
+  min-height: 88px;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  background: #fff;
+  border: 2px solid var(--companion-line);
+  font-size: calc(21px * var(--text-scale, 1));
+  font-weight: 650;
+  color: var(--companion-ink);
+}
+.companion-page .companion-option.right,
+.companion-page .companion-option.right[aria-pressed="true"] {
+  background: var(--companion-good-bg);
+  border-color: var(--companion-good);
+  color: var(--companion-good);
+}
+.companion-page .companion-option.picked[aria-pressed="true"] {
+  background: #fff;
+  border: 2px dashed var(--companion-miss);
+  color: var(--companion-ink);
+}
+.companion-listen-small {
+  flex: 0 0 auto;
+}
+.companion-feedback p {
+  font-size: calc(19px * var(--text-scale, 1));
+  font-weight: 650;
+}
+.companion-next {
+  min-width: 160px;
+  font-weight: 700;
+}
+.companion-mic {
+  margin-top: 1.25rem;
+  border-top: 1px solid var(--companion-line);
+  padding-top: 0.75rem;
+}
+.companion-heard {
+  background: #eef3fa;
+  border-radius: 14px;
+  padding: 0.75rem 1rem;
+  color: #203b58;
+}
+.companion-type {
+  display: grid;
+  gap: 0.5rem;
+  font-weight: 650;
+  margin: 0.75rem 0;
+}
+.companion-type textarea {
+  width: 100%;
+  min-height: 110px;
+  padding: 1rem;
+  font: inherit;
+  font-size: calc(20px * var(--text-scale, 1));
+  border: 1px solid #687e73;
+  border-radius: 12px;
+  resize: vertical;
+}
+.companion-rest-panel p {
+  font-size: calc(19px * var(--text-scale, 1));
+}
+.companion-summary-count {
+  font-size: calc(22px * var(--text-scale, 1));
+  font-weight: 700;
+}
+.companion-review-list {
+  display: grid;
+  gap: 0.5rem;
+  padding-left: 1.25rem;
+}
+.companion-review-list li span {
+  font-weight: 650;
+  margin-right: 0.5rem;
+}
+.companion-review-list li small {
+  color: var(--companion-miss);
+}
+.companion-page :focus-visible {
+  outline: 3px solid var(--companion-brand);
+  outline-offset: 3px;
+}
+
+@media (max-width: 480px) {
+  .companion-phrase p,
+  .companion-cue p {
+    font-size: calc(23px * var(--text-scale, 1));
+  }
+  .companion-dot-mark {
+    width: 28px;
+    height: 28px;
+  }
+  .companion-lesson-actions .tap,
+  .companion-row .tap {
+    flex: 1 1 auto;
+  }
+}
+.high-contrast .companion-page .tap {
+  border: 2px solid currentColor;
+}
+.high-contrast .companion-note,
+.high-contrast .companion-privacy,
+.high-contrast .companion-dot-day,
+.high-contrast .companion-unit-text small {
+  color: #3d244c;
+}
+@media (prefers-reduced-motion: reduce) {
+  .companion-ring-fill {
+    transition: none;
+  }
+}
+html.reduced-motion .companion-ring-fill {
+  transition: none;
+}

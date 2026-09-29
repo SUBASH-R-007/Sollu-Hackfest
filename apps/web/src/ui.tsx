@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useRef,
   type ButtonHTMLAttributes,
   type ReactNode,
@@ -12,6 +13,41 @@ import { useApp } from "./state";
 import { uiText, copy } from "./lib/copy";
 type Activation =
   globalThis.PointerEvent | globalThis.KeyboardEvent | globalThis.MouseEvent;
+/** Extra reach (px) around a button in which a shaky release still counts. */
+export const RELEASE_SLOP_PX = 12;
+interface ReleasePoint {
+  pointerId: number;
+  button: number;
+  clientX: number;
+  clientY: number;
+}
+interface Box {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+/**
+ * A pointer release activates a button only when the same pointer was pressed
+ * down on that button and is released on (or just beside) it. Releasing after
+ * drifting onto another button activates neither of them.
+ */
+export function releaseActivates(
+  pressedPointer: number | null,
+  release: ReleasePoint,
+  box: Box,
+  slop = RELEASE_SLOP_PX,
+): boolean {
+  return (
+    release.button === 0 &&
+    pressedPointer !== null &&
+    pressedPointer === release.pointerId &&
+    release.clientX >= box.left - slop &&
+    release.clientX <= box.right + slop &&
+    release.clientY >= box.top - slop &&
+    release.clientY <= box.bottom + slop
+  );
+}
 export function TapButton({
   onActivate,
   children,
@@ -22,7 +58,31 @@ export function TapButton({
   children: ReactNode;
 }) {
   const last = useRef(Number.NEGATIVE_INFINITY);
+  // The pointer that started a press on this button; null when none is pending.
+  const pressed = useRef<number | null>(null);
+  const disarm = useRef<(() => void) | undefined>(undefined);
   const { settings } = useApp();
+  useEffect(() => () => disarm.current?.(), []);
+  // Remember which pointer pressed this button. The window listeners run after
+  // this button's own pointerup handler and forget the press wherever that
+  // pointer is released or cancelled, so a later press that starts elsewhere
+  // can never be completed on this button.
+  function arm(pointerId: number) {
+    disarm.current?.();
+    pressed.current = pointerId;
+    const end = (event: globalThis.PointerEvent) => {
+      if (event.pointerId === pointerId) cleanup();
+    };
+    const cleanup = () => {
+      if (pressed.current === pointerId) pressed.current = null;
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      disarm.current = undefined;
+    };
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+    disarm.current = cleanup;
+  }
   function activate(
     e:
       | PointerEvent<HTMLButtonElement>
@@ -43,8 +103,17 @@ export function TapButton({
       {...props}
       data-tap="true"
       className={`tap ${className}`}
+      onPointerDown={(e) => {
+        props.onPointerDown?.(e);
+        if (e.button === 0) arm(e.pointerId);
+      }}
       onPointerUp={(e) => {
-        if (e.button === 0) activate(e);
+        const pointer = pressed.current;
+        if (pointer === e.pointerId) pressed.current = null;
+        if (
+          releaseActivates(pointer, e, e.currentTarget.getBoundingClientRect())
+        )
+          activate(e);
       }}
       onKeyDown={(e) => {
         props.onKeyDown?.(e);

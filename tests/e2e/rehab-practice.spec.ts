@@ -17,10 +17,10 @@ test("root stays on patient Home with a saved caregiver role", async ({
   });
   await page.goto("/");
   await expect(page.locator(".home-grid")).toBeVisible();
-  await expect(page).toHaveURL("http://localhost:5173/");
+  await expect(page).toHaveURL("/");
   await page.reload();
   await expect(page.locator(".home-grid")).toBeVisible();
-  await expect(page).toHaveURL("http://localhost:5173/");
+  await expect(page).toHaveURL("/");
   await page.goto("/care");
   await expect(page.locator(".care-shell")).toBeVisible();
   await expect(page).toHaveURL(/\/care$/);
@@ -40,37 +40,24 @@ test("practice keeps missing scores unknown and only learns human-confirmed revi
     page.getByRole("heading", { name: "Communication practice", exact: true }),
   ).toBeVisible();
   await checkTargetSizes(page);
-  await page
-    .getByRole("button", { name: "Start this practice", exact: true })
-    .click();
+  // One tap on the message card starts the attempt (no dropdown or Start).
+  await page.getByRole("button", { name: /Please give me time./ }).click();
   await expect(page.getByText("Not scored", { exact: true })).toBeVisible();
+  await checkTargetSizes(page);
+  // Tapping a word marks it as not said clearly; nothing is typed.
+  await page.getByRole("button", { name: "give", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Record audio", exact: true }),
-  ).toBeDisabled();
+    page.getByRole("button", { name: "give", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText("75% text match", { exact: true })).toBeVisible();
   await page
-    .getByLabel("Words actually heard (optional)", { exact: true })
-    .fill("Please me time");
-  await expect(
-    page.getByText("75% text match · awaiting transcript review", {
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("checkbox", { name: "give", exact: true }),
-  ).toBeDisabled();
+    .getByRole("group", { name: "Did my partner understand?" })
+    .getByRole("button", { name: "Yes", exact: true })
+    .click();
+  await page.getByText("More details (optional)", { exact: true }).click();
   await page
-    .getByRole("checkbox", {
-      name: "A person checked that this transcript reflects what was said",
-      exact: true,
-    })
-    .check();
-  await page.getByRole("checkbox", { name: "give", exact: true }).check();
-  await page
-    .getByRole("combobox", { name: /^Did my partner understand/ })
-    .selectOption("yes");
-  await page
-    .getByRole("combobox", { name: /^Tiredness after practice/ })
-    .selectOption("7");
+    .getByRole("button", { name: "Tiredness after practice: 7", exact: true })
+    .click();
   await expect(
     page.getByText("Time to consider a rest.", { exact: false }),
   ).toBeVisible();
@@ -91,6 +78,8 @@ test("practice keeps missing scores unknown and only learns human-confirmed revi
         confirmedMissedWords: string[];
         partnerUnderstanding: string;
         transcriptSource: string;
+        transcriptReviewed: boolean;
+        fatigueAfter: number | null;
         mediaIds: string[];
       }[]
     >((resolve) => {
@@ -108,6 +97,8 @@ test("practice keeps missing scores unknown and only learns human-confirmed revi
     confirmedMissedWords: ["give"],
     partnerUnderstanding: "yes",
     transcriptSource: "manual",
+    transcriptReviewed: true,
+    fatigueAfter: 7,
     mediaIds: [],
   });
   expect(inference).toEqual([]);
@@ -119,17 +110,52 @@ test("practice keeps missing scores unknown and only learns human-confirmed revi
   ).toBeVisible();
 });
 
+test("typed transcripts stay provisional until a person confirms the review", async ({
+  page,
+}) => {
+  await page.goto("/practice");
+  await page.getByRole("button", { name: /Please give me time./ }).click();
+  await page.getByText("Type what was heard instead", { exact: true }).click();
+  await page
+    .getByLabel("Words actually heard (optional)", { exact: true })
+    .fill("Please me time");
+  await expect(
+    page.getByText("75% text match · awaiting transcript review", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("checkbox", { name: "give", exact: true }),
+  ).toBeDisabled();
+  await page
+    .getByRole("checkbox", {
+      name: "A person checked that this transcript reflects what was said",
+      exact: true,
+    })
+    .check();
+  await page.getByRole("checkbox", { name: "give", exact: true }).check();
+  await page
+    .getByRole("button", { name: "Save practice", exact: true })
+    .click();
+  await expect(
+    page.getByText("Practice saved on this device.", { exact: false }),
+  ).toBeVisible();
+  // One tap continues with the next planned message.
+  await expect(
+    page.getByRole("button", { name: /^Next practice/ }),
+  ).toBeVisible();
+  expect(await spokenCalls(page)).toEqual([]);
+});
+
 test("recording requires consent and denial leaves practice usable without sending audio", async ({
   page,
 }) => {
   await page.goto("/practice");
+  await page.getByRole("button", { name: /Please give me time./ }).click();
+  // The explicit "Agree and record" tap is this attempt’s recording consent.
   await page
-    .getByRole("button", { name: "Start this practice", exact: true })
+    .getByRole("button", { name: "Agree and record audio", exact: true })
     .click();
-  await page
-    .getByRole("checkbox", { name: /I agree to record this practice/ })
-    .check();
-  await page.getByRole("button", { name: "Record audio", exact: true }).click();
   await expect(
     page.getByRole("status").filter({ hasText: "Deliberate E2E fixture" }),
   ).toBeVisible();
@@ -198,16 +224,14 @@ test("a synthetic camera clip is saved only with the attempt and permission rese
       value: async () => stream,
     });
   });
-  await page
-    .getByRole("button", { name: "Start this practice", exact: true })
-    .click();
+  await page.getByRole("button", { name: /Please give me time./ }).click();
+  await page.getByText("Type what was heard instead", { exact: true }).click();
   await page
     .getByLabel("Words actually heard (optional)", { exact: true })
     .fill("Earlier separate attempt");
   await page
-    .getByRole("checkbox", { name: /I agree to record this practice/ })
-    .check();
-  await page.getByRole("button", { name: "Record video", exact: true }).click();
+    .getByRole("button", { name: "Agree and record video", exact: true })
+    .click();
   await expect(
     page.getByRole("button", { name: "Finish recording", exact: true }),
   ).toBeVisible();
@@ -291,11 +315,11 @@ test("a synthetic camera clip is saved only with the attempt and permission rese
   await page
     .getByRole("button", { name: "Choose another practice", exact: true })
     .click();
-  await page
-    .getByRole("button", { name: "Start this practice", exact: true })
-    .click();
+  await page.getByRole("button", { name: /Please give me time./ }).click();
+  // A new attempt has no clip; recording again needs its own explicit tap.
   await expect(
-    page.getByRole("button", { name: "Record audio", exact: true }),
-  ).toBeDisabled();
+    page.getByRole("button", { name: "Agree and record audio", exact: true }),
+  ).toBeEnabled();
+  await expect(page.locator(".rehab-evidence")).toHaveCount(0);
   expect(await spokenCalls(page)).toEqual([]);
 });

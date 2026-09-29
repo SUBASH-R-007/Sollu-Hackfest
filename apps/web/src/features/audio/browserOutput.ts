@@ -81,9 +81,61 @@ export class BrowserAudioOutput implements AudioOutput {
     if (this.now() >= options.deadline) throw new OutputError("expired");
   }
 
+  constructor() {
+    // Chrome loads its voice list lazily; asking early (no audio is produced)
+    // lets the first tap find an installed voice instead of reporting none.
+    try {
+      if (typeof window !== "undefined") window.speechSynthesis?.getVoices();
+    } catch {
+      /* Voices are checked again at the tap. */
+    }
+  }
+
   device(text: string, lang: string, options: OutputOptions): Promise<void> {
     const voice = this.synthesisVoice(lang);
-    if (!voice) return Promise.reject(new OutputError("unavailable"));
+    if (voice) return this.speakWith(voice, text, options);
+    const synthesis =
+      typeof window === "undefined" ? undefined : window.speechSynthesis;
+    // An empty list usually means "not loaded yet", not "none installed".
+    if (!synthesis || synthesis.getVoices().length > 0)
+      return Promise.reject(new OutputError("unavailable"));
+    return this.voicesLoaded(synthesis, options).then(() => {
+      const loaded = this.synthesisVoice(lang);
+      if (!loaded) throw new OutputError("unavailable");
+      return this.speakWith(loaded, text, options);
+    });
+  }
+
+  private voicesLoaded(
+    synthesis: SpeechSynthesis,
+    options: OutputOptions,
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const done = (error?: OutputError) => {
+        clearTimeout(timer);
+        synthesis.removeEventListener?.("voiceschanged", loaded);
+        options.signal.removeEventListener("abort", cancelled);
+        if (error) reject(error);
+        else resolve();
+      };
+      const loaded = () => done();
+      const cancelled = () => done(new OutputError("cancelled"));
+      // Freshness still applies: never wait beyond the tap's deadline.
+      const timer = setTimeout(
+        () => done(new OutputError("unavailable")),
+        Math.max(0, options.deadline - this.now()),
+      );
+      synthesis.addEventListener?.("voiceschanged", loaded);
+      options.signal.addEventListener("abort", cancelled, { once: true });
+      if (options.signal.aborted) cancelled();
+    });
+  }
+
+  private speakWith(
+    voice: SpeechSynthesisVoice,
+    text: string,
+    options: OutputOptions,
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
         this.assertReady(options);

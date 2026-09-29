@@ -18,6 +18,7 @@ import TherapyDashboard from "../features/rehab/TherapyDashboard";
 import ClinicianOverview, {
   type ClinicianReviewTarget,
 } from "../features/rehab/ClinicianOverview";
+import { reviewTargetFromState } from "../features/rehab/reviewTarget";
 import { COMMUNICATION_LOG_INTERPRETATION } from "../features/rehab/reportScope";
 import AppointmentsPage from "../features/appointments/AppointmentsPage";
 
@@ -34,7 +35,12 @@ const dateTime = (at: number) =>
 export default function Therapist() {
   const location = useLocation();
   const [params, setParams] = useSearchParams();
-  const [reviewTarget, setReviewTarget] = useState<ClinicianReviewTarget>();
+  // The target belongs to the history entry that opened it, so browser
+  // Back/Forward never reuses a stale record from another entry.
+  const reviewTarget = useMemo(
+    () => reviewTargetFromState(location.state),
+    [location.state],
+  );
   const clinicianRoute = location.pathname === "/clinician";
   const requestedView = params.get("view");
   const view =
@@ -50,8 +56,10 @@ export default function Therapist() {
     next: "overview" | "rehab" | "log" | "appointments",
     target?: ClinicianReviewTarget,
   ) {
-    setReviewTarget(target);
-    setParams({ view: next });
+    setParams(
+      { view: next },
+      { state: target ? { reviewTarget: target } : null },
+    );
   }
   return (
     <section className="therapist-page">
@@ -101,7 +109,7 @@ export default function Therapist() {
           onLog={() => setView("log")}
         />
       ) : view === "rehab" ? (
-        <TherapyDashboard initialTarget={reviewTarget} />
+        <TherapyDashboard key={location.key} initialTarget={reviewTarget} />
       ) : view === "appointments" ? (
         <AppointmentsPage embedded />
       ) : (

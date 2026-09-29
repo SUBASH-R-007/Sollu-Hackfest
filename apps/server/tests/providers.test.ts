@@ -502,20 +502,32 @@ describe("provider settings API", () => {
     const { app, headers } = await setup();
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
-    await app.inject({
+    // A cloud engine with no usable key is refused instead of failing later.
+    const refused = await app.inject({
       method: "POST",
       url: "/api/llm/settings",
       headers,
       payload: { provider: "gemini", cloudConsent: true },
     });
+    expect(refused.statusCode).toBe(400);
+    await app.inject({
+      method: "POST",
+      url: "/api/llm/settings",
+      headers,
+      payload: {
+        provider: "gemini",
+        cloudConsent: true,
+        apiKey: "fictional-fixture",
+      },
+    });
+    fetch.mockRejectedValue(new Error("offline"));
     const response = await app.inject({
       method: "POST",
       url: "/api/llm/test",
       headers,
       payload: { localOnly: false },
     });
-    expect(response.json().ok).toBe(false);
-    expect(fetch).not.toHaveBeenCalled();
+    expect(response.json()).toMatchObject({ ok: false, provider: "gemini" });
   });
   it("requires sharing permission and supports the free connection check", async () => {
     const { app, headers } = await setup();

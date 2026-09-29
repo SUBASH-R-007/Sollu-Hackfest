@@ -338,7 +338,15 @@ describe("context signal engine", () => {
     ).toBe("home");
   });
 
-  it.each(["want usual water", "no usual tea", "usual பால்"])(
+  it.each([
+    "want usual water",
+    "no usual tea",
+    "usual பால்",
+    // Colloquial catalog aliases keep the named drink's identity.
+    "வழக்கமான தண்ணி",
+    "usual thanneer",
+    "usual பாலு",
+  ])(
     "does not substitute a different named drink using the routine: %s",
     (raw) => {
       const c = context({ fragment: { modality: "text", raw } });
@@ -350,6 +358,22 @@ describe("context signal engine", () => {
       ).toBe(false);
     },
   );
+
+  it("still resolves a colloquial drink name to the matching routine", () => {
+    const c = context({
+      fragment: { modality: "text", raw: "வழக்கமான தண்ணி" },
+      routine: {
+        dueNow: [
+          { label: "Morning water", topic: "drink", time: "08:05" },
+          { label: "Morning coffee", topic: "drink", time: "08:00" },
+        ],
+        justPassed: [],
+      },
+    });
+    expect(deriveContextSignals(c).routines.map((r) => r.label)).toEqual([
+      "Morning water",
+    ]);
+  });
 
   it("bounds hints to three and never generates text from empty input", () => {
     const c = context({

@@ -39,6 +39,37 @@ const concepts: Record<string, string> = {
   book: "Reading",
   clock: "Time",
 };
+// Display names only; the English label is still what is sent for sentences.
+const tamilObjects: Record<string, string> = {
+  bottle: "பாட்டில்",
+  cup: "கப்",
+  bowl: "கிண்ணம்",
+  banana: "வாழைப்பழம்",
+  apple: "ஆப்பிள்",
+  orange: "ஆரஞ்சு",
+  sandwich: "சாண்ட்விச்",
+  bed: "படுக்கை",
+  couch: "சோபா",
+  chair: "நாற்காலி",
+  toilet: "கழிவறை",
+  sink: "சிங்க்",
+  toothbrush: "பல் பிரஷ்",
+  tv: "டிவி",
+  remote: "ரிமோட்",
+  "cell phone": "ஃபோன்",
+  book: "புத்தகம்",
+  clock: "கடிகாரம்",
+};
+const tamilConcepts: Record<string, string> = {
+  Drink: "குடிக்க",
+  Food: "சாப்பாடு",
+  Rest: "ஓய்வு",
+  "Toilet & bath": "கழிவறை, குளியல்",
+  TV: "டிவி",
+  Phone: "ஃபோன்",
+  Reading: "படிக்க",
+  Time: "நேரம்",
+};
 
 // Model weights are reused in memory. Photos are never stored in this cache.
 let cachedModel: ObjectDetection | undefined;
@@ -126,6 +157,7 @@ export default function Camera() {
   const [photo, setPhoto] = useState("");
   const [label, setLabel] = useState("");
   const [error, setError] = useState("");
+  const say = (en: string, ta: string) => copy(settings.lang, en, ta);
 
   function stopCamera() {
     cameraRequest.current += 1;
@@ -147,7 +179,10 @@ export default function Camera() {
     if (!navigator.mediaDevices?.getUserMedia) {
       setOpening(false);
       setError(
-        "Camera access needs HTTPS or localhost. You can choose a photo below.",
+        say(
+          "The camera can’t open here. Choose a photo below.",
+          "இங்கே கேமரா திறக்காது. கீழே ஒரு படத்தைத் தேர்ந்தெடுங்கள்.",
+        ),
       );
       return;
     }
@@ -173,7 +208,12 @@ export default function Camera() {
       if (mounted.current && request === cameraRequest.current) {
         stopCamera();
         setOpening(false);
-        setError("The camera could not open. Choose a photo, or use Topics.");
+        setError(
+          say(
+            "The camera could not open. Choose a photo, or use Topics.",
+            "கேமரா திறக்கவில்லை. படத்தைத் தேர்ந்தெடுங்கள், அல்லது தலைப்புகளைப் பாருங்கள்.",
+          ),
+        );
       }
     } finally {
       if (mounted.current && request === cameraRequest.current)
@@ -217,14 +257,23 @@ export default function Camera() {
       if (match) setLabel(match.class);
       else
         setError(
-          "I’m not sure what this is. Try a bottle or cup, take another photo, or use Topics.",
+          say(
+            "I’m not sure what this is. Take another photo, or use Topics.",
+            "இது என்னவென்று தெரியவில்லை. வேறு படம் எடுங்கள், அல்லது தலைப்புகளைப் பாருங்கள்.",
+          ),
         );
     } catch (failure) {
       if (mounted.current && request === detectionRequest.current) {
         setError(
           failure instanceof Error && settings.localProcessingOnly
-            ? failure.message
-            : "The object recogniser is unavailable. Its first download needs internet. Your photo has stayed on this device. Try Topics or the labelled demo below.",
+            ? say(
+                failure.message,
+                "உள்ளூர் பாதுகாப்பு இயக்கத்தில் உள்ளது. தலைப்புகளைப் பாருங்கள்.",
+              )
+            : say(
+                "Object finder not ready: it needs internet the first time. Your photo stayed on this device. Use Topics.",
+                "பொருளைக் கண்டறிய முதல் முறை இணையம் தேவை. உங்கள் படம் இந்தச் சாதனத்திலேயே உள்ளது. தலைப்புகளைப் பாருங்கள்.",
+              ),
         );
       }
     } finally {
@@ -236,7 +285,12 @@ export default function Camera() {
   function capture() {
     const preview = video.current;
     if (!preview || preview.videoWidth === 0) {
-      setError("The camera is still getting ready. Please try again.");
+      setError(
+        say(
+          "The camera is still getting ready. Please try again.",
+          "கேமரா இன்னும் தயாராகிறது. மீண்டும் முயற்சி செய்யுங்கள்.",
+        ),
+      );
       return;
     }
     try {
@@ -245,9 +299,12 @@ export default function Camera() {
       );
     } catch (failure) {
       setError(
-        failure instanceof Error
-          ? failure.message
-          : "Please try another photo.",
+        say(
+          failure instanceof Error
+            ? failure.message
+            : "Please try another photo.",
+          "இந்தப் படத்தைத் திறக்க முடியவில்லை. வேறு படத்தை முயற்சி செய்யுங்கள்.",
+        ),
       );
     }
   }
@@ -264,11 +321,21 @@ export default function Camera() {
         "image/heif",
       ].includes(file.type)
     ) {
-      setError("Choose a JPG, PNG, WebP, or other supported camera photo.");
+      setError(
+        say(
+          "Choose a JPG, PNG, WebP, or other supported camera photo.",
+          "JPG அல்லது PNG படத்தைத் தேர்ந்தெடுங்கள்.",
+        ),
+      );
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      setError("That photo is too large. Please choose a photo under 10 MB.");
+      setError(
+        say(
+          "That photo is too large. Please choose a photo under 10 MB.",
+          "படம் மிகப் பெரியது. 10 MB-க்குக் குறைவான படத்தைத் தேர்ந்தெடுங்கள்.",
+        ),
+      );
       return;
     }
     const request = ++detectionRequest.current;
@@ -288,7 +355,10 @@ export default function Camera() {
     } catch {
       if (mounted.current && request === detectionRequest.current) {
         setError(
-          "This photo format could not be opened. Try a JPG or PNG photo.",
+          say(
+            "This photo format could not be opened. Try a JPG or PNG photo.",
+            "இந்தப் படத்தைத் திறக்க முடியவில்லை. JPG அல்லது PNG படத்தை முயற்சி செய்யுங்கள்.",
+          ),
         );
         setWorking(false);
       }
@@ -343,7 +413,7 @@ export default function Camera() {
             ref={video}
             muted
             playsInline
-            aria-label="Live rear-camera preview"
+            aria-label={say("Live rear-camera preview", "கேமரா காட்சி")}
             style={{
               width: "100%",
               height: "100%",
@@ -354,7 +424,10 @@ export default function Camera() {
           {photo && (
             <img
               src={photo}
-              alt="Your photo, processed only on this device"
+              alt={say(
+                "Your photo, processed only on this device",
+                "உங்கள் படம், இந்தச் சாதனத்தில் மட்டும்",
+              )}
               style={{ width: "100%", height: "100%", objectFit: "contain" }}
             />
           )}
@@ -403,6 +476,7 @@ export default function Camera() {
           )}
           {!cameraReady && (
             <TapButton
+              className="secondary-button"
               disabled={working || opening}
               onActivate={() => {
                 void openCamera();
@@ -417,6 +491,7 @@ export default function Camera() {
             </TapButton>
           )}
           <TapButton
+            className="secondary-button"
             disabled={working}
             onActivate={() => fileInput.current?.click()}
           >
@@ -443,15 +518,22 @@ export default function Camera() {
           <div className="hint" role="status">
             <ScanLine aria-hidden="true" />
             <span>
-              Looking at this photo on your device… The first model download may
-              take a moment.
+              {say(
+                "Looking at your photo on this device…",
+                "உங்கள் படத்தை இந்தச் சாதனத்திலேயே பார்க்கிறது…",
+              )}
             </span>
           </div>
         )}
         {label && !working && (
           <div className="camera-result" style={{ display: "grid", gap: 12 }}>
             <div className="chip" role="status">
-              I see: <strong>{label}</strong> · {concepts[label]}
+              {say("I see:", "இது:")}{" "}
+              <strong>{say(label, tamilObjects[label] ?? label)}</strong> ·{" "}
+              {say(
+                concepts[label] ?? "",
+                tamilConcepts[concepts[label] ?? ""] ?? concepts[label] ?? "",
+              )}
             </div>
             <TapButton className="primary-button" onActivate={useObject}>
               <ArrowRight />
@@ -471,42 +553,61 @@ export default function Camera() {
           </p>
         )}
         <Hint>
-          <ShieldCheck size={18} aria-hidden="true" /> Photos stay on this
-          device.{" "}
-          {settings.localProcessingOnly !== false
-            ? "Local-only protection blocks new model downloads. A model already loaded in this tab can still work."
-            : "The first use downloads a free recognition model. A transfer already started may finish if protection changes; it contains no photo."}{" "}
-          Only the object label is sent to the Sollu server to find sentences.
+          <ShieldCheck size={18} aria-hidden="true" />{" "}
+          {say(
+            "Photos stay on this device. Only the object’s name is sent to find sentences.",
+            "படம் இந்தச் சாதனத்திலேயே இருக்கும். பொருளின் பெயர் மட்டும் வாக்கியம் தேட அனுப்பப்படும்.",
+          )}
         </Hint>
         <p className="muted">
-          Recognises everyday objects such as bottles, cups and chairs. It
-          cannot recognise medicine, glasses or personal objects yet.
+          {settings.localProcessingOnly !== false
+            ? say(
+                "Local-only protection is on: no new downloads. An object finder already open here still works.",
+                "உள்ளூர் பாதுகாப்பு இயக்கத்தில் உள்ளது; புதிதாக எதுவும் பதிவிறக்கப்படாது.",
+              )
+            : say(
+                "First use downloads a free object finder. It never contains your photo.",
+                "முதல் முறை ஒரு இலவசக் கருவி பதிவிறக்கப்படும்; அதில் உங்கள் படம் இருக்காது.",
+              )}{" "}
+          {say(
+            "It knows everyday things like cups and chairs, not medicines or personal items.",
+            "கப், நாற்காலி போன்ற பொதுப் பொருட்களை மட்டும் அறியும்; மருந்துகளை அறியாது.",
+          )}
         </p>
         <div
           className="camera-alternatives"
           style={{ display: "flex", flexWrap: "wrap", gap: 12 }}
         >
-          <TapButton onActivate={() => navigate("/topics")}>
+          <TapButton
+            className="secondary-button"
+            onActivate={() => navigate("/topics")}
+          >
             <span aria-hidden="true">🗂️</span>
             <span>
               {copy(settings.lang, "Use Topics", "தலைப்புகளைக் காட்டு")}
             </span>
           </TapButton>
-          <TapButton disabled={working} onActivate={demoBottle}>
-            <span aria-hidden="true">🧪</span>
-            <span>
-              {copy(
-                settings.lang,
-                "Try demo: water bottle",
-                "மாதிரி: தண்ணீர் பாட்டில்",
-              )}
-            </span>
-          </TapButton>
+          {settings.demo && (
+            <TapButton
+              className="secondary-button"
+              disabled={working}
+              onActivate={demoBottle}
+            >
+              <span aria-hidden="true">🧪</span>
+              <span>
+                {say("Try demo: water bottle", "மாதிரி: தண்ணீர் பாட்டில்")}
+              </span>
+            </TapButton>
+          )}
         </div>
-        <p className="muted">
-          The demo uses a sample bottle label. It does not identify anything in
-          your photo.
-        </p>
+        {settings.demo && (
+          <p className="muted">
+            {say(
+              "The demo uses a sample bottle label. It does not identify anything in your photo.",
+              "மாதிரி ஒரு பாட்டில் பெயரை மட்டும் பயன்படுத்தும்; உங்கள் படத்தில் உள்ளதை அறியாது.",
+            )}
+          </p>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,19 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
+
+// Lets a second checkout (or E2E run) use other ports; defaults are unchanged.
+function portFromEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw === "") return fallback;
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 1 || port > 65535)
+    throw new Error(`${name} must be a port number from 1 to 65535`);
+  return port;
+}
+const webPort = portFromEnv("SOLLU_WEB_PORT", 5173);
+const apiHost = `127.0.0.1:${portFromEnv("SOLLU_API_PORT", 8787)}`;
+
 export default defineConfig({
   plugins: [
     react(),
@@ -44,11 +57,11 @@ export default defineConfig({
     }),
   ],
   server: {
-    port: 5173,
+    port: webPort,
     strictPort: true,
     proxy: {
-      "/api": "http://127.0.0.1:8787",
-      "/ws": { target: "ws://127.0.0.1:8787", ws: true },
+      "/api": `http://${apiHost}`,
+      "/ws": { target: `ws://${apiHost}`, ws: true },
     },
   },
   build: { chunkSizeWarningLimit: 700 },

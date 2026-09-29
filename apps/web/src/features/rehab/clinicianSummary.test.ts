@@ -236,4 +236,17 @@ describe("clinician overview observations", () => {
     expect(result.communication.seconds.n).toBe(1);
     expect(result.communication.seconds.median).toBe(0);
   });
+
+  it("treats negative, non-finite or implausible times as missing rather than zero", () => {
+    const result = summary({
+      attempts: [
+        attempt({ timeToSpeechMs: 4000 }),
+        attempt({ id: "negative", timeToSpeechMs: -500 }),
+        attempt({ id: "huge", timeToSpeechMs: 86_400_001 }),
+        // Stored rows can bypass schema parsing (for example, legacy data).
+        { ...attempt({ id: "nan" }), timeToSpeechMs: Number.NaN },
+      ],
+    });
+    expect(result.communication.seconds).toMatchObject({ n: 1, median: 4 });
+  });
 });

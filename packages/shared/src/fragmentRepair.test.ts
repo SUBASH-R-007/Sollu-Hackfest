@@ -123,6 +123,35 @@ describe("conservative fragmented communication", () => {
     expect(repairCatalogFragment("tea table no off").changes).toEqual([]);
     expect(repairCatalogFragment("tea-pot").text).toBe("tea-pot");
   });
+
+  it.each([
+    "pill",
+    "my pill",
+    "pill please",
+    "a glass",
+    "glass",
+    "took",
+    "chai",
+    "clot",
+    "mil",
+    "மூக்கு",
+    "தூக்க",
+    "headache",
+    "venaa",
+    "வேணா",
+    "varala",
+  ])(
+    "never completes a complete health, body, refusal or ordinary word: %s",
+    (raw) => {
+      expect(repairCatalogFragment(raw).changes).toEqual([]);
+      expect(suggest(raw).candidates.map((c) => c.intentId)).not.toContain(
+        "daily.pillow",
+      );
+      expect(suggest(raw).candidates.map((c) => c.intentId)).not.toContain(
+        "daily.glasses",
+      );
+    },
+  );
 });
 
 describe("confirmed personal corrections and grounding", () => {

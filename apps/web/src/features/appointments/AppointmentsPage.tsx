@@ -127,7 +127,9 @@ export default function AppointmentsPage({
       `sollu-appointment-${item.id}.ics`,
     );
     setMessage(
-      "Calendar file saved. Import it into your calendar to set a reminder. This does not book or contact the clinic.",
+      item.status === "cancelled"
+        ? "Cancellation calendar file saved. Import it to mark the event cancelled in your calendar. This does not cancel with or contact the clinic."
+        : "Calendar file saved. Import it into your calendar to set a reminder. This does not book or contact the clinic.",
     );
   }
 
@@ -352,17 +354,16 @@ export default function AppointmentsPage({
                     <Check size={20} aria-hidden="true" /> Clinic has confirmed
                   </TapButton>
                 )}
+                <TapButton disabled={busy} onActivate={() => calendar(item)}>
+                  <CalendarPlus size={20} aria-hidden="true" />
+                  {item.status === "cancelled"
+                    ? "Save cancellation calendar file"
+                    : "Save calendar file"}
+                </TapButton>
                 {item.status !== "cancelled" && (
                   <>
                     <TapButton disabled={busy} onActivate={() => edit(item)}>
                       <Pencil size={20} aria-hidden="true" /> Reschedule
-                    </TapButton>
-                    <TapButton
-                      disabled={busy}
-                      onActivate={() => calendar(item)}
-                    >
-                      <CalendarPlus size={20} aria-hidden="true" /> Save
-                      calendar file
                     </TapButton>
                     <TapButton
                       disabled={busy}

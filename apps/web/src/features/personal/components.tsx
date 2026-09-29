@@ -80,6 +80,8 @@ export function SpeakLine({
           setArmed(true);
           return;
         }
+        // Each spoken line needs its own two-step confirmation.
+        setArmed(false);
         begin({ modality: "text", raw: text });
         const ticket = audio.createTap(event, text, {
           role: "patient",

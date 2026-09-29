@@ -265,6 +265,60 @@ suite("rehabilitation report honesty and safe transfer", () => {
     });
   });
 
+  it("keeps every session in a weekly bucket, including weeks outside the local range", () => {
+    const data = report();
+    const earlier = new Date(2026, 7, 20, 12).getTime();
+    const weeks = weeklyReport({
+      ...data,
+      sessions: [
+        ...data.sessions,
+        { ...data.sessions[0], id: "x", at: earlier },
+      ],
+    });
+    expect(weeks.reduce((sum, w) => sum + w.count, 0)).toBe(2);
+    expect(weeks[0]).toMatchObject({ week: "2026-08-17", count: 1 });
+    expect(weeks.map((w) => w.week)).toEqual(
+      [...weeks.map((w) => w.week)].sort(),
+    );
+  });
+
+  it("exports implausible or invalid communication times as missing, not zero", () => {
+    const base = AttemptSchema.parse({
+      id: "a",
+      startedAt: at,
+      modality: "text",
+      fragmentRaw: "water",
+      outputLang: "en",
+      place: "home",
+      timeBucket: "afternoon",
+      demoClock: false,
+      rounds: [],
+      taps: 2,
+      offline: false,
+      demoCached: false,
+      outcome: "spoken",
+      timeToSpeechMs: 3000,
+    });
+    const data = report({
+      attempts: [
+        base,
+        { ...base, id: "late", timeToSpeechMs: 90_000_000 },
+        { ...base, id: "negative", timeToSpeechMs: -1 },
+        { ...base, id: "infinite", timeToSpeechMs: Infinity },
+      ],
+    });
+    expect(data.communication.map((r) => r.seconds)).toEqual([
+      3,
+      null,
+      null,
+      null,
+    ]);
+    expect(communicationSummary(data.communication).seconds).toMatchObject({
+      n: 1,
+      median: 3,
+    });
+  });
+
   it("round trips snapshots while stripping unknown trust, URLs, tokens and executable metadata", () => {
     const input = {
       ...report(),

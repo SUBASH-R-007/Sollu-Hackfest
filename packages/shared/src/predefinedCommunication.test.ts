@@ -29,6 +29,23 @@ describe("predefined communication route", () => {
     "மாத்திரை வேணாம்",
     "nenju vali",
     "marunthu vendam",
+    // Compound/agglutinated Tamil and missing English/Tanglish health words.
+    "தலைவலி",
+    "நெஞ்சுவலி",
+    "வயிறு வலிக்கிறது",
+    "வலிக்கிறது",
+    "மூச்சு விட முடியலை",
+    "காய்ச்சல்",
+    "உதவிக்கு வாங்க",
+    "வயிற்று வலி",
+    "thalaivali",
+    "thalavali",
+    "vayiru valikudhu",
+    "headache",
+    "fever",
+    "vomiting",
+    "breathless",
+    "pill",
   ])(
     "keeps recognized health/help wording out of generation without determining urgency: %s",
     (raw) => {
@@ -45,6 +62,9 @@ describe("predefined communication route", () => {
     "painting",
     "chestnut",
     "garden tomorrow sister",
+    "valid ticket",
+    "pillow",
+    "வலது கை",
   ])("does not treat unrelated words as a safety assessment: %s", (raw) => {
     expect(requiresPredefinedCommunication(context(raw))).toBe(false);
   });

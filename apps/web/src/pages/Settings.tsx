@@ -39,7 +39,7 @@ import { useApp } from "../state";
 import { Back, Hint, PageTitle, TapButton } from "../ui";
 import { audio, type VoiceInfo } from "../features/audio";
 import { startPhraseRecording, type PhraseRecorder } from "../features/voice";
-import { MemoryPanel, OfflinePanel } from "./Communication";
+import { MemoryPanel, OfflinePanel } from "./CaregiverPanels";
 import { BackupPanel } from "./Support";
 import {
   LlmSettings,
@@ -51,6 +51,8 @@ import { PrivacyControls } from "../features/privacy/PrivacyControls";
 import { setCloudSentencePermission } from "../features/privacy/sentencePolicy";
 import { SpeechRecognitionSettings } from "../features/settings/SpeechRecognitionSettings";
 import { setRecognitionPreference } from "../features/privacy/recognitionPreference";
+import { setCloudTranscriptionPermission } from "../features/privacy/transcriptionPolicy";
+import { recordWithdrawnConsents } from "../features/personal/withdrawals";
 
 const sections = [
   { id: "general", label: "General", icon: Settings2 },
@@ -152,6 +154,7 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 function General() {
   const { settings, updateSettings } = useApp();
   const [draft, setDraft] = useState(settings);
+  const [baseline, setBaseline] = useState(settings);
   const [pin, setPin] = useState("");
   const [pinAgain, setPinAgain] = useState("");
   const [accessCode, setAccessCode] = useState("");
@@ -187,7 +190,21 @@ function General() {
         demoSetAt: Date.now(),
         ...(pin ? { pinHash: await hashPin(pin) } : {}),
       };
-      await updateSettings(next);
+      // Save only what this form changed. Re-sending the whole mount-time copy
+      // would revert changes made elsewhere since (language switch, privacy,
+      // cloud sentence permission in another tab or settings panel).
+      const patch = Object.fromEntries(
+        Object.entries(next).filter(
+          ([key, value]) =>
+            value !== baseline[key as keyof UserSettings] ||
+            key === "demoSetAt",
+        ),
+      ) as Partial<UserSettings>;
+      // Restart the demo clock only when it is switched on or its time changes.
+      if (!next.demo || (baseline.demo && next.demoTime === baseline.demoTime))
+        delete patch.demoSetAt;
+      await updateSettings(patch);
+      setBaseline(next);
       await setKV("accessCode", accessCode);
       setDraft(next);
       setPin("");
@@ -285,6 +302,13 @@ function General() {
             onChange={(value) => change("showGloss", value)}
           >
             Show the English meaning under Tamil
+          </Toggle>
+          <Toggle
+            checked={draft.followListenerLanguage === true}
+            onChange={(value) => change("followListenerLanguage", value)}
+          >
+            Suggest sentences in each listener’s language instead of the primary
+            language
           </Toggle>
           <Toggle
             checked={draft.twoStep}
@@ -738,10 +762,18 @@ function VoiceStudio() {
   async function withdrawAll() {
     cancel();
     try {
-      await db.transaction("rw", [db.recordings, db.consents], async () => {
-        await db.recordings.clear();
-        await db.consents.clear();
-      });
+      await db.transaction(
+        "rw",
+        [db.recordings, db.consents, db.kv],
+        async () => {
+          // Remember withdrawals so restoring an older backup cannot revive them (I-7).
+          await recordWithdrawnConsents(
+            (await db.consents.toArray()).map((consent) => consent.id),
+          );
+          await db.recordings.clear();
+          await db.consents.clear();
+        },
+      );
       setConsented(false);
       setWithdraw(false);
       setMessage(
@@ -1222,6 +1254,11 @@ function Privacy() {
       setCloudSentencePermission(false);
     } catch {
       /* Revocation remains effective in this tab. */
+    }
+    try {
+      setCloudTranscriptionPermission(false);
+    } catch {
+      /* Local-only protection already blocks cloud audio. */
     }
     try {
       setRecognitionPreference("local");
