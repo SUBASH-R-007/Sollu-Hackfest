@@ -39,7 +39,14 @@ import {
   clockNow,
   timeBucket,
 } from "./lib/context";
-import { getIntent } from "./lib/api";
+import {
+  getIntent,
+  rememberSentenceEngine,
+  selectedSentenceEngine,
+  type EngineFailure,
+  type EngineFailureDetail,
+  type SentenceEngine,
+} from "./lib/api";
 import { RelayClient, type DeliveryStatus } from "./lib/relay";
 import { copy } from "./lib/copy";
 import { audio, type TapTicket } from "./features/audio";
@@ -58,6 +65,7 @@ import {
   subscribeLocalProcessingPolicy,
 } from "./features/privacy/browserPolicy";
 import { setRecognitionPreference } from "./features/privacy/recognitionPreference";
+import { setCloudTranscriptionPermission } from "./features/privacy/transcriptionPolicy";
 import {
   setCloudSentencePermission,
   subscribeCloudSentencePermission,
@@ -68,6 +76,11 @@ export interface Session {
   context: ContextPacket;
   candidates: Candidate[];
   moreCandidates?: Candidate[];
+  // Prepared vocabulary shown only after an explicit tap when the AI engine fails.
+  preparedCandidates?: Candidate[];
+  engineNotice?: string;
+  /** Output language the person switched to for this message. */
+  langOverride?: Lang;
   loading: boolean;
   error: string;
   model: string;
@@ -95,10 +108,15 @@ type AppState = {
     preview?: boolean,
     langOverride?: Lang,
   ) => void;
+  sayInPlace: (
+    candidate: Candidate,
+    ticket: TapTicket | null,
+  ) => Promise<string>;
   stop: () => void;
   abandon: () => void;
   retry: () => void;
   showMoreChoices: () => void;
+  showPreparedChoices: () => void;
   question: { text: string; at: number; lang?: Lang } | null;
   setQuestion: (text: string) => void;
   caregiverUnlocked: boolean;
@@ -120,6 +138,117 @@ type AppState = {
     partnerUnderstanding?: string,
   ) => void;
 };
+/** Settings that never change which sentences are suggested. */
+const presentationOnlySettings = new Set<keyof Settings>([
+  "speechLang",
+  "hand",
+  "keepLeft",
+  "textScale",
+  "highContrast",
+  "showGloss",
+  "twoStep",
+  "choiceCount",
+  "tapFilterMs",
+  "pauseSeconds",
+  "speechRate",
+  "quietMode",
+  "reducedMotion",
+  "preferredInput",
+  "stage",
+  "pinHash",
+]);
+const engineLabels: Record<SentenceEngine, string> = {
+  mock: "Free vocabulary",
+  openai: "OpenAI",
+  anthropic: "Anthropic Claude",
+  gemini: "Google Gemini",
+  groq: "Groq",
+  ollama: "Ollama (local)",
+};
+function engineLabel(engine: SentenceEngine | undefined) {
+  return engine ? engineLabels[engine] : "The AI sentence engine";
+}
+function engineFromModel(model: string): SentenceEngine | undefined {
+  const id = model.split(/[:\s]/)[0];
+  return id in engineLabels ? (id as SentenceEngine) : undefined;
+}
+/** An honest explanation; prepared phrases are offered, never substituted. */
+export function engineFailureNotice(
+  failure: EngineFailure,
+  engine: SentenceEngine | undefined,
+  lang: Lang,
+  detail?: EngineFailureDetail,
+  timeoutMs?: number,
+) {
+  const name = engineLabel(engine);
+  const seconds = timeoutMs ? Math.round(timeoutMs / 1000) : undefined;
+  if (failure === "unavailable" && detail) {
+    const reason: Record<EngineFailureDetail, [string, string]> = {
+      timeout: [
+        `${name} did not answer within ${seconds ?? "the maximum"} seconds. Try again, or allow a longer wait in Settings → Sentence engine.`,
+        `${name} ${seconds ?? ""} வினாடிகளில் பதில் தரவில்லை. மீண்டும் முயலுங்கள், அல்லது அமைப்புகளில் காத்திருக்கும் நேரத்தை நீட்டுங்கள்.`,
+      ],
+      key: [
+        `${name} did not accept the API key. Check the key in Settings → Sentence engine.`,
+        `${name} API விசையை ஏற்கவில்லை. அமைப்புகளில் விசையைச் சரிபாருங்கள்.`,
+      ],
+      model: [
+        `${name} does not offer the chosen model to this account. Choose another model in Settings → Sentence engine.`,
+        `இந்தக் கணக்கிற்கு ${name} அந்த மாடலைத் தரவில்லை. அமைப்புகளில் வேறு மாடலைத் தேர்ந்தெடுங்கள்.`,
+      ],
+      quota: [
+        `${name} is busy or the account limit was reached. Wait a little and try again.`,
+        `${name} பரபரப்பாக உள்ளது அல்லது கணக்கு வரம்பு முடிந்தது. சற்று நேரம் கழித்து முயலுங்கள்.`,
+      ],
+      provider: [
+        `${name} had a temporary problem. Try again.`,
+        `${name}-இல் தற்காலிகச் சிக்கல். மீண்டும் முயலுங்கள்.`,
+      ],
+      network: [
+        `${name} could not be reached. Check the internet connection and try again.`,
+        `${name}-ஐ அணுக முடியவில்லை. இணையத்தைச் சரிபார்த்து மீண்டும் முயலுங்கள்.`,
+      ],
+      "invalid-output": [
+        `${name} sent an answer Sollu could not use. Try again.`,
+        `${name} தந்த பதிலைப் பயன்படுத்த முடியவில்லை. மீண்டும் முயலுங்கள்.`,
+      ],
+    };
+    return `${copy(lang, ...reason[detail])} ${copy(lang, "No vocabulary phrases were substituted.", "மாற்று வாக்கியங்கள் தானாகச் சேர்க்கப்படவில்லை.")}`;
+  }
+  switch (failure) {
+    case "clarify":
+      return copy(
+        lang,
+        `${name} needs a little more to be sure. Add a word, or see prepared phrases.`,
+        `${name}-க்கு இன்னும் கொஞ்சம் தெளிவு வேண்டும். ஒரு வார்த்தை சேருங்கள், அல்லது தயாரான வாக்கியங்களைப் பாருங்கள்.`,
+      );
+    case "unverified":
+      return copy(
+        lang,
+        `${name}'s suggestions did not pass the checks for your words, so none are shown. Try other words or check what was heard.`,
+        `${name} தந்த வாக்கியங்கள் உங்கள் வார்த்தைகளுடன் பொருந்தவில்லை. வேறு வார்த்தைகளை முயலுங்கள்.`,
+      );
+    case "device-permission":
+      return copy(
+        lang,
+        `Cloud sentences are off on this device, so ${name} was not asked. Turn them on in Settings → Sentence engine.`,
+        `இந்தச் சாதனத்தில் கிளவுட் வாக்கியங்கள் அணைக்கப்பட்டுள்ளன; ${name} கேட்கப்படவில்லை. அமைப்புகளில் இயக்குங்கள்.`,
+      );
+    case "engine-reset":
+      return copy(
+        lang,
+        `The Sollu server restarted and forgot the ${name} choice. Choose it again in Settings → Sentence engine.`,
+        `Sollu சர்வர் மீண்டும் தொடங்கியதால் ${name} தேர்வு நீங்கியது. அமைப்புகளில் மீண்டும் தேர்ந்தெடுங்கள்.`,
+      );
+    default:
+      return copy(
+        lang,
+        `${name} could not answer (offline, timeout, missing key or provider error). No vocabulary phrases were substituted.`,
+        `${name} பதில் தரவில்லை. மாற்று வாக்கியங்கள் தானாகச் சேர்க்கப்படவில்லை.`,
+      );
+  }
+}
+
 const AppContext = createContext<AppState | null>(null);
 export const useApp = () => {
   const ctx = useContext(AppContext);
@@ -151,6 +280,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     abort = useRef<AbortController | null>(null),
     relay = useRef<RelayClient | null>(null),
     pendingReceipt = useRef<string | null>(null),
+    sendSeq = useRef(0),
     generation = useRef(0);
   function setSession(next: Session | null) {
     sessionRef.current = next;
@@ -177,6 +307,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       loading: false,
       candidates: [],
       moreCandidates: [],
+      preparedCandidates: [],
+      engineNotice: "",
       model: "",
       error:
         settingsRef.current.lang === "ta"
@@ -313,10 +445,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...s,
         candidates: [],
         moreCandidates: [],
+        preparedCandidates: [],
+        engineNotice: "",
         loading: false,
         chosen: undefined,
         model: "",
-        error: "",
+        // Explain the empty list instead of leaving a blank screen.
+        error:
+          s.loading || s.candidates.length || s.chosen
+            ? copy(
+                settingsRef.current.lang,
+                "Settings changed, so the earlier choices were cleared. Tap Find new choices to try the same words again.",
+                "அமைப்புகள் மாறியதால் முந்தைய தேர்வுகள் நீக்கப்பட்டன. அதே வார்த்தைகளுக்குப் ‘புதிய தேர்வுகள்’ தொடுங்கள்.",
+              )
+            : s.error,
       }));
       if (event.type === "sollu:llm-settings-changed") void clearRehearsal();
     };
@@ -370,13 +512,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
           )
             changeSession((s) => ({
               ...s,
-              delivery: `Shown on ${pair.name}’s phone ✓`,
+              delivery: deliveryText("delivered", false, pair.name),
             }));
           if (
             message.type === "ack" &&
             message.refId === pendingReceipt.current
           )
-            setHelpAck(`${pair.name} is coming ✓`);
+            setHelpAck(
+              copy(
+                settingsRef.current.lang,
+                `${pair.name} is coming ✓`,
+                `${pair.name} வருகிறார் ✓`,
+              ),
+            );
           if (message.type === "ask" && message.text)
             changeQuestion({
               text: message.text,
@@ -406,7 +554,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       relay.current = null;
     };
   }, [pairingVersion]);
-  function applyPrivacyMode(protectedMode: boolean) {
+  function applyPrivacyMode(protectedMode: boolean, revoke = false) {
     const changed = settingsRef.current.localProcessingOnly !== protectedMode;
     setLocalProcessingOnly(protectedMode);
     settingsRef.current = {
@@ -414,7 +562,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       localProcessingOnly: protectedMode,
     };
     setSettings(settingsRef.current);
-    if (changed || protectedMode) {
+    // Only a real change (or an explicit revocation) cancels work. Re-confirming
+    // an unchanged protected mode on every settings save must not stop the
+    // microphone or wipe the person's choices.
+    if (changed || revoke) {
       generation.current++;
       speechEpoch.current++;
       abort.current?.abort();
@@ -424,6 +575,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...s,
         candidates: [],
         moreCandidates: [],
+        preparedCandidates: [],
+        engineNotice: "",
         loading: false,
         chosen: undefined,
         model: "",
@@ -433,11 +586,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
   async function updateSettings(patch: Partial<Settings>) {
     const privacyVersion = localProcessingPreferenceVersion();
-    if (patch.localProcessingOnly === true) {
+    // Restoring protection revokes online permissions; re-sending an
+    // unchanged `true` (e.g. from a full settings form) must not.
+    if (
+      patch.localProcessingOnly === true &&
+      settingsRef.current.localProcessingOnly !== true
+    ) {
       try {
         setCloudSentencePermission(false);
       } catch {
         /* Failed writes still revoke the current tab. */
+      }
+      try {
+        setCloudTranscriptionPermission(false);
+      } catch {
+        /* Local-only protection already blocks cloud audio. */
       }
       // Forget an online input choice when protection is explicitly restored.
       try {
@@ -446,7 +609,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // The preference module revokes locally even if browser storage fails.
       }
       // Revoke pending requests and speech immediately, even if persistence fails.
-      applyPrivacyMode(true);
+      applyPrivacyMode(true, true);
       persistLocalProcessingPreference(true);
     }
     const save = settingsWrites.current
@@ -470,7 +633,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           patch.localProcessingOnly === false &&
           localProcessingPreferenceVersion() !== privacyVersion
         ) {
-          applyPrivacyMode(true);
+          applyPrivacyMode(true, true);
           throw new Error(
             "Privacy protection changed while saving. Review the setting and try again.",
           );
@@ -480,9 +643,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
         next.localProcessingOnly =
           next.localProcessingOnly !== false || readLocalProcessingPreference();
         applyPrivacyMode(next.localProcessingOnly);
+        // A new chosen language replaces a per-message switch.
+        if (patch.lang !== undefined && patch.lang !== settingsRef.current.lang)
+          changeSession((s) => ({ ...s, langOverride: undefined }));
         settingsRef.current = next;
         setSettings(next);
-        window.dispatchEvent(new Event("sollu:communication-settings-changed"));
+        // Only settings that change sentence generation invalidate choices.
+        if (
+          Object.keys(patch).some(
+            (key) => !presentationOnlySettings.has(key as keyof Settings),
+          )
+        )
+          window.dispatchEvent(
+            new Event("sollu:communication-settings-changed"),
+          );
       });
     settingsWrites.current = save;
     await save;
@@ -531,6 +705,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       context,
       candidates: [],
       moreCandidates: [],
+      preparedCandidates: [],
+      engineNotice: "",
       loading: false,
       error: "",
       model: "",
@@ -544,7 +720,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     round: 1 | 2 | 3 = 1,
     override?: Lang,
   ) {
-    if (!sessionRef.current) begin(fragment ?? { modality: "text", raw: "" });
+    // An ended attempt (round-3 fallback, spoken message) must not collect new
+    // rounds; start a fresh attempt for the same words, keeping any language
+    // the person chose for this message.
+    const endedLang = sessionRef.current?.attempt.endedAt
+      ? sessionRef.current.langOverride
+      : undefined;
+    if (!sessionRef.current || sessionRef.current.attempt.endedAt)
+      begin(
+        fragment ??
+          sessionRef.current?.context.fragment ?? { modality: "text", raw: "" },
+      );
     speechEpoch.current++;
     audio.stop();
     abort.current?.abort();
@@ -563,7 +749,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           : [],
       question: questionRef.current ?? undefined,
     });
-    if (override) context.outputLang = override;
+    // A one-tap language switch applies to every later round of this message.
+    const langOverride = override ?? current.langOverride ?? endedLang;
+    if (langOverride) context.outputLang = langOverride;
     context.rejectedMeaningKeys =
       round > 1
         ? [
@@ -577,9 +765,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSession({
       ...current,
       context,
+      langOverride,
       loading: true,
       candidates: [],
       moreCandidates: [],
+      preparedCandidates: [],
+      engineNotice: "",
       error: "",
       chosen: undefined,
       audioStatus: "",
@@ -660,6 +851,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (run !== generation.current || requestController.signal.aborted)
         return;
       const trustedCandidates = savedPhrases.map((p) => p.candidate);
+      // AI-only (default): with an AI engine chosen, never substitute or mix in
+      // prepared vocabulary silently. The caregiver can opt into mixing.
+      const aiOnly = settingsRef.current.mixPreparedWithAi !== true;
+      const chosenEngine = aiOnly ? await selectedSentenceEngine() : undefined;
+      if (run !== generation.current || requestController.signal.aborted)
+        return;
+      const expectsAi = chosenEngine !== undefined && chosenEngine !== "mock";
+      let engineFailure: EngineFailure | undefined;
+      let failureDetail: EngineFailureDetail | undefined;
+      let failureTimeoutMs: number | undefined;
+      let requestError = "";
       if (pain.length) {
         candidates = pain;
         model = "Pain templates";
@@ -667,6 +869,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // Prepared health/help wording must also bypass network and rehearsal caches.
         candidates = getControlledCandidates(context);
         model = "Prepared health/help wording";
+      } else if (!navigator.onLine && expectsAi) {
+        candidates = [];
+        model = `${engineLabel(chosenEngine)} · offline`;
+        engineFailure = "unavailable";
       } else if (!navigator.onLine) {
         const cached = settingsRef.current.demo
           ? await getRehearsal(context)
@@ -698,28 +904,62 @@ export function AppProvider({ children }: { children: ReactNode }) {
           );
           if (run !== generation.current || requestController.signal.aborted)
             return;
-          // Catalog interpretation can use private device context without sending it to a model.
-          candidates =
-            result.mock || result.fallback
-              ? getControlledCandidates(context)
-              : result.candidates;
-          serverGeneratedCandidates = result.candidates.filter(
-            (c) => c.source === "model" && Boolean(c.sig),
-          );
+          if (result.requestedProvider && result.requestedProvider !== "mock")
+            rememberSentenceEngine(result.requestedProvider);
+          // The server keeps engine choices in memory; a restart silently
+          // returns this device to Free vocabulary.
+          const failure =
+            result.failure ??
+            (expectsAi && result.requestedProvider === "mock"
+              ? "engine-reset"
+              : undefined);
+          if (failure) {
+            candidates = [];
+            engineFailure = failure;
+            failureDetail = result.failureDetail;
+            failureTimeoutMs = result.timeoutMs;
+          } else {
+            // Catalog interpretation can use private device context without sending it to a model.
+            candidates =
+              result.mock || result.fallback
+                ? getControlledCandidates(context)
+                : result.candidates;
+            serverGeneratedCandidates = result.candidates.filter(
+              (c) => c.source === "model" && Boolean(c.sig),
+            );
+            // The AI asked for clarification: still offer prepared phrases on
+            // request, so a clear topic tap never ends at an empty screen.
+            if (expectsAi && !result.mock && !result.candidates.length)
+              engineFailure = "clarify";
+          }
           model = result.model;
           latencyMs = result.latencyMs;
           // Generated suggestions must come from this request, never a stale rehearsal.
-          if (settingsRef.current.demo && !serverGeneratedCandidates.length)
+          if (
+            settingsRef.current.demo &&
+            !failure &&
+            candidates.length &&
+            !serverGeneratedCandidates.length
+          )
             await saveRehearsal(context, { ...result, candidates });
         } catch (error) {
-          const cached =
-            settingsRef.current.demo && !requestController.signal.aborted
-              ? await getRehearsal(context)
-              : undefined;
           if (requestController.signal.aborted) throw error;
-          candidates = cached?.candidates ?? getControlledCandidates(context);
-          model = cached ? `${cached.model} · CACHED` : "Offline vocabulary";
-          demoCached = Boolean(cached);
+          if (expectsAi) {
+            candidates = [];
+            model = `${engineLabel(chosenEngine)} · unavailable`;
+            engineFailure = "unavailable";
+          } else {
+            const cached =
+              settingsRef.current.demo && !requestController.signal.aborted
+                ? await getRehearsal(context)
+                : undefined;
+            if (requestController.signal.aborted) throw error;
+            candidates = cached?.candidates ?? getControlledCandidates(context);
+            model = cached ? `${cached.model} · CACHED` : "Offline vocabulary";
+            demoCached = Boolean(cached);
+            // Say why the server was not used (access code, rate limit…).
+            requestError = error instanceof Error ? error.message : "";
+          }
         }
       }
       if (run !== generation.current) return;
@@ -763,19 +1003,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
           (c) => normalize(c.text) === normalize(usual.m.sentence),
         ),
       );
+      // Prepared phrases stay hidden until the person explicitly asks for them.
+      const preparedCandidates = engineFailure
+        ? applyCandidatePolicy(getControlledCandidates(context), context, {
+            trustedCandidates,
+          }).candidates.filter(
+            (c) => !candidates.some((shown) => shown.text === c.text),
+          )
+        : [];
+      const engineNotice = engineFailure
+        ? engineFailureNotice(
+            engineFailure,
+            chosenEngine ?? engineFromModel(model),
+            settingsRef.current.lang,
+            failureDetail,
+            failureTimeoutMs,
+          )
+        : "";
       changeSession((s) => ({
         ...s,
         context,
         candidates,
         moreCandidates,
+        preparedCandidates,
+        engineNotice,
         model,
         usual: usualShown ? usual?.m.sentence : undefined,
         loading: false,
-        error: candidates.length
-          ? ""
-          : settingsRef.current.lang === "ta"
-            ? "வேறு வார்த்தை அல்லது தலைப்பைத் தேர்ந்தெடுக்கவும்."
-            : "Please add a word, choose a topic, or use My words.",
+        error: requestError
+          ? requestError
+          : candidates.length || engineFailure
+            ? ""
+            : settingsRef.current.lang === "ta"
+              ? "வேறு வார்த்தை அல்லது தலைப்பைத் தேர்ந்தெடுக்கவும்."
+              : "Please add a word, choose a topic, or use My words.",
         attempt: {
           ...s.attempt,
           demoCached,
@@ -785,15 +1046,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
               round,
               source: pain.length
                 ? "template"
-                : serverGeneratedCandidates.length
-                  ? model.startsWith("ollama:")
+                : engineFailure
+                  ? (chosenEngine ?? engineFromModel(model)) === "ollama"
                     ? "local"
                     : "llm"
-                  : model.toLowerCase().includes("mock")
-                    ? "mock"
-                    : model.startsWith("ollama:")
+                  : serverGeneratedCandidates.length
+                    ? model.startsWith("ollama:")
                       ? "local"
-                      : "template",
+                      : "llm"
+                    : model.toLowerCase().includes("mock")
+                      ? "mock"
+                      : model.startsWith("ollama:")
+                        ? "local"
+                        : "template",
               model,
               latencyMs,
               candidates,
@@ -813,8 +1078,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
         error: error instanceof Error ? error.message : "Please try again.",
         candidates: [],
         moreCandidates: [],
+        preparedCandidates: [],
+        engineNotice: "",
       }));
     }
+  }
+  function showPreparedChoices() {
+    changeSession((s) => {
+      if (s.loading || s.chosen || !s.preparedCandidates?.length) return s;
+      const candidates = [...s.candidates, ...s.preparedCandidates].slice(
+        0,
+        settingsRef.current.choiceCount,
+      );
+      return {
+        ...s,
+        candidates,
+        preparedCandidates: [],
+        engineNotice: "",
+        model: `${s.model} → prepared phrases (chosen)`,
+        attempt: {
+          ...s.attempt,
+          // Log the revealed prepared phrases as shown in this round.
+          rounds: s.attempt.rounds.map((round, index) =>
+            index === s.attempt.rounds.length - 1
+              ? { ...round, candidates, source: "mock" as const }
+              : round,
+          ),
+        },
+      };
+    });
   }
   function showMoreChoices() {
     changeSession((s) => {
@@ -904,7 +1196,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         context: { ...s.context, outputLang: lang },
         chosen: c,
         returnTo:
-          /^\/(words|scenes|stories|passport|draw|sentence|comfort)(\/|$)/.test(
+          /^\/(words|scenes|stories|passport|draw|sentence|comfort|phrases|repair)(\/|$)/.test(
             location.pathname,
           )
             ? `${location.pathname}${location.search}`
@@ -916,18 +1208,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ...s.attempt,
           outputLang: lang,
           addresseeId: s.context.addressee?.id,
-          rounds: s.attempt.rounds.map((r, i) =>
-            i === s.attempt.rounds.length - 1
-              ? {
-                  ...r,
-                  chosenIndex: Math.max(
-                    0,
-                    r.candidates.findIndex((x) => x.text === c.text),
-                  ),
-                  usualChosen: s.usual === c.text,
-                }
-              : r,
-          ),
+          // A Help/repair/quick phrase spoken mid-message is not one of this
+          // round's choices; never log it as the chosen suggestion.
+          rounds: s.attempt.rounds.map((r, i) => {
+            if (i !== s.attempt.rounds.length - 1) return r;
+            const index = r.candidates.findIndex((x) => x.text === c.text);
+            return {
+              ...r,
+              chosenIndex: index >= 0 ? index : undefined,
+              usualChosen: index >= 0 && s.usual === c.text,
+            };
+          }),
         },
       });
       navigate(c.urgency === "emergency" ? "/help" : "/speaking");
@@ -983,7 +1274,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
             audioStatus: "Speaking…",
           });
           void db.attempts.put(attempt);
-          if (source !== "tone") void remember(c, attempt);
+          // Learn "these words → this sentence" only from the round's own
+          // choices (or a direct phrase with no rounds), never from an
+          // unrelated Help or repair phrase tapped mid-message.
+          const lastRound = live.attempt.rounds.at(-1);
+          if (
+            source !== "tone" &&
+            (!lastRound || lastRound.candidates.some((x) => x.text === c.text))
+          )
+            void remember(c, attempt);
           if (c.urgency !== "emergency") void sendChosen("spoken");
         },
         onEnd: () => {
@@ -1030,6 +1329,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     async function sendChosen(type: "spoken" | "help") {
       const client = relay.current;
+      const sendRun = ++sendSeq.current;
       let id: string | null = null;
       try {
         id =
@@ -1042,7 +1342,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch {
         /* Show an honest local send failure. */
       }
-      if (utteranceRun !== speechEpoch.current) return;
+      // Stopping audio must not hide an already-sent Help's delivery status or
+      // the caregiver's reply (I-6); only a newer send supersedes it.
+      if (sendRun !== sendSeq.current) return;
+      if (type !== "help" && utteranceRun !== speechEpoch.current) return;
       pendingReceipt.current = id;
       changeSession((v) => ({
         ...v,
@@ -1052,6 +1355,65 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ),
       }));
     }
+  }
+  /** A quick Yes/No from the dock: speaks exactly the tapped phrase where the
+   * person is, without replacing, ending or navigating away from a message
+   * they are composing. It is logged as its own spoken attempt. */
+  function sayInPlace(c: Candidate, ticket: TapTicket | null) {
+    if (!ticket) return Promise.resolve("");
+    const lang = settingsRef.current.lang;
+    // A newer tap supersedes pending speech (I-1).
+    speechEpoch.current++;
+    const startedAt = Date.now();
+    return (async () => {
+      const saved = await db.recordings.get(recordingId(c.text, lang));
+      const consent = saved
+        ? await db.consents.get(saved.consentId)
+        : undefined;
+      const recording =
+        saved && consent && saved.text === c.text && saved.lang === lang
+          ? saved
+          : undefined;
+      const result = await audio.speak({
+        text: c.text,
+        lang,
+        ticket,
+        channel: "speak",
+        recording: recording?.blob,
+        onStart: ({ atMs }: { source: string; atMs: number }) => {
+          const current = settingsRef.current;
+          const contact = current.contacts.find(
+            (item) => item.id === current.addressee,
+          );
+          void db.attempts.put({
+            id: crypto.randomUUID(),
+            startedAt,
+            endedAt: Date.now(),
+            modality: "topic",
+            fragmentRaw: c.reading,
+            sttRetries: 0,
+            outputLang: lang,
+            place: current.place,
+            timeBucket: timeBucket(clockNow(current).getHours()),
+            demoClock: current.demo,
+            rounds: [],
+            taps: 1,
+            offline: !navigator.onLine,
+            demoCached: false,
+            addresseeId: contact?.id,
+            addresseeRelation: contact?.relation,
+            outcome: "spoken",
+            chosenText: c.text,
+            chosenGloss: c.gloss_en,
+            chosenIntent: c.intent,
+            chosenReading: c.reading,
+            timeToSpeechMs: Date.now() - startedAt,
+            firstAudioMs: atMs - ticket.issuedAt,
+          });
+        },
+      });
+      return result.status;
+    })().catch(() => "failed");
   }
   function finishBaseline(text: string) {
     const current = sessionRef.current;
@@ -1106,6 +1468,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         begin,
         generate,
         speak,
+        sayInPlace,
         finishBaseline,
         paused,
         pause: () => {
@@ -1114,10 +1477,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         },
         resume: () => {
           setPaused(false);
-          if (sessionRef.current)
-            navigate(
-              sessionRef.current.candidates.length ? "/confirm" : "/type",
-            );
+          const current = sessionRef.current;
+          if (!current) return;
+          if (current.candidates.length) navigate("/confirm");
+          // A restored topic/speech/camera message finds its choices again
+          // (nothing is spoken) instead of turning into text to retype.
+          else if (
+            current.context.fragment.modality !== "text" &&
+            current.context.fragment.raw.trim()
+          )
+            void generate(undefined, 1);
+          else navigate("/type");
         },
         updateDraft: (fragment) => {
           const current = sessionRef.current;
@@ -1136,6 +1506,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             context: { ...s.context, fragment },
             candidates: [],
             moreCandidates: [],
+            preparedCandidates: [],
+            engineNotice: "",
             loading: false,
             chosen: undefined,
             usual: undefined,
@@ -1165,6 +1537,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         abandon,
         retry,
         showMoreChoices,
+        showPreparedChoices,
         question,
         setQuestion: (text) =>
           changeQuestion({
@@ -1183,7 +1556,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           stop();
           // The relay serializes this after Help and resolves its own last Help ID, even if encryption is still pending.
           void relay.current?.send("help_cancel").catch(() => {});
-          setHelpAck("Help cancelled.");
+          setHelpAck(
+            copy(
+              settingsRef.current.lang,
+              "Help cancelled.",
+              "உதவி ரத்து செய்யப்பட்டது.",
+            ),
+          );
         },
         online,
       }}

@@ -13,6 +13,14 @@ export interface Settings {
   localProcessingOnly: boolean;
   name: string;
   lang: Lang;
+  /** Opt-in (SPEC §6 outputLang): speak in the selected listener's language
+   * instead of the chosen language. Off means the chosen language always wins. */
+  followListenerLanguage: boolean;
+  /** Language the microphone listens for; undefined follows `lang`. */
+  speechLang?: Lang;
+  /** With an AI sentence engine selected, also mix in prepared vocabulary
+   * phrases and fall back to them. Off means AI-only with honest failures. */
+  mixPreparedWithAi: boolean;
   hand: "left" | "right";
   keepLeft: boolean;
   textScale: 1 | 1.25 | 1.5;
@@ -105,6 +113,8 @@ export const defaultSettings: Settings = {
   localProcessingOnly: true,
   name: "Amma",
   lang: "ta",
+  followListenerLanguage: false,
+  mixPreparedWithAi: false,
   hand: "left",
   keepLeft: true,
   textScale: 1,
@@ -168,7 +178,7 @@ export const defaultSettings: Settings = {
       id: "rao",
       name: "Dr. Rao",
       relation: "doctor",
-      aliases: ["Rao"],
+      aliases: ["Rao", "டாக்டர் ராவ்"],
       register: "respectful",
       lang: "en",
       isCaregiver: false,

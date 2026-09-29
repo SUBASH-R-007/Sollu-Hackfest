@@ -383,10 +383,10 @@ button {
 }
 .language-switch {
   min-height: 72px;
-  font-size: 12px;
+  font-size: 14px;
   gap: 0;
   background: #fff;
-  border: 1px solid var(--line);
+  border: 2px solid #8d779e;
   border-radius: 14px;
   padding: 8px;
 }
@@ -442,7 +442,7 @@ button {
 .context-person small,
 .routine-chip small {
   display: block;
-  font-size: 10px;
+  font-size: calc(14px * var(--text-scale));
   color: #84738f;
   font-weight: 400;
   margin-bottom: 5px;
@@ -527,7 +527,7 @@ button {
   letter-spacing: 0;
 }
 .tile-detail {
-  font-size: 13px;
+  font-size: calc(14px * var(--text-scale));
   margin-top: 8px;
   font-weight: 400;
 }
@@ -600,7 +600,7 @@ button {
   white-space: nowrap;
 }
 .privacy-inline {
-  font-size: 11px;
+  font-size: calc(14px * var(--text-scale));
   color: #796a83;
   margin: 6px 0 20px;
   line-height: 1.7;
@@ -615,7 +615,7 @@ button {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 14px;
-  font-size: 10px;
+  font-size: calc(14px * var(--text-scale));
   color: #86748f;
 }
 .quick-heading span:first-child {
@@ -635,12 +635,12 @@ button {
   justify-content: flex-start;
   gap: 11px;
   font-size: calc(16px * var(--text-scale));
-  min-height: 92px;
+  min-height: 120px;
   line-height: 1.65;
 }
 .quick-button small {
   display: block;
-  font-size: 10px;
+  font-size: calc(14px * var(--text-scale));
   color: #82728d;
   font-weight: 400;
   line-height: 1.5;
@@ -741,8 +741,15 @@ button {
   color: #694c20;
 }
 .notice .tap {
-  font-size: 16px;
+  font-size: calc(16px * var(--text-scale));
   margin-top: 10px;
+  padding: 12px 20px;
+}
+/* Buttons inside a notice need a visible edge; filled variants keep theirs. */
+.notice .tap:not(.primary, .primary-button, .danger, .stop-button) {
+  background: #fff;
+  border: 2px solid #8d779e;
+  color: var(--ink);
 }
 .question-banner {
   display: flex;
@@ -867,6 +874,11 @@ select {
   font-size: 15px;
   padding: 13px 19px;
 }
+.confirm-context .tap.selected {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
 .candidate-list {
   display: grid;
   gap: 15px;
@@ -926,11 +938,11 @@ select {
 .listen-button {
   width: 80px;
   flex: 0 0 80px;
-  border: 1px solid #dacde4;
+  border: 2px solid #8d779e;
   background: #f7f2fb;
   flex-direction: column;
   gap: 9px;
-  font-size: 13px;
+  font-size: calc(14px * var(--text-scale));
 }
 .urgency-elevated .candidate-card {
   border-color: #b38224;
@@ -968,7 +980,7 @@ mark {
 .round-label {
   text-align: center;
   margin: 18px 0;
-  font-size: 12px;
+  font-size: calc(14px * var(--text-scale));
   color: #776081;
 }
 .loading-cards {
@@ -1010,7 +1022,8 @@ mark {
   color: #7b6588;
 }
 .usual-label {
-  font-size: 12px;
+  font-size: calc(15px * var(--text-scale));
+  font-weight: 700;
   display: block;
   color: #735225;
   margin-bottom: 8px;
@@ -1111,7 +1124,7 @@ mark {
   border: 1px solid #ddd0e6;
   justify-content: flex-start;
   text-align: left;
-  font-size: 22px;
+  font-size: calc(22px * var(--text-scale));
 }
 .phrase-card > span:nth-child(2) {
   flex: 1;
@@ -1737,7 +1750,7 @@ pre {
     min-height: 183px;
   }
   .tile-title {
-    font-size: 25px;
+    font-size: calc(25px * var(--text-scale));
     gap: 10px;
   }
   .tile-title > span {
@@ -1754,10 +1767,10 @@ pre {
     gap: 6px;
   }
   .hint {
-    font-size: 11px;
+    font-size: calc(14px * var(--text-scale));
   }
   .quick-button {
-    min-height: 85px;
+    min-height: 120px;
   }
   .breadcrumb {
     font-size: 9px;
@@ -1767,10 +1780,10 @@ pre {
     padding-left: 18px;
   }
   .tile-detail {
-    font-size: 12px;
+    font-size: calc(14px * var(--text-scale));
   }
   .candidate-sentence {
-    font-size: 25px;
+    font-size: calc(25px * var(--text-scale));
   }
   .footer-credit {
     display: none;
@@ -1860,7 +1873,7 @@ pre {
   .language-switch {
     min-width: 108px;
     min-height: 72px;
-    font-size: 12px;
+    font-size: 14px;
     padding: 6px;
   }
   .language-switch span {
@@ -1902,7 +1915,7 @@ pre {
     font-size: 18px;
   }
   .context-person small {
-    font-size: 9px;
+    font-size: calc(14px * var(--text-scale));
   }
   .context-person strong {
     font-size: 14px;
@@ -1924,10 +1937,10 @@ pre {
     width: 18px;
   }
   .routine-chip small {
-    font-size: 9px;
+    font-size: calc(14px * var(--text-scale));
   }
   .routine-chip strong {
-    font-size: 10px;
+    font-size: calc(14px * var(--text-scale));
     line-height: 1.7;
   }
   .home-grid {
@@ -1954,7 +1967,7 @@ pre {
     width: 20px;
   }
   .tile-title {
-    font-size: 23px;
+    font-size: calc(23px * var(--text-scale));
     flex-direction: column;
     gap: 6px;
     line-height: 1.45;
@@ -1971,7 +1984,7 @@ pre {
     margin-top: 12px;
   }
   .home-bottom .hint {
-    font-size: 11px;
+    font-size: calc(14px * var(--text-scale));
     padding: 12px 0;
   }
   .partner-button {
@@ -1985,7 +1998,7 @@ pre {
     margin-left: auto;
   }
   .privacy-inline {
-    font-size: 10px;
+    font-size: calc(14px * var(--text-scale));
     margin: 12px 0 17px;
   }
   .quick-strip {
@@ -1997,19 +2010,19 @@ pre {
     gap: 16px;
   }
   .quick-button {
-    font-size: 15px;
+    font-size: calc(16px * var(--text-scale));
     padding: 16px 13px;
     gap: 10px;
-    min-height: 94px;
+    min-height: 120px;
   }
   .quick-button small {
-    font-size: 10px;
+    font-size: calc(14px * var(--text-scale));
   }
   .quick-icon svg {
     width: 21px;
   }
   .quick-heading {
-    font-size: 9px;
+    font-size: calc(14px * var(--text-scale));
   }
   .footer-note {
     margin-top: 28px;
@@ -2035,7 +2048,7 @@ pre {
     padding: 19px;
   }
   .topic-tile strong {
-    font-size: 21px;
+    font-size: calc(21px * var(--text-scale));
   }
   .topic-tile > span:last-child {
     font-size: 17px;
@@ -2044,12 +2057,12 @@ pre {
     font-size: 31px;
   }
   .pagination .tap {
-    font-size: 13px;
+    font-size: calc(15px * var(--text-scale));
     padding: 10px;
     gap: 4px;
   }
   .pagination > span {
-    font-size: 11px;
+    font-size: calc(14px * var(--text-scale));
   }
   .heard-row {
     font-size: 14px;
@@ -2060,7 +2073,7 @@ pre {
     gap: 10px;
   }
   .confirm-context .tap {
-    font-size: 13px;
+    font-size: calc(14px * var(--text-scale));
     padding: 10px;
     min-height: 72px;
     flex: 1;
@@ -2093,7 +2106,7 @@ pre {
   .listen-button {
     width: 72px;
     flex-basis: 72px;
-    font-size: 12px;
+    font-size: calc(14px * var(--text-scale));
     min-height: 100px;
     border-radius: 13px;
   }
@@ -2109,13 +2122,13 @@ pre {
     font-size: 13px;
   }
   .round-label {
-    font-size: 11px;
+    font-size: calc(14px * var(--text-scale));
   }
   .speaking-card {
     padding: 25px 20px;
   }
   .spoken-sentence {
-    font-size: 27px;
+    font-size: calc(27px * var(--text-scale));
   }
   .speaking-card > p {
     font-size: 16px;
@@ -2139,7 +2152,7 @@ pre {
     font-size: 18px;
   }
   .phrase-card {
-    font-size: 20px;
+    font-size: calc(20px * var(--text-scale));
     padding: 18px 13px;
     gap: 12px;
   }
@@ -2292,6 +2305,7 @@ pre {
   color: #813026;
 }
 .language-switch .selected,
+.confirm-context .tap.selected,
 .primary,
 .stop-button,
 .danger {
@@ -2384,6 +2398,33 @@ pre {
   white-space: normal;
   overflow-wrap: anywhere;
   padding: 16px;
+  min-height: 120px;
+  background: #fff;
+  border: 2px solid #8d779e;
+  color: var(--ink);
+}
+.support-grid > .tap[aria-pressed="true"] {
+  background: #eadbf3;
+  border-color: #71338b;
+  color: #321147;
+}
+/* Shared filled and outlined actions (Camera, personal tools, Care). */
+.primary-button,
+.secondary-button {
+  padding: 14px 24px;
+  font-weight: 600;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.primary-button {
+  background: var(--brand);
+  border: 2px solid var(--brand);
+  color: #fff;
+}
+.secondary-button {
+  background: #fff;
+  border: 2px solid #8d779e;
+  color: var(--ink);
 }
 .support-grid .support-tile {
   min-height: 140px;
@@ -2447,7 +2488,7 @@ pre {
   bottom: 12px;
   z-index: 20;
   display: grid;
-  grid-template-columns: repeat(4, minmax(72px, 1fr));
+  grid-template-columns: repeat(6, minmax(72px, 1fr));
   gap: 8px;
   margin: 28px 0 0;
   padding: 10px;
@@ -2469,6 +2510,23 @@ pre {
 .communication-dock .dock-help {
   background: #ffe9e5;
   color: #802c1d;
+}
+.communication-dock .dock-yes {
+  background: #e3f3e6;
+  color: #1d5230;
+}
+.communication-dock .dock-no {
+  background: #f3ece3;
+  color: #5a3a17;
+}
+.communication-dock .dock-status {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 4px 8px;
+  font-weight: 700;
+  font-size: calc(16px * var(--text-scale));
+  color: #442157;
+  overflow-wrap: anywhere;
 }
 .pause-space {
   max-width: 720px;
@@ -2513,12 +2571,22 @@ pre {
   color: #321147;
 }
 @media (max-width: 760px) {
+  /* Confirm/Speaking: show the choices first; navigation moves below them. */
+  .task-focus .page-meta {
+    display: none;
+  }
+  .task-focus > .mobile-nav {
+    order: 3;
+  }
+  .task-focus > .workspace-bottom {
+    order: 4;
+  }
   .mobile-nav {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .mobile-nav .tap {
-    font-size: 12px;
+    font-size: calc(14px * var(--text-scale));
     padding: 6px 2px;
     min-width: 72px;
     overflow-wrap: anywhere;
@@ -2558,6 +2626,7 @@ pre {
     display: none;
   }
   .communication-dock {
+    grid-template-columns: repeat(3, minmax(72px, 1fr));
     bottom: 4px;
     gap: 4px;
     padding: 6px;
@@ -2565,7 +2634,7 @@ pre {
     margin-right: -6px;
   }
   .communication-dock .tap {
-    font-size: 13px;
+    font-size: calc(15px * var(--text-scale));
   }
   .support-card {
     padding: 18px;

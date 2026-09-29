@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   appointmentCalendar,
+  appointmentSequence,
+  nextAppointmentSequence,
   parseAppointment,
   type Appointment,
   type AppointmentForm,
@@ -123,9 +125,12 @@ describe("appointment calendar export", () => {
   };
 
   it("exports UTC times, stable identity, escaped fields and CRLF without creating injected properties", () => {
-    const calendar = appointmentCalendar(appointment);
+    const calendar = appointmentCalendar(
+      appointment,
+      Date.UTC(2030, 0, 1, 12, 15),
+    );
     expect(calendar).toContain("UID:stable-id@sollu.local\r\n");
-    expect(calendar).toContain("DTSTAMP:20300101T090000Z\r\n");
+    expect(calendar).toContain("DTSTAMP:20300101T121500Z\r\nSEQUENCE:0\r\n");
     expect(calendar).toContain(
       "DTSTART:20300102T103000Z\r\nDTEND:20300102T110000Z",
     );
@@ -150,6 +155,29 @@ describe("appointment calendar export", () => {
     const calendar = appointmentCalendar({ ...appointment, status });
     expect(calendar).toContain(`STATUS:${expected}\r\n`);
     expect(calendar).toContain("UID:stable-id@sollu.local\r\n");
+  });
+
+  it("stamps the export time and carries the stored revision for reschedules and cancellations", () => {
+    const exportedAt = Date.UTC(2030, 0, 1, 18, 5, 9);
+    const cancelled = appointmentCalendar(
+      { ...appointment, status: "cancelled", sequence: 3 },
+      exportedAt,
+    );
+    expect(cancelled).toContain("DTSTAMP:20300101T180509Z\r\n");
+    expect(cancelled).not.toContain("DTSTAMP:20300101T090000Z");
+    expect(cancelled).toContain("SEQUENCE:3\r\n");
+    expect(cancelled).toContain("STATUS:CANCELLED\r\n");
+  });
+
+  it("defaults missing or invalid revisions for older records and increments on change", () => {
+    expect(appointmentSequence(appointment)).toBe(0);
+    expect(appointmentSequence({ sequence: -2 })).toBe(0);
+    expect(appointmentSequence({ sequence: 1.5 })).toBe(0);
+    expect(nextAppointmentSequence(appointment)).toBe(1);
+    expect(nextAppointmentSequence({ sequence: 4 })).toBe(5);
+    expect(
+      appointmentCalendar({ ...appointment, sequence: Number.NaN }),
+    ).toContain("SEQUENCE:0\r\n");
   });
 
   it("folds long Unicode lines at 75 UTF-8 octets and preserves content after unfolding", () => {

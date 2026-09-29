@@ -5,6 +5,7 @@ import {
   repairFragment,
   type FragmentRepair,
 } from "./fragmentRepair";
+import { completeWords, hasNegation, hasQuestionCue } from "./lexicon";
 
 export const vocabularyCategories = [
   "core",
@@ -1216,7 +1217,7 @@ export const vocabularyCatalog: readonly VocabularyEntry[] = [
     "டிவி",
     "I'd like to watch television.",
     "டிவி பார்க்கணும்.",
-    "tv|television|watch tv",
+    "tv|television|watch tv|turn on tv|turn on the tv",
     "டிவி|தொலைக்காட்சி",
     "tv paakanum|tv",
     "request",
@@ -1885,8 +1886,8 @@ export function normalizeVocabularyQuery(value: string): string {
     .trim();
 }
 const catalogTokens = new Set(
-  vocabularyCatalog.flatMap((v) =>
-    [
+  [
+    ...vocabularyCatalog.flatMap((v) => [
       v.en,
       v.ta,
       v.enSentence,
@@ -1894,8 +1895,10 @@ const catalogTokens = new Set(
       ...v.aliases.en,
       ...v.aliases.ta,
       ...v.aliases.tanglish,
-    ].flatMap((form) => normalizeVocabularyQuery(form).split(" ")),
-  ),
+    ]),
+    // Complete everyday/health/body words are known, so they are never "completed".
+    ...completeWords,
+  ].flatMap((form) => normalizeVocabularyQuery(form).split(" ")),
 );
 const repairableTokens = new Set(
   vocabularyCatalog
@@ -1941,14 +1944,18 @@ const forms = (v: VocabularyEntry) =>
 function containsPhrase(text: string, phrase: string): boolean {
   return ` ${text} `.includes(` ${phrase} `);
 }
+/** Code points, not UTF-16 units. A whole Tamil-script word matched on token boundaries is
+ * distinctive even when it is one syllable (டீ), unlike a short Latin token (hi, tv). */
+const formSize = (form: string) =>
+  Math.max([...form].length, /^[\p{Script=Tamil}\s]+$/u.test(form) ? 3 : 0);
 function score(v: VocabularyEntry, query: string): number {
   const all = forms(v);
   if (all.includes(query)) return 100;
   const matched = all.filter(
-    (form) => form.length >= 3 && containsPhrase(query, form),
+    (form) => formSize(form) >= 3 && containsPhrase(query, form),
   );
   if (matched.length)
-    return Math.max(...matched.map((form) => 20 + form.length));
+    return Math.max(...matched.map((form) => 20 + formSize(form)));
   return all.some((form) => form.startsWith(query)) ? 5 : 0;
 }
 export function searchVocabulary(
@@ -1998,6 +2005,35 @@ export function getVocabularyCandidate(
   };
 }
 
+// Grammar already present in authored request wording; these do not change the meaning.
+const benignTamilTokens = new Set([
+  "எனக்கு",
+  "கொஞ்சம்",
+  "வேணும்",
+  "வேண்டும்",
+  "ப்ளீஸ்",
+  "தயவுசெய்து",
+  "குடுங்க",
+  "கொடுங்க",
+]);
+/** Tamil-script tokens not found in the authored Tamil wording of any given entry. */
+export function unexplainedTamilTokens(
+  text: string,
+  entries: readonly VocabularyEntry[],
+): string[] {
+  const supported = new Set(
+    entries
+      .flatMap((v) => [v.ta, v.taSentence, ...v.aliases.ta])
+      .flatMap((form) => normalizeVocabularyQuery(form).split(" ")),
+  );
+  return (normalizeVocabularyQuery(text).match(/[\p{L}\p{M}]+/gu) ?? []).filter(
+    (token) =>
+      /\p{Script=Tamil}/u.test(token) &&
+      !supported.has(token) &&
+      !benignTamilTokens.has(token),
+  );
+}
+
 /** Conservative exact/alias retrieval. New sentences, body slots and personalised facts are not invented. */
 export function getVocabularyCandidates(context: ContextInput): Candidate[] {
   const prepared = prepareCatalogFragment(context);
@@ -2031,15 +2067,9 @@ export function getVocabularyCandidates(context: ContextInput): Candidate[] {
   // Prefer an explicit multiword phrase over a contained noun or generic yes/no word.
   if (exact.length) matches = exact;
   else {
-    const negative =
-      /\b(?:no|not|don't|dont|never|off|vendam|vendaam|venam|illa|illai)\b|வேண்டாம்|வேணாம்|இல்லை|இல்ல|வலிக்கல|பிடிக்கல|புரியல/u.test(
-        raw,
-      );
+    const negative = hasNegation(raw) || /\boff\b/u.test(raw);
     if (negative) matches = matches.filter((v) => v.polarity !== "positive");
-    const question =
-      /\b(?:who|where|when|why|how|what|yaaru|yaru|enga|enge|eppo|yen|eppadi|epdi|enna)\b|எங்கே|எங்க|எப்போ|ஏன்|எப்படி|யாரு/u.test(
-        raw,
-      );
+    const question = hasQuestionCue(raw);
     if (question) matches = matches.filter((v) => v.speechAct === "question");
     // A location, number, named person or different body part needs a dedicated renderer.
     if (
@@ -2048,6 +2078,9 @@ export function getVocabularyCandidates(context: ContextInput): Candidate[] {
       )
     )
       return [];
+    // An unexplained Tamil tense, negation, question or other qualifier (சாப்பிடல, குடிச்சேன்,
+    // வந்தாரா) must not disappear into a generic positive card. Ask instead.
+    if (unexplainedTamilTokens(raw, matches).length) return [];
     const objectIds = new Set(matches.map((v) => v.objectId).filter(Boolean));
     if (objectIds.size > 1) return [];
   }

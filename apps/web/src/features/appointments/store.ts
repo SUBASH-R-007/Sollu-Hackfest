@@ -1,5 +1,9 @@
 import { db } from "../../db";
-import type { Appointment, AppointmentDetails } from "./model";
+import {
+  nextAppointmentSequence,
+  type Appointment,
+  type AppointmentDetails,
+} from "./model";
 
 const prefix = "appointment:";
 
@@ -44,6 +48,7 @@ export async function saveAppointment(
       id: previous?.id ?? crypto.randomUUID(),
       createdAt: previous?.createdAt ?? Date.now(),
       status: "requested",
+      sequence: previous ? nextAppointmentSequence(previous) : 0,
     };
     await db.kv.put({ key: prefix + appointment.id, value: appointment });
     return appointment;
@@ -64,7 +69,15 @@ export async function changeAppointmentStatus(
     ) {
       throw new Error("Only a future request can be marked confirmed.");
     }
-    await db.kv.put({ key: prefix + id, value: { ...appointment, status } });
+    if (appointment.status === status) return;
+    await db.kv.put({
+      key: prefix + id,
+      value: {
+        ...appointment,
+        status,
+        sequence: nextAppointmentSequence(appointment),
+      },
+    });
   });
 }
 

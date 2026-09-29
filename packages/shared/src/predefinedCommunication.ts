@@ -1,4 +1,5 @@
 import type { ContextInput } from "./schemas";
+import { benignHealthIdioms, containsHealthStem, healthTerms } from "./lexicon";
 import { prepareCatalogFragment, vocabularyCatalog } from "./vocabulary";
 
 const normalize = (text: string) =>
@@ -9,27 +10,7 @@ const normalize = (text: string) =>
     .trim();
 const terms = new Set(
   [
-    ..."help emergency ambulance pain pains hurt hurts hurting chest breath breathe breathing choke choking bleed bleeding faint fainting seizure seizures medicine medicines medication medications tablet tablets pill pills drug drugs dose doses dosage treatment diagnosis diagnose diagnosed prescription prescribe prescribed overdose mg mcg ml".split(
-      " ",
-    ),
-    // Existing vocabulary and terms are matching boundaries, never new translated output.
-    "vali",
-    "nenju",
-    "nenchu",
-    "marunthu",
-    "marundhu",
-    "mathirai",
-    "maathirai",
-    "udhavi",
-    "uthavi",
-    "வலி",
-    "வலிக்குது",
-    "நெஞ்சு",
-    "மருந்து",
-    "மாத்திரை",
-    "உதவி",
-    "சிகிச்சை",
-    "மருந்தளவு",
+    ...healthTerms,
     ...vocabularyCatalog
       .filter((entry) => entry.category === "health")
       .flatMap((entry) => [
@@ -61,7 +42,15 @@ export function requiresPredefinedCommunication(
       context.fragment.objectLabel ?? "",
       ...(context.fragment.topicPath ?? []),
     ].join(" "),
-  );
+  )
+    .replace(benignHealthIdioms, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   const padded = ` ${current} `;
-  return [...terms].some((term) => padded.includes(` ${term} `));
+  // Whole words/phrases, plus health stems inside agglutinated or compound tokens
+  // (தலைவலி, வலிக்கிறது, உதவிக்கு, thalaivali, headache, vomiting).
+  return (
+    [...terms].some((term) => padded.includes(` ${term} `)) ||
+    current.split(" ").some(containsHealthStem)
+  );
 }

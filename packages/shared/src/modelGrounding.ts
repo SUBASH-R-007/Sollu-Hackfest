@@ -1,7 +1,24 @@
 import { z } from "zod";
 import { numberWords, painParts } from "./phrases";
-import { prepareCatalogFragment, vocabularyCatalog } from "./vocabulary";
+import {
+  prepareCatalogFragment,
+  unexplainedTamilTokens,
+  vocabularyCatalog,
+} from "./vocabulary";
+import {
+  containsTerm,
+  hasNegation,
+  isFusedTanglishPain,
+  sideMentions,
+  tanglishBodyPartForms,
+  withoutIdiomaticRight,
+} from "./lexicon";
 import { deriveContextSignals } from "./contextEngine";
+import {
+  explicitFragmentText,
+  explicitTopicTerms,
+  withoutTopicParents,
+} from "./topicFragment";
 import {
   CandidateSchema,
   ModelEvidenceSchema,
@@ -26,20 +43,11 @@ const normalize = (text: string) =>
     .replace(/[\p{P}\p{S}\s]+/gu, " ")
     .trim();
 const words = (text: string) => normalize(text).split(/\s+/).filter(Boolean);
-const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const contains = (text: string, term: string) =>
-  new RegExp(
-    `(^|[^\\p{L}\\p{M}\\p{N}])${escape(term)}(?=$|[^\\p{L}\\p{M}\\p{N}])`,
-    "iu",
-  ).test(text);
-const negative = (text: string) =>
-  /\b(?:no|not|never|don['’]?t|doesn['’]?t|didn['’]?t|can['’]?t|cannot|won['’]?t|without|venam|vendam|vendaam|illai|illa)\b|வேணாம்|வேண்டாம்|இல்லை|இல்ல|முடியாது|மாட்டேன்/u.test(
-    text.toLowerCase(),
-  );
-const sides = (text: string) => ({
-  left: /\bleft\b|இடது|\bidathu\b/iu.test(text),
-  right: /\bright\b|வலது|\bvalathu\b/iu.test(text),
-});
+const contains = containsTerm;
+// Shared lexicon: Tamil suffix/fused negation (வரல, முடியல, விருப்பமில்லை) and Tanglish forms.
+const negative = hasNegation;
+// "right now", "all right" and "he left" are not body sides.
+const sides = sideMentions;
 const digits = (text: string) => text.match(/\p{N}+(?:[.:/]\p{N}+)*/gu) ?? [];
 const clinicalInstruction =
   /\b(?:mg|mcg|ml|milligrams?|micrograms?|millilit(?:er|re)s?|dosage|you should|you must|diagnos(?:is|ed)|prescri(?:be|ption)|take .{0,30}(?:daily|every)|stop taking|double .{0,20}dose)\b|மில்லிகிராம்|மி\.கி|மருந்தளவு|மருந்து எடுத்துக்கொள்ள/iu;
@@ -157,7 +165,9 @@ export function catalogFitsExplicitContext(
 ): boolean {
   const prepared = prepareCatalogFragment(context);
   if (prepared.ambiguous) return false;
-  const matchingFragment = prepared.text;
+  // Navigation category ids (food, people, tv_phone) and contact ids are menu structure,
+  // not patient words; the tapped leaf and pain part/side remain explicit.
+  const matchingFragment = withoutTopicParents(prepared.text, context.fragment);
   // Exact curated aliases already have an authored bilingual interpretation. Applying English
   // verb/tense heuristics to untranslated Tanglish (e.g. appuram → later) would reject it.
   // Match the whole fragment and this exact catalog meaning, never a substring of a longer claim.
@@ -167,7 +177,9 @@ export function catalogFitsExplicitContext(
   if (
     canonicalEntry &&
     !context.fragment.objectLabel &&
-    !context.fragment.topicPath?.length &&
+    explicitTopicTerms(context.fragment).every((term) =>
+      contains(matchingFragment, term),
+    ) &&
     [
       canonicalEntry.en,
       canonicalEntry.ta,
@@ -177,11 +189,7 @@ export function catalogFitsExplicitContext(
     ].some((alias) => normalize(alias) === normalize(matchingFragment))
   )
     return true;
-  const current = [
-    matchingFragment,
-    context.fragment.objectLabel ?? "",
-    ...(context.fragment.topicPath ?? []),
-  ].join(" ");
+  const current = explicitFragmentText(context.fragment, matchingFragment);
   // Generic cards do not render quantities. Never erase a stated number when
   // completing a broken word; Tamil number words need the same protection.
   if (
@@ -191,23 +199,16 @@ export function catalogFitsExplicitContext(
     )
   )
     return false;
-  if (prepared.reading && /\p{Script=Tamil}/u.test(matchingFragment)) {
-    // English content-word checks below cannot validate an unknown Tamil
-    // remainder. Repairs require every Tamil token to belong to this meaning's
-    // authored wording, rather than silently dropping a name/qualifier/symptom.
-    if (!canonicalEntry) return false;
-    const supported = new Set(
-      [
-        canonicalEntry.ta,
-        canonicalEntry.taSentence,
-        ...canonicalEntry.aliases.ta,
-      ].flatMap((form) => form.match(/[\p{L}\p{M}]+/gu) ?? []),
-    );
-    const tamilTokens =
-      matchingFragment
-        .match(/[\p{L}\p{M}]+/gu)
-        ?.filter((token) => /\p{Script=Tamil}/u.test(token)) ?? [];
-    if (tamilTokens.some((token) => !supported.has(token))) return false;
+  if (/\p{Script=Tamil}/u.test(matchingFragment)) {
+    // English content-word checks below cannot validate an unknown Tamil remainder
+    // (a tense, negation, question, name, qualifier or symptom). Every Tamil token must
+    // belong to this meaning's authored wording rather than silently disappear.
+    if (prepared.reading && !canonicalEntry) return false;
+    if (
+      canonicalEntry &&
+      unexplainedTamilTokens(matchingFragment, [canonicalEntry]).length
+    )
+      return false;
   }
   const item: GeneratedSentence = {
     text: candidate.text,
@@ -229,9 +230,19 @@ export function catalogFitsExplicitContext(
     return false;
   // The reviewed medicine catalog renders the Medicine topic as "my tablets".
   // This equivalence is catalog-specific; model-authored drug/dose text gets no such exemption.
+  // Tanglish maathirai/marunthu name the same Medicine topic.
   const catalogConcept = (word: string) =>
     candidate.intentId?.startsWith("medicine.") &&
-    ["medicine", "medication", "tablet", "pill"].includes(word)
+    [
+      "medicine",
+      "medication",
+      "tablet",
+      "pill",
+      "maathirai",
+      "mathirai",
+      "marunthu",
+      "marundhu",
+    ].includes(word)
       ? "medicine"
       : word;
   const output = new Set(contentWords(candidate.gloss_en).map(catalogConcept));
@@ -247,9 +258,24 @@ export function catalogFitsExplicitContext(
     "ph",
     "phone",
   ]);
+  // Tanglish help/body words are translation input for the matching authored card only:
+  // "udhavi" for the Help card, and only this template's own body part for a pain card.
+  if (candidate.intentId === "communication.help")
+    for (const word of ["udhavi", "uthavi"]) tanglish.add(word);
+  if (candidate.bodyPart)
+    for (const [part, forms] of Object.entries(tanglishBodyPartForms))
+      for (const form of forms)
+        if (part === candidate.bodyPart) tanglish.add(form);
+        else tanglish.delete(form);
+  // Fused Tanglish body + pain words (thalaivali) for this template's own body part.
+  const fusedOwnPain = (word: string) =>
+    !!candidate.bodyPart && isFusedTanglishPain(word, candidate.bodyPart);
   const english = current.match(/[A-Za-z][A-Za-z'-]*/g)?.join(" ") ?? "";
-  return contentWords(english).every(
-    (word) => tanglish.has(word) || output.has(catalogConcept(word)),
+  return contentWords(withoutIdiomaticRight(english)).every(
+    (word) =>
+      tanglish.has(word) ||
+      fusedOwnPain(word) ||
+      output.has(catalogConcept(word)),
   );
 }
 
@@ -300,8 +326,8 @@ export const generatedSentencesJsonSchema: Record<string, unknown> = {
           "evidence",
         ],
         properties: {
-          text: { type: "string", maxLength: 180 },
-          gloss_en: { type: "string", maxLength: 180 },
+          text: { type: "string", minLength: 1, maxLength: 180 },
+          gloss_en: { type: "string", minLength: 1, maxLength: 180 },
           speechAct: {
             type: "string",
             enum: [
@@ -327,9 +353,9 @@ export const generatedSentencesJsonSchema: Record<string, unknown> = {
               additionalProperties: false,
               required: ["path", "quote", "translation_en"],
               properties: {
-                path: { type: "string" },
-                quote: { type: "string" },
-                translation_en: { type: "string" },
+                path: { type: "string", minLength: 1, maxLength: 120 },
+                quote: { type: "string", minLength: 1, maxLength: 500 },
+                translation_en: { type: "string", maxLength: 500 },
               },
             },
           },
@@ -511,30 +537,29 @@ function checkSentence(
     !["request", "refuse", "question"].includes(item.speechAct)
   )
     return "context";
+  // A translation is allowed for Tamil-script quotes, and for a Latin-script (Tanglish) quote of
+  // the current fragment when the output is Tamil. English quotes keep an empty translation.
   if (
     item.evidence.some(
       (e) =>
         e.translation_en &&
-        (!/\p{Script=Tamil}/u.test(e.quote) ||
-          /\p{Script=Tamil}/u.test(e.translation_en)),
+        (/\p{Script=Tamil}/u.test(e.translation_en) ||
+          !(
+            /\p{Script=Tamil}/u.test(e.quote) ||
+            (context.outputLang === "ta" && e.path === "fragment.raw")
+          )),
     )
   )
     return "evidence";
   // A translated current fragment must be quoted in full, otherwise qualifiers could disappear
   // before comparison. This records the model's translation; it does not independently verify it.
-  if (
-    /\p{Script=Tamil}/u.test(context.fragment.raw) &&
-    !item.evidence.some(
-      (e) =>
-        e.path === "fragment.raw" && e.quote === context.fragment.raw.trim(),
-    )
-  )
+  const fullRaw = context.fragment.raw.trim().normalize("NFC");
+  const fullRawEvidence = item.evidence.filter(
+    (e) => e.path === "fragment.raw" && e.quote.normalize("NFC") === fullRaw,
+  );
+  if (/\p{Script=Tamil}/u.test(context.fragment.raw) && !fullRawEvidence.length)
     return "evidence";
-  const current = [
-    context.fragment.raw,
-    context.fragment.objectLabel ?? "",
-    ...(context.fragment.topicPath ?? []),
-  ].join(" ");
+  const current = explicitFragmentText(context.fragment);
   const evidence = item.evidence.map((e) => e.quote).join(" ");
   const maxWords = context.communication?.maxWords ?? 12;
   if (words(item.text).length > maxWords || words(item.gloss_en).length > 24)
@@ -574,16 +599,61 @@ function checkSentence(
     .map((e) => e.translation_en)
     .join(" ")}`;
   if (pragmaticMismatch(item, pragmaticCurrent)) return "context";
-  const explicitNames = [
-    ...[...context.fragment.raw.matchAll(/\s([A-Z][a-z]+)\b/g)].map(
-      (match) => match[1],
-    ),
-    ...(context.people ?? [])
-      .filter((person) => contains(current, person.name))
-      .map((person) => person.name),
-  ];
-  if (explicitNames.some((name) => !item.gloss_en.includes(name)))
+  // A mentioned person (by name or alias) must stay in the gloss. Other capitalised words count
+  // as names only mid-sentence and when they are not ordinary/catalog words ("I want Coffee").
+  const mentionedPeople = (context.people ?? []).filter((person) =>
+    [person.name, ...person.aliases].some((name) => contains(current, name)),
+  );
+  if (
+    mentionedPeople.some(
+      (person) =>
+        ![person.name, ...person.aliases].some((name) =>
+          contains(item.gloss_en, name),
+        ),
+    )
+  )
     return "context";
+  const knownPersonWords = new Set(
+    mentionedPeople.flatMap((person) =>
+      [person.name, ...person.aliases].flatMap(words),
+    ),
+  );
+  // A capitalised function word is a name only outside grammatical position: "call Will" keeps
+  // Will (case-sensitively, so "I will call." cannot satisfy it), while "I Want water" does not.
+  const capitalisedNames = context.fragment.raw
+    .split(/[.!?]+/u)
+    .flatMap((sentence) => {
+      const tokens = sentence.match(/[A-Za-z][A-Za-z'-]*/g) ?? [];
+      return tokens.slice(1).map((word, i) => ({ word, previous: tokens[i] }));
+    })
+    .filter(({ word, previous }) => {
+      const lowerWord = word.toLowerCase();
+      if (!/^[A-Z][a-z]+$/.test(word) || knownPersonWords.has(lowerWord))
+        return false;
+      if (functionWords.has(lowerWord))
+        return !functionWords.has(previous.toLowerCase());
+      return !contentWords(word).every(
+        (content) =>
+          englishCatalogWords.has(content) || tanglishWords.has(content),
+      );
+    });
+  if (
+    capitalisedNames.some(({ word }) =>
+      functionWords.has(word.toLowerCase())
+        ? !new RegExp(`\\b${word}\\b`).test(item.gloss_en)
+        : !contains(item.gloss_en, word),
+    )
+  )
+    return "context";
+  // The model's own translation of the full Tamil/Tanglish fragment must agree on polarity with
+  // the recognised cues; disagreement (தூக்கம் வரல → "I want to sleep") abstains.
+  if (
+    fullRawEvidence.some(
+      (e) =>
+        e.translation_en && negative(e.translation_en) !== expectedNegative,
+    )
+  )
+    return "polarity";
   if (
     negative(item.gloss_en) !== expectedNegative ||
     negative(item.text) !== expectedNegative ||
@@ -612,8 +682,8 @@ function checkSentence(
   // English gloss permits useful grammar, but no new content words. Translation equivalents come
   // only from the controlled vocabulary or explicit shared evidence. Tamil morphology/semantics
   // still require the patient to review the sentence; these checks do not validate translation.
+  // Translations were only accepted above for Tamil-script or Tanglish fragment quotes.
   let englishEvidence = `${evidence} ${item.evidence
-    .filter((e) => /\p{Script=Tamil}/u.test(e.quote))
     .map((e) => e.translation_en)
     .join(" ")}`;
   if (currentSide.left) englishEvidence += " left";
@@ -628,8 +698,16 @@ function checkSentence(
         ...entry.aliases.tanglish,
       ].some((term) => contains(evidence, term))
     )
-      englishEvidence += ` ${entry.en} ${entry.enSentence}`;
+      // Authored English aliases are the same catalog meaning (tv → "turn on tv").
+      englishEvidence += ` ${entry.en} ${entry.enSentence} ${entry.aliases.en.join(" ")}`;
   }
+  // A People tap asks to reach the tapped contact. The authored contact cards render that as
+  // call/talk/ask; only these communication verbs are licensed, never an event or a place.
+  if (
+    context.fragment.modality === "topic" &&
+    context.fragment.topicPath?.[0] === "people"
+  )
+    englishEvidence += " talk speak call ask";
   for (const part of painParts)
     if (
       contains(evidence, part.id) ||
@@ -670,7 +748,7 @@ function checkSentence(
   // Known Tanglish words are translation input; their equivalents were added to englishEvidence.
   const tanglish = tanglishWords;
   if (
-    contentWords(currentEnglish).some(
+    contentWords(withoutIdiomaticRight(currentEnglish)).some(
       (word) =>
         !tanglish.has(word) &&
         !proposedConcepts.has(word) &&

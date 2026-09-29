@@ -153,6 +153,7 @@ export class ProviderSettingsStore {
           ? {}
           : this.config.apiKeys,
       intentProvider: state.provider,
+      requestedProvider: saved.provider,
       llmModel: state.model,
       ollamaModel:
         state.provider === "ollama" ? state.model : this.config.ollamaModel,
@@ -162,6 +163,12 @@ export class ProviderSettingsStore {
         ? (state.keys[state.provider] ?? this.environmentKey(state.provider))
         : undefined,
     };
+  }
+  /** OpenAI key for high-accuracy transcription: this device's session key,
+   * else the server environment key — only while cloud AI is permitted. */
+  transcriptionKey(deviceId: string): string | undefined {
+    if (this.config.allowCloudAI !== true) return undefined;
+    return this.read(deviceId).keys.openai ?? this.environmentKey("openai");
   }
   view(deviceId: string) {
     const state = this.read(deviceId);
@@ -212,6 +219,20 @@ export class ProviderSettingsStore {
     if (isCloudProvider(update.provider)) {
       if (update.removeKey) delete keys[update.provider];
       if (update.apiKey) keys[update.provider] = update.apiKey;
+      // Selecting a cloud engine with no usable key would make every request
+      // fail; refuse it up front instead.
+      if (
+        !update.removeKey &&
+        !keys[update.provider] &&
+        !this.environmentKey(update.provider)
+      )
+        throw new z.ZodError([
+          {
+            code: "custom",
+            message: "An API key is required for this provider",
+            path: ["apiKey"],
+          },
+        ]);
     }
     if (
       !this.sessions.has(deviceId) &&

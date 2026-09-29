@@ -18,6 +18,8 @@ import {
   BookHeart,
   ChevronRight,
   Clock3,
+  AudioLines,
+  GraduationCap,
   Home as HomeIcon,
   LockKeyhole,
   Settings as SettingsIcon,
@@ -25,22 +27,27 @@ import {
   Sprout,
   Stethoscope,
   WifiOff,
+  Wrench,
 } from "lucide-react";
 import { AppProvider, useApp } from "./state";
 import { hashPin } from "./db";
 import { audio } from "./features/audio";
 import { Brand, FooterNote, TapButton } from "./ui";
-import { clockNow } from "./lib/context";
+import { clockNow, sentenceLanguage } from "./lib/context";
 import { api } from "./lib/api";
-import { uiText } from "./lib/copy";
+import { copy, uiText } from "./lib/copy";
 import { RehabilitationNav } from "./features/rehab/RehabilitationNav";
-import {
-  CommunicationDock,
-  PausePage,
-  RepairPage,
-  ComfortPage,
-  SentencePage,
-} from "./pages/Communication";
+import { CommunicationDock, PausePage } from "./pages/Communication";
+// Repair, comfort and the sentence builder load on first use.
+const RepairPage = lazy(() =>
+  import("./pages/Conversation").then((m) => ({ default: m.RepairPage })),
+);
+const ComfortPage = lazy(() =>
+  import("./pages/Conversation").then((m) => ({ default: m.ComfortPage })),
+);
+const SentencePage = lazy(() =>
+  import("./pages/Conversation").then((m) => ({ default: m.SentencePage })),
+);
 const ToolsPage = lazy(() =>
   import("./pages/Support").then((m) => ({ default: m.ToolsPage })),
 );
@@ -67,10 +74,7 @@ import {
   ConfirmPage,
   SpeakingPage,
   PhrasesPage,
-  PeoplePage,
-  RecentPage,
   SpeakPage,
-  BaselinePage,
 } from "./pages/Patient";
 const SettingsPage = lazy(() => import("./pages/Settings"));
 const CameraPage = lazy(() => import("./pages/Camera"));
@@ -84,6 +88,17 @@ const RehabilitationHub = lazy(
   () => import("./features/rehab/RehabilitationHub"),
 );
 const Demo = lazy(() => import("./pages/Demo"));
+const FlowPage = lazy(() => import("./features/flow/FlowPage"));
+const PeoplePage = lazy(() =>
+  import("./pages/PatientMore").then((m) => ({ default: m.PeoplePage })),
+);
+const RecentPage = lazy(() =>
+  import("./pages/PatientMore").then((m) => ({ default: m.RecentPage })),
+);
+const BaselinePage = lazy(() =>
+  import("./pages/PatientMore").then((m) => ({ default: m.BaselinePage })),
+);
+const CompanionPage = lazy(() => import("./features/companion/CompanionPage"));
 
 function CaregiverGate({ children }: { children: ReactNode }) {
   const { settings, updateSettings, caregiverUnlocked, unlock } = useApp();
@@ -120,14 +135,34 @@ function CaregiverGate({ children }: { children: ReactNode }) {
       <span className="lock-icon">
         <LockKeyhole size={32} />
       </span>
-      <span className="eyebrow">A SPACE FOR FAMILY & CAREGIVERS</span>
+      <span className="eyebrow">
+        {copy(
+          settings.lang,
+          "A SPACE FOR FAMILY & CAREGIVERS",
+          "குடும்பத்தினர், பராமரிப்பாளர்களுக்கு",
+        )}
+      </span>
       <h1>
-        {settings.pinHash ? "Welcome back." : "Let’s make this space yours."}
+        {settings.pinHash
+          ? copy(settings.lang, "Welcome back.", "மீண்டும் வாருங்கள்.")
+          : copy(
+              settings.lang,
+              "Let’s make this space yours.",
+              "இந்த இடத்தை அமைப்போம்.",
+            )}
       </h1>
       <p>
         {settings.pinHash
-          ? "Enter your PIN to open settings, Voice Studio and the clinician dashboard."
-          : "Create a four-digit PIN to keep settings separate from everyday communication."}
+          ? copy(
+              settings.lang,
+              "Enter your PIN to open settings, Voice Studio and the clinician dashboard.",
+              "அமைப்புகளைத் திறக்க PIN-ஐ உள்ளிடுங்கள்.",
+            )
+          : copy(
+              settings.lang,
+              "Create a four-digit PIN to keep settings separate from everyday communication.",
+              "அமைப்புகளைத் தனியாக வைக்க நான்கு இலக்க PIN-ஐ உருவாக்குங்கள்.",
+            )}
       </p>
       <form
         onSubmit={(e) => {
@@ -166,6 +201,7 @@ function Shell() {
     updateSettings,
     lock,
     paused,
+    caregiverUnlocked,
   } = useApp();
   const navigate = useNavigate(),
     location = useLocation();
@@ -245,14 +281,17 @@ function Shell() {
         <p>Getting your space ready…</p>
       </div>
     );
-  if (paused && !care && !family) return <PausePage />;
-  const now = clockNow(settings),
-    contact = settings.contacts.find((c) => c.id === settings.addressee);
+  // Pause from the dock must show the pause screen unless a caregiver is
+  // already working in an unlocked family area.
+  if (paused && !care && !(family && caregiverUnlocked)) return <PausePage />;
+  const now = clockNow(settings);
   const nav = [
     { path: "/", label: "My space", icon: HomeIcon },
     { path: "/phrases", label: "My phrases", icon: BookHeart },
     { path: "/recent", label: "Recent words", icon: Clock3 },
-    { path: "/tools", label: "My tools", icon: BookHeart },
+    { path: "/tools", label: "My tools", icon: Wrench },
+    { path: "/companion", label: "Companion", icon: GraduationCap },
+    { path: "/flow", label: "Voice flow", icon: AudioLines },
     { path: "/rehabilitation", label: "Rehabilitation", icon: Sprout },
     { path: "/clinician", label: "Clinician", icon: Stethoscope },
   ];
@@ -322,7 +361,14 @@ function Shell() {
           </div>
         </aside>
       )}
-      <div className="workspace">
+      <div
+        className={`workspace${
+          // Mid-message screens show the choices first on phones.
+          ["/confirm", "/speaking", "/practice"].includes(path)
+            ? " task-focus"
+            : ""
+        }`}
+      >
         <header className="topbar">
           <div className="mobile-brand">
             <Brand />
@@ -410,6 +456,11 @@ function Shell() {
                 )}
                 <TapButton
                   className="language-switch"
+                  aria-label={
+                    settings.lang === "ta"
+                      ? "மொழி: தமிழ். Switch to English"
+                      : "Language: English. தமிழுக்கு மாற்று"
+                  }
                   onActivate={() =>
                     void updateSettings({
                       lang: settings.lang === "ta" ? "en" : "ta",
@@ -444,6 +495,8 @@ function Shell() {
               <Route path="/recent" element={<RecentPage />} />
               <Route path="/people" element={<PeoplePage />} />
               <Route path="/tools" element={<ToolsPage />} />
+              <Route path="/flow" element={<FlowPage />} />
+              <Route path="/companion" element={<CompanionPage />} />
               <Route path="/practice" element={<PracticePage />} />
               <Route path="/appointments" element={<AppointmentsPage />} />
               <Route path="/rehabilitation" element={<RehabilitationHub />} />
@@ -519,7 +572,7 @@ function Shell() {
               </small>
             </div>
           )}
-          {family && (
+          {family && caregiverUnlocked && (
             <div className="family-links">
               <TapButton onActivate={() => navigate("/settings?tab=voice")}>
                 Voice Studio
@@ -547,7 +600,9 @@ function Shell() {
             </div>
           )}
           {!care && <FooterNote />}
-          {!care && !family && <CommunicationDock />}
+          {/* Patients also reach family routes (PIN screen, Clinician), so the
+              Help/Fix/Pause/Stop dock stays on every non-care screen. */}
+          {!care && <CommunicationDock />}
         </main>
         <div className="workspace-bottom">
           <span>
@@ -556,7 +611,7 @@ function Shell() {
           <span>
             {care
               ? "Caregiver companion"
-              : `${contact?.lang === "en" ? "English" : "Tamil"} + English · Built for you`}
+              : `${sentenceLanguage(settings) === "en" ? "English" : "Tamil"} + English · Built for you`}
           </span>
         </div>
       </div>

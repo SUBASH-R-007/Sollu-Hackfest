@@ -11,6 +11,34 @@ const mentions = (text: string, value: string) =>
     "u",
   ).test(normalize(text));
 
+// Each explicit drink keeps its identity, including colloquial catalog aliases (தண்ணி,
+// thanneer, kapi): 'usual தண்ணி' must not resolve to a coffee routine. English words that
+// are also Tanglish spellings (pal = friend, tee) are not drink cues.
+const ambiguousDrinkAliases = new Set(["pal", "tee"]);
+const drinkAliases = (objectId: string, extra: string[]) => [
+  ...new Set([
+    ...extra,
+    ...vocabularyCatalog
+      .filter(
+        (entry) => entry.category === "daily" && entry.objectId === objectId,
+      )
+      .flatMap((entry) => [
+        entry.en.toLowerCase(),
+        entry.ta,
+        ...entry.aliases.en,
+        ...entry.aliases.ta,
+        ...entry.aliases.tanglish,
+      ])
+      .filter((alias) => !ambiguousDrinkAliases.has(alias)),
+  ]),
+];
+const drinkConcepts = [
+  drinkAliases("water", ["water", "தண்ணீர்", "thanni", "tanni"]),
+  drinkAliases("tea", ["tea", "தேநீர்", "டீ"]),
+  drinkAliases("coffee", ["coffee", "காபி", "kaapi"]),
+  ["juice", "சாறு"],
+  drinkAliases("milk", ["milk", "பால்", "paal"]),
+];
 // Topic cues help rank an existing caregiver-confirmed routine. They never author a sentence.
 const topicCues: Record<TopicId, string[]> = {
   medicine: [
@@ -45,6 +73,8 @@ const topicCues: Record<TopicId, string[]> = {
     "பால்",
     "பானம்",
     "குடிக்க",
+    // Colloquial catalog drink names (தண்ணி, thanneer, பாலு) are drink cues too.
+    ...drinkConcepts.flat(),
   ],
   toilet: ["toilet", "bathroom", "கழிப்பறை"],
   pain: ["pain", "hurt", "hurts", "வலி"],
@@ -55,13 +85,6 @@ const topicCues: Record<TopicId, string[]> = {
   prayer: ["prayer", "pray", "worship", "பிரார்த்தனை", "வழிபாடு"],
   go_out: ["outside", "walk", "garden", "out", "வெளியே", "நடை", "தோட்டம்"],
 };
-const drinkConcepts = [
-  ["water", "தண்ணீர்", "thanni", "tanni"],
-  ["tea", "தேநீர்", "டீ"],
-  ["coffee", "காபி", "kaapi"],
-  ["juice", "சாறு"],
-  ["milk", "பால்", "paal"],
-];
 const genericCategoryWords = new Set([
   "drink",
   "beverage",

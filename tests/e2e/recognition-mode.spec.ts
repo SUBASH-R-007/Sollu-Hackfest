@@ -114,7 +114,7 @@ test("choosing local stops online patient and practice recognition across tabs w
     // Open practice before Speak creates its recoverable communication draft.
     await practice.goto("/practice");
     await practice
-      .getByRole("button", { name: "Start this practice", exact: true })
+      .getByRole("button", { name: /Please give me time\./ })
       .click();
     await practice
       .getByText("Optional browser transcript", { exact: true })

@@ -28,6 +28,7 @@ import {
   topics,
   type Candidate,
   type Fragment,
+  type Lang,
 } from "@sollu/shared";
 import { useApp } from "../state";
 import { db } from "../db";
@@ -68,7 +69,7 @@ export function Home() {
       tone: "topics-tile",
       icon: <Grid2X2 size={29} />,
       title: "Topics",
-      tamil: "வகைகள்",
+      tamil: "தலைப்புகள்",
       detail: "Find what’s on your mind",
     },
     {
@@ -311,6 +312,100 @@ export function TypePage() {
     </>
   );
 }
+type TopicLeaf = { id: string; icon: string; ta: string; en: string };
+/** Second-level choices; each leaf is sent as the person's words. */
+const subtopics: Record<string, TopicLeaf[]> = {
+  food: [
+    { id: "idli", icon: "🍚", ta: "இட்லி", en: "Idli" },
+    { id: "dosa", icon: "🥞", ta: "தோசை", en: "Dosa" },
+    { id: "rasam", icon: "🍲", ta: "ரசம்", en: "Rasam" },
+    { id: "rice", icon: "🍛", ta: "சாதம்", en: "Rice" },
+  ],
+  drink: [
+    { id: "water", icon: "💧", ta: "தண்ணி", en: "Water" },
+    { id: "coffee", icon: "☕", ta: "காபி", en: "Coffee" },
+    { id: "tea", icon: "🍵", ta: "டீ", en: "Tea" },
+    { id: "milk", icon: "🥛", ta: "பால்", en: "Milk" },
+  ],
+  feelings: [
+    { id: "happy", icon: "😊", ta: "சந்தோஷம்", en: "Happy" },
+    { id: "sad", icon: "😢", ta: "சோகம்", en: "Sad" },
+    { id: "worried", icon: "😟", ta: "கவலை", en: "Worried" },
+    { id: "scared", icon: "😨", ta: "பயம்", en: "Scared" },
+    { id: "angry", icon: "😠", ta: "கோபம்", en: "Angry" },
+    { id: "lonely", icon: "🥺", ta: "தனிமை", en: "Lonely" },
+    { id: "tired", icon: "🥱", ta: "களைப்பு", en: "Tired" },
+    { id: "bored", icon: "😐", ta: "போரடிக்குது", en: "Bored" },
+    { id: "confused", icon: "😕", ta: "குழப்பம்", en: "Confused" },
+    { id: "calm", icon: "😌", ta: "நிம்மதி", en: "Calm" },
+  ],
+  tv_phone: [
+    { id: "tv", icon: "📺", ta: "டிவி", en: "TV" },
+    { id: "phone", icon: "📱", ta: "ஃபோன்", en: "Phone" },
+    { id: "music", icon: "🎵", ta: "பாட்டு", en: "Music" },
+  ],
+  go_out: [
+    { id: "outside", icon: "🌳", ta: "வெளியே", en: "Outside" },
+    { id: "home", icon: "🏠", ta: "வீட்டுக்கு", en: "Home" },
+  ],
+};
+const painIcons: Record<string, string> = {
+  head: "🤕",
+  mouth: "👄",
+  tooth: "🦷",
+  throat: "🗣️",
+  chest: "🫀",
+  stomach: "🫃",
+  back: "🧍",
+  neck: "🧣",
+  eye: "👁️",
+  ear: "👂",
+  shoulder: "🤷",
+  arm: "💪",
+  hand: "✋",
+  wrist: "⌚",
+  hip: "🩳",
+  knee: "🦵",
+  leg: "🦿",
+  foot: "🦶",
+  ankle: "👟",
+};
+const perPage = 6;
+/** What the person tapped, in their language (never an internal topic id). */
+export function topicLabel(
+  fragment: Fragment,
+  lang: "ta" | "en",
+  contacts: { id: string; name: string; aliases: string[] }[],
+): string {
+  const path = fragment.topicPath ?? [];
+  const pick = (item?: { ta: string; en: string }) =>
+    item ? (lang === "ta" ? item.ta : item.en) : undefined;
+  if (path[0] === "pain") {
+    const part = painParts.find((p) => p.id === path[1]);
+    const side =
+      path[2] === "left"
+        ? copy(lang, "left", "இடது")
+        : path[2] === "right"
+          ? copy(lang, "right", "வலது")
+          : "";
+    const topic = topics.find((t) => t.id === "pain");
+    return [pick(topic), side, pick(part)].filter(Boolean).join(" · ");
+  }
+  if (path[0] === "people") {
+    const contact = contacts.find((c) => c.id === path[1]);
+    return (
+      (lang === "ta"
+        ? contact?.aliases.find((a) => /\p{Script=Tamil}/u.test(a))
+        : undefined) ??
+      contact?.name ??
+      fragment.raw
+    );
+  }
+  const leaf = subtopics[path[0]]?.find((item) => item.id === path[1]);
+  return (
+    pick(leaf) ?? pick(topics.find((t) => t.id === path[0])) ?? fragment.raw
+  );
+}
 export function TopicsPage() {
   const { settings, session, begin, generate } = useApp();
   const [category, setCategory] = useState(""),
@@ -323,7 +418,8 @@ export function TopicsPage() {
   const ordered = [...topics].sort(
     (a, b) => Number(due.has(b.id)) - Number(due.has(a.id)),
   );
-  function send(path: string[], raw = path.join(" ")) {
+  // Send only the tapped item as the person's words; the path keeps context.
+  function send(path: string[], raw: string) {
     const fragment: Fragment = { modality: "topic", raw, topicPath: path };
     if (!session) begin(fragment);
     void generate(fragment);
@@ -335,14 +431,7 @@ export function TopicsPage() {
         ? []
         : painParts.map((p) => ({
             id: p.id,
-            icon:
-              p.id === "chest"
-                ? "🫀"
-                : p.id === "head"
-                  ? "🙂"
-                  : p.id === "shoulder"
-                    ? "💪"
-                    : "🧍",
+            icon: painIcons[p.id] ?? "🧍",
             ta: p.ta,
             en: p.en,
           }))
@@ -350,41 +439,30 @@ export function TopicsPage() {
         ? settings.contacts.map((c) => ({
             id: c.id,
             icon: "👤",
-            ta: c.name,
+            ta:
+              c.aliases.find((alias) => /\p{Script=Tamil}/u.test(alias)) ??
+              c.name,
             en: c.name,
           }))
-        : category === "food"
-          ? [
-              { id: "idli", icon: "🍚", ta: "இட்லி", en: "Idli" },
-              { id: "dosa", icon: "🥞", ta: "தோசை", en: "Dosa" },
-              { id: "rasam", icon: "🍲", ta: "ரசம்", en: "Rasam" },
-              { id: "rice", icon: "🍚", ta: "சாதம்", en: "Rice" },
-            ]
-          : category === "drink"
-            ? [
-                { id: "water", icon: "💧", ta: "தண்ணி", en: "Water" },
-                { id: "coffee", icon: "☕", ta: "காபி", en: "Coffee" },
-                { id: "tea", icon: "🍵", ta: "டீ", en: "Tea" },
-                { id: "milk", icon: "🥛", ta: "பால்", en: "Milk" },
-              ]
-            : ordered;
+        : (subtopics[category] ?? ordered);
   function choose(id: string) {
     if (!category) {
-      if (["pain", "people", "food", "drink"].includes(id)) {
+      if (id === "pain" || id === "people" || subtopics[id]) {
         setCategory(id);
         setPage(0);
-      } else send([id]);
+      } else if (id === "prayer") send(["prayer", "pray"], "pray");
+      else send([id], id);
     } else if (category === "pain") {
       const p = painParts.find((p) => p.id === id);
       if (p?.paired) {
         setPart(id);
         setPage(0);
-      } else send(["pain", id]);
+      } else send(["pain", id], `pain ${id}`);
     } else
       send(
         [category, id],
         category === "people"
-          ? settings.contacts.find((c) => c.id === id)?.name
+          ? (settings.contacts.find((c) => c.id === id)?.name ?? id)
           : id,
       );
   }
@@ -435,7 +513,9 @@ export function TopicsPage() {
             <TapButton
               className="topic-tile"
               key={side}
-              onActivate={() => send(["pain", part, side])}
+              onActivate={() =>
+                send(["pain", part, side], `pain ${part} ${side}`)
+              }
             >
               <span className="topic-emoji">
                 {side === "left" ? "⬅️" : "➡️"}
@@ -456,7 +536,7 @@ export function TopicsPage() {
       ) : (
         <>
           <div className="topic-grid">
-            {items.slice(page * 4, page * 4 + 4).map((t) => (
+            {items.slice(page * perPage, page * perPage + perPage).map((t) => (
               <TapButton
                 className="topic-tile"
                 key={t.id}
@@ -468,7 +548,7 @@ export function TopicsPage() {
               </TapButton>
             ))}
           </div>
-          {items.length > 4 && (
+          {items.length > perPage && (
             <div className="pagination">
               <TapButton
                 disabled={page === 0}
@@ -478,10 +558,10 @@ export function TopicsPage() {
                 {uiText(settings.lang, "Previous")}
               </TapButton>
               <span>
-                {page + 1} of {Math.ceil(items.length / 4)}
+                {page + 1} / {Math.ceil(items.length / perPage)}
               </span>
               <TapButton
-                disabled={(page + 1) * 4 >= items.length}
+                disabled={(page + 1) * perPage >= items.length}
                 onActivate={() => setPage((p) => p + 1)}
               >
                 {copy(settings.lang, "More topics", "மேலும் தலைப்புகள்")}
@@ -507,8 +587,15 @@ function SentenceText({ c }: { c: Candidate }) {
   );
 }
 export function ConfirmPage() {
-  const { session, settings, speak, retry, generate, showMoreChoices } =
-    useApp();
+  const {
+    session,
+    settings,
+    speak,
+    retry,
+    generate,
+    showMoreChoices,
+    showPreparedChoices,
+  } = useApp();
   const [selected, setSelected] = useState<Candidate | null>(null);
   const navigate = useNavigate();
   useEffect(
@@ -529,62 +616,59 @@ export function ConfirmPage() {
     ...candidates,
     ...(session.moreCandidates ?? []),
   ].some((candidate) => candidate.source === "model");
+  // Other hearings the recognizer offered for this speech attempt.
+  const heardKey = (text: string) =>
+    text.normalize("NFC").toLocaleLowerCase().replace(/\s+/g, " ").trim();
+  const heardAlternatives =
+    context.fragment.modality === "speech"
+      ? [...new Set(context.fragment.sttAlternatives ?? [])]
+          .filter(
+            (alternative) =>
+              heardKey(alternative) &&
+              heardKey(alternative) !== heardKey(context.fragment.raw),
+          )
+          .slice(0, 2)
+      : [];
   return (
     <>
       <Back />
       <div className="heard-row">
         <span>
           {context.fragment.modality === "camera"
-            ? "📷 I see"
+            ? copy(settings.lang, "📷 I see", "📷 நான் பார்ப்பது")
             : context.fragment.modality === "speech"
-              ? "🎤 I heard"
-              : "💬 Your words"}
-          : <strong>{context.fragment.raw}</strong>
+              ? copy(settings.lang, "🎤 I heard", "🎤 நான் கேட்டது")
+              : context.fragment.modality === "topic"
+                ? copy(settings.lang, "🗂️ You chose", "🗂️ நீங்கள் தேர்ந்தது")
+                : copy(settings.lang, "💬 Your words", "💬 உங்கள் வார்த்தைகள்")}
+          :{" "}
+          <strong>
+            {context.fragment.modality === "topic"
+              ? topicLabel(context.fragment, settings.lang, settings.contacts)
+              : context.fragment.raw}
+          </strong>
         </span>
         <span className="mode-badge">{session.model || "Finding words"}</span>
       </div>
       <PageTitle
-        title="Is this what you mean?"
+        title={copy(
+          settings.lang,
+          "Is this what you mean?",
+          "நீங்கள் சொல்ல வந்தது இதுவா?",
+        )}
         subtitle={
           settings.twoStep
-            ? "Choose a sentence, then tap Say to speak. Listen lets you hear a preview."
-            : "Tap your sentence to say it. Listen lets you hear a preview."
+            ? copy(
+                settings.lang,
+                "Choose a sentence, then tap Say to speak.",
+                "ஒரு வாக்கியத்தைத் தேர்ந்தெடுத்து, ‘சொல்’ தொடுங்கள்.",
+              )
+            : copy(
+                settings.lang,
+                "Tap your sentence to say it.",
+                "சொல்ல உங்கள் வாக்கியத்தைத் தொடுங்கள்.",
+              )
         }
-      />
-      {requiresPredefinedCommunication(context) && (
-        <p className="notice">
-          Health and help messages use prepared wording. Choose only what you
-          mean.
-        </p>
-      )}
-      <div className="confirm-context">
-        <TapButton onActivate={() => navigate("/people")}>
-          To: {context.addressee?.name ?? "Someone nearby"}
-          <ChevronRight size={18} />
-        </TapButton>
-        <TapButton
-          onActivate={() =>
-            void generate(
-              undefined,
-              1,
-              context.outputLang === "ta" ? "en" : "ta",
-            )
-          }
-        >
-          {context.outputLang === "ta" ? "தமிழ் → English" : "English → தமிழ்"}
-        </TapButton>
-        {context.fragment.modality === "speech" && (
-          <TapButton onActivate={() => navigate("/speak")}>
-            <RotateCcw size={20} />
-            Try speaking again
-          </TapButton>
-        )}
-      </div>
-      <ContextSummary
-        context={
-          hasModelChoices ? inferenceContext(context, settings) : context
-        }
-        lang={settings.lang}
       />
       <div className="candidate-list" aria-live="polite" aria-busy={loading}>
         {loading ? (
@@ -616,7 +700,8 @@ export function ConfirmPage() {
                 className={`candidate-card ${selected?.text === c.text ? "selected" : ""}`}
                 onActivate={(event) => {
                   if (settings.twoStep) setSelected(c);
-                  else speak(c, ticket(event, c.text));
+                  else
+                    speak(c, ticket(event, c.text), false, context.outputLang);
                 }}
               >
                 <span className="candidate-icon">{c.icon}</span>
@@ -669,7 +754,9 @@ export function ConfirmPage() {
               <TapButton
                 className="listen-button"
                 aria-label={`Listen: ${c.text}`}
-                onActivate={(event) => speak(c, ticket(event, c.text), true)}
+                onActivate={(event) =>
+                  speak(c, ticket(event, c.text), true, context.outputLang)
+                }
               >
                 <Ear size={25} />
                 <span>{uiText(settings.lang, "Listen")}</span>
@@ -678,6 +765,40 @@ export function ConfirmPage() {
           ))
         )}
       </div>
+      {!loading && heardAlternatives.length > 0 && (
+        <div
+          className="confirm-context"
+          role="group"
+          aria-label={copy(
+            settings.lang,
+            "Did you say…?",
+            "நீங்கள் சொன்னது இதுவா?",
+          )}
+        >
+          <span className="field-label">
+            {copy(settings.lang, "Did you say…?", "நீங்கள் சொன்னது இதுவா?")}
+          </span>
+          {heardAlternatives.map((alternative) => (
+            <TapButton
+              key={alternative}
+              onActivate={() =>
+                // Re-run with the person's chosen hearing; nothing is spoken.
+                void generate(
+                  {
+                    ...context.fragment,
+                    raw: alternative,
+                  },
+                  1,
+                )
+              }
+            >
+              <span lang={/\p{Script=Tamil}/u.test(alternative) ? "ta" : "en"}>
+                {alternative}
+              </span>
+            </TapButton>
+          ))}
+        </div>
+      )}
       {!loading && Boolean(session.moreCandidates?.length) && (
         <TapButton
           className="secondary-button full"
@@ -691,11 +812,40 @@ export function ConfirmPage() {
           )}
         </TapButton>
       )}
+      {!loading && session.engineNotice && (
+        <div role="status" className="notice amber">
+          {session.engineNotice}
+          {Boolean(session.preparedCandidates?.length) && (
+            <TapButton onActivate={showPreparedChoices}>
+              {copy(
+                settings.lang,
+                "Show prepared phrases instead",
+                "தயாரான வாக்கியங்களைக் காட்டு",
+              )}
+              <ArrowRight />
+            </TapButton>
+          )}
+          <TapButton onActivate={() => navigate("/settings?tab=llm")}>
+            {copy(
+              settings.lang,
+              "Sentence engine settings",
+              "வாக்கிய இயந்திர அமைப்புகள்",
+            )}
+            <ArrowRight />
+          </TapButton>
+        </div>
+      )}
       {session.error && (
         <div role="status" className="notice amber">
           {session.error}
+          {!loading && context.fragment.raw.trim() && (
+            <TapButton onActivate={() => void generate(undefined, 1)}>
+              <RotateCcw size={20} />
+              {copy(settings.lang, "Find new choices", "புதிய தேர்வுகள்")}
+            </TapButton>
+          )}
           <TapButton onActivate={() => navigate("/phrases")}>
-            Open My phrases
+            {copy(settings.lang, "Open My phrases", "என் வாக்கியங்களைத் திற")}
             <ArrowRight />
           </TapButton>
         </div>
@@ -703,10 +853,17 @@ export function ConfirmPage() {
       {settings.twoStep && selected && !loading && (
         <TapButton
           className="primary full"
-          onActivate={(event) => speak(selected, ticket(event, selected.text))}
+          onActivate={(event) =>
+            speak(
+              selected,
+              ticket(event, selected.text),
+              false,
+              context.outputLang,
+            )
+          }
         >
           <Volume2 />
-          Say: {selected.text}
+          {copy(settings.lang, "Say", "சொல்")}: {selected.text}
         </TapButton>
       )}
       {!loading && (
@@ -731,6 +888,52 @@ export function ConfirmPage() {
           `${context.round} / 3 · மீண்டும் தொடங்கலாம்`,
         )}
       </div>
+      {requiresPredefinedCommunication(context) && (
+        <p className="notice">
+          {copy(
+            settings.lang,
+            "Health and help messages use prepared wording. Choose only what you mean.",
+            "உடல்நலம், உதவி செய்திகளுக்குத் தயாரான வாக்கியங்கள். நீங்கள் சொல்ல வந்ததை மட்டும் தேர்ந்தெடுங்கள்.",
+          )}
+        </p>
+      )}
+      <div className="confirm-context">
+        <TapButton onActivate={() => navigate("/people")}>
+          {copy(settings.lang, "To", "யாரிடம்")}:{" "}
+          {context.addressee?.name ??
+            copy(settings.lang, "Someone nearby", "அருகில் உள்ளவர்")}
+          <ChevronRight size={18} />
+        </TapButton>
+        <TapButton
+          onActivate={() =>
+            void generate(
+              undefined,
+              1,
+              context.outputLang === "ta" ? "en" : "ta",
+            )
+          }
+        >
+          {context.outputLang === "ta" ? "தமிழ் → English" : "English → தமிழ்"}
+        </TapButton>
+        {context.fragment.modality === "speech" && (
+          <TapButton onActivate={() => navigate("/speak")}>
+            <RotateCcw size={20} />
+            {copy(settings.lang, "Try speaking again", "மீண்டும் பேசு")}
+          </TapButton>
+        )}
+        {context.fragment.modality === "speech" && (
+          <TapButton onActivate={() => navigate("/type")}>
+            <Keyboard size={20} />
+            {copy(settings.lang, "Edit the words", "வார்த்தைகளைத் திருத்து")}
+          </TapButton>
+        )}
+      </div>
+      <ContextSummary
+        context={
+          hasModelChoices ? inferenceContext(context, settings) : context
+        }
+        lang={settings.lang}
+      />
     </>
   );
 }
@@ -756,8 +959,8 @@ export function SpeakingPage({ help = false }: { help?: boolean }) {
         </Empty>
       </>
     );
-  const sms =
-    settings.contacts.find((p) => p.isCaregiver && p.phone)?.phone ?? "";
+  const smsContact = settings.contacts.find((p) => p.isCaregiver && p.phone);
+  const sms = smsContact?.phone ?? "";
   return (
     <>
       <Back />
@@ -808,15 +1011,6 @@ export function SpeakingPage({ help = false }: { help?: boolean }) {
           <Square fill="currentColor" size={19} />
           {uiText(settings.lang, "Stop")}
         </TapButton>
-        <TapButton
-          className="secondary"
-          onActivate={(event) =>
-            speak(c, ticket(event, c.text), false, session.context.outputLang)
-          }
-        >
-          <RotateCcw />
-          {copy(settings.lang, "Say again", "மீண்டும் சொல்")}
-        </TapButton>
       </div>
       {session.delivery && (
         <div className="delivery-status">{session.delivery}</div>
@@ -824,16 +1018,37 @@ export function SpeakingPage({ help = false }: { help?: boolean }) {
       {help ? (
         <>
           <div className="help-ack" role="status">
-            {helpAck || "Waiting for someone to reply…"}
+            {helpAck ||
+              copy(
+                settings.lang,
+                "Waiting for someone to reply…",
+                "பதிலுக்குக் காத்திருக்கிறது…",
+              )}
           </div>
           <a
             className="tap primary full"
             data-tap
-            href={`sms:${sms}?body=${encodeURIComponent("I need help. Please come to me.")}`}
+            href={`sms:${sms}?body=${encodeURIComponent(
+              copy(
+                settings.lang,
+                "I need help. Please come to me.",
+                "எனக்கு உதவி வேணும். தயவுசெய்து என்னிடம் வாருங்கள்.",
+              ),
+            )}`}
           >
             <Send />
             {copy(settings.lang, "Send SMS", "குறுஞ்செய்தி அனுப்பு")}
+            {smsContact ? ` · ${smsContact.name}` : ""}
           </a>
+          {!smsContact && (
+            <p className="help-disclaimer">
+              {copy(
+                settings.lang,
+                "No SMS number is saved, so your phone will ask who to text.",
+                "குறுஞ்செய்தி எண் சேமிக்கப்படவில்லை; யாருக்கு அனுப்புவது என்று ஃபோன் கேட்கும்.",
+              )}
+            </p>
+          )}
           <TapButton
             className="secondary full"
             onActivate={() => {
@@ -946,90 +1161,6 @@ export function PhrasesPage() {
     </>
   );
 }
-export function PeoplePage() {
-  const { settings, updateSettings, session, generate } = useApp();
-  const navigate = useNavigate();
-  return (
-    <>
-      <Back />
-      <PageTitle
-        title="Who are you talking to?"
-        subtitle="Their language and the way you speak to them come along."
-      />
-      <div className="topic-grid">
-        {settings.contacts.map((c, i) => (
-          <TapButton
-            className="person-tile"
-            key={c.id}
-            onActivate={() => {
-              void updateSettings({ addressee: c.id }).then(() => {
-                if (session?.candidates.length) void generate();
-                else navigate("/");
-              });
-            }}
-          >
-            <span className={`avatar person-${i}`}>{c.name[0]}</span>
-            <strong>{c.name}</strong>
-            <small>
-              {c.relation} · {c.lang === "en" ? "English" : "தமிழ்"}
-            </small>
-            {settings.addressee === c.id && <Check size={20} />}
-          </TapButton>
-        ))}
-      </div>
-      {session?.candidates.length ? (
-        <TapButton className="primary full" onActivate={() => void generate()}>
-          Update these sentences
-          <ArrowRight />
-        </TapButton>
-      ) : null}
-    </>
-  );
-}
-export function RecentPage() {
-  const attempts =
-    useLiveQuery(() =>
-      db.attempts.orderBy("startedAt").reverse().limit(20).toArray(),
-    ) ?? [];
-  return (
-    <>
-      <Back />
-      <PageTitle
-        title="Recent words"
-        subtitle="The things you chose to say, kept on this device."
-      />
-      {attempts.filter((a) => a.chosenText).length ? (
-        <div className="recent-list">
-          {attempts
-            .filter((a) => a.chosenText)
-            .map((a) => (
-              <article key={a.id}>
-                <span className="recent-time">
-                  {new Date(a.startedAt).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </span>
-                <p>{a.chosenText}</p>
-                <small>
-                  {a.taps} taps{" "}
-                  {a.timeToSpeechMs
-                    ? `· ${(a.timeToSpeechMs / 1000).toFixed(1)}s`
-                    : ""}{" "}
-                  {a.demoClock ? "· Demo" : ""}
-                </small>
-              </article>
-            ))}
-        </div>
-      ) : (
-        <Empty title="Your words will appear here">
-          After you choose and speak a sentence, you can find it here.
-        </Empty>
-      )}
-    </>
-  );
-}
-
 interface RecognitionResultLike {
   isFinal: boolean;
   length: number;
@@ -1066,8 +1197,24 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
     setQuestion,
     online,
     updateDraft,
+    updateSettings,
   } = useApp();
   const [recordingRun, setRecordingRun] = useState(0);
+  // Recognition must listen for the language actually spoken, which can differ
+  // from the interface language. The recorder reads the ref when it starts.
+  const [speechLang, setSpeechLang] = useState<Lang>(
+    settings.speechLang ?? settings.lang,
+  );
+  const speechLangRef = useRef(speechLang);
+  const chooseSpeechLang = (next: Lang) => {
+    if (next === speechLangRef.current) return;
+    speechLangRef.current = next;
+    setSpeechLang(next);
+    void updateSettings({ speechLang: next }).catch(() => {
+      /* This attempt still uses the choice; only remembering it failed. */
+    });
+    setRecordingRun((v) => v + 1);
+  };
   const navigate = useNavigate();
   const stopRecognition = useRef(() => {});
   const transcript = useRef(""),
@@ -1077,6 +1224,14 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
     [starting, setStarting] = useState(false),
     [heard, setHeard] = useState(""),
     [error, setError] = useState("");
+  const heardRef = useRef("");
+  heardRef.current = heard;
+  // Recognition cannot run here (no API, no local language pack, blocked).
+  const [unsupported, setUnsupported] = useState(false),
+    [noRecognizer, setNoRecognizer] = useState(false);
+  const [typingQuestion, setTypingQuestion] = useState(false),
+    [typedQuestion, setTypedQuestion] = useState("");
+  const finishNow = useRef(() => {});
   const submitRef = useRef((_text: string) => {});
   submitRef.current = (text: string) => {
     if (submitted.current || !text.trim()) return;
@@ -1095,6 +1250,8 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
   };
   useEffect(() => {
     setError("");
+    setUnsupported(false);
+    setNoRecognizer(false);
     setListening(false);
     setStarting(false);
     submitted.current = false;
@@ -1103,15 +1260,18 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
       (window as SpeechWindow).SpeechRecognition ??
       (window as SpeechWindow).webkitSpeechRecognition;
     if (!online && recognitionMode === "browser") {
+      setUnsupported(true);
       setError("You’re offline. Use Topics or My phrases.");
       return;
     }
     if (!Constructor) {
+      setUnsupported(true);
+      setNoRecognizer(true);
       setError(
         recognitionErrorMessage(
           "recognition-unavailable",
           recognitionMode,
-          settings.lang,
+          speechLangRef.current,
         ),
       );
       return;
@@ -1120,6 +1280,8 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
     try {
       rec = prepareBrowserRecognition(Constructor);
     } catch (failure) {
+      setUnsupported(true);
+      setNoRecognizer(true);
       setError(
         failure instanceof Error
           ? failure.message
@@ -1128,7 +1290,7 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
       return;
     }
     const prefix = transcript.current;
-    rec.lang = settings.lang === "ta" ? "ta-IN" : "en-IN";
+    rec.lang = speechLangRef.current === "ta" ? "ta-IN" : "en-IN";
     rec.continuous = true;
     rec.interimResults = true;
     rec.maxAlternatives = 3;
@@ -1137,12 +1299,17 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
     let receivedSpeech = false;
     let silence: ReturnType<typeof setTimeout> | undefined;
     let cap: ReturnType<typeof setTimeout> | undefined;
+    let stopDeadline: ReturnType<typeof setTimeout> | undefined;
+    // Done asks the recognizer to finalize instead of discarding its last
+    // (possibly provisional) hearing and alternatives.
+    let doneRequested = false;
     const dispose = () => {
       if (!active) return;
       active = false;
       clearTimeout(cap);
       clearTimeout(silence);
       clearTimeout(startup);
+      clearTimeout(stopDeadline);
       rec.onstart = rec.onend = rec.onresult = rec.onerror = null;
       try {
         rec.abort();
@@ -1156,17 +1323,61 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
     const fail = (code: string) => {
       if (!active) return;
       dispose();
+      // Retrying cannot help these; lead with Topics and Type instead.
+      if (
+        [
+          "language-not-supported",
+          "service-not-allowed",
+          "not-allowed",
+          "NotAllowedError",
+          "SecurityError",
+          "recognition-unavailable",
+        ].includes(code)
+      )
+        setUnsupported(true);
       setError(recognitionErrorMessage(code, recognitionMode, rec.lang));
     };
     const finish = () => {
       if (!active) return;
       dispose();
-      if (receivedSpeech && transcript.current.trim())
+      if ((receivedSpeech || doneRequested) && transcript.current.trim())
         submitRef.current(transcript.current);
       else
         setError(
           recognitionErrorMessage("no-speech", recognitionMode, rec.lang),
         );
+    };
+    // No time limit on the person (I-10): after 15 s the microphone closes,
+    // but nothing is submitted until they tap Done or keep listening.
+    const closeMicrophone = () => {
+      if (!active) return;
+      dispose();
+      setError(
+        transcript.current.trim()
+          ? copy(
+              settings.lang,
+              "The microphone has stopped. Tap Done to use these words, or Keep listening.",
+              "மைக் நின்றது. இந்த வார்த்தைகளுக்கு ‘முடிந்தது’ தொடுங்கள், அல்லது தொடர்ந்து கேளுங்கள்.",
+            )
+          : recognitionErrorMessage("no-speech", recognitionMode, rec.lang),
+      );
+    };
+    finishNow.current = () => {
+      if (!active) {
+        submitRef.current(transcript.current || heardRef.current);
+        return;
+      }
+      doneRequested = true;
+      clearTimeout(silence);
+      clearTimeout(cap);
+      try {
+        rec.stop();
+      } catch {
+        finish();
+        return;
+      }
+      // Some engines never fire onend after stop(); do not leave Done hanging.
+      stopDeadline = setTimeout(finish, 1500);
     };
     rec.onstart = () => {
       if (!active || started) return;
@@ -1174,7 +1385,7 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
       clearTimeout(startup);
       setStarting(false);
       setListening(true);
-      cap = setTimeout(finish, 15000);
+      cap = setTimeout(closeMicrophone, 15000);
     };
     rec.onresult = (e) => {
       if (!active) return;
@@ -1202,16 +1413,15 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
     } catch (failure) {
       fail(failure instanceof Error ? failure.name : "unknown");
     }
-    const stopRecording = () => {
-      submitted.current = true;
-      dispose();
-    };
+    // Stop/Pause closes the microphone; the heard words stay available for Done.
+    const stopRecording = () => dispose();
     window.addEventListener("sollu:stop", stopRecording);
     return () => {
       window.removeEventListener("sollu:stop", stopRecording);
       dispose();
       if (stopRecognition.current === dispose)
         stopRecognition.current = () => {};
+      finishNow.current = () => submitRef.current(heardRef.current);
     };
     // The recorder starts once on entering this screen, never on transcript updates.
   }, [recordingRun]);
@@ -1219,25 +1429,77 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
     <>
       <Back />
       <PageTitle
-        eyebrow={partner ? "A LITTLE CONTEXT HELPS" : "ONE WORD IS ENOUGH"}
+        eyebrow={
+          partner
+            ? copy(
+                settings.lang,
+                "A LITTLE CONTEXT HELPS",
+                "கொஞ்சம் சூழல் உதவும்",
+              )
+            : copy(settings.lang, "ONE WORD IS ENOUGH", "ஒரு வார்த்தை போதும்")
+        }
         title={
           partner
-            ? "What did they ask?"
+            ? copy(
+                settings.lang,
+                "What did they ask?",
+                "அவர்கள் என்ன கேட்டார்கள்?",
+              )
             : listening
-              ? "I’m listening."
-              : "Let’s hear your words."
+              ? copy(settings.lang, "I’m listening.", "கேட்கிறேன்.")
+              : copy(
+                  settings.lang,
+                  "Let’s hear your words.",
+                  "உங்கள் வார்த்தைகளைச் சொல்லுங்கள்.",
+                )
         }
         subtitle={
           partner
-            ? "Speak their question. It stays in context for five minutes."
-            : "Take your time. A word, a pause, a little of both."
+            ? copy(
+                settings.lang,
+                "Speak their question. It stays in context for five minutes.",
+                "அவர்கள் கேள்வியைச் சொல்லுங்கள். ஐந்து நிமிடம் நினைவில் இருக்கும்.",
+              )
+            : copy(
+                settings.lang,
+                "Take your time. A word, a pause, a little of both.",
+                "நிதானமாக. ஒரு வார்த்தை போதும்.",
+              )
         }
       />
+      <div
+        className="confirm-context"
+        role="group"
+        aria-label={copy(settings.lang, "I will speak in", "நான் பேசும் மொழி")}
+      >
+        <TapButton
+          aria-pressed={speechLang === "ta"}
+          className={speechLang === "ta" ? "selected" : ""}
+          onActivate={() => chooseSpeechLang("ta")}
+        >
+          🎤 தமிழ்
+        </TapButton>
+        <TapButton
+          aria-pressed={speechLang === "en"}
+          className={speechLang === "en" ? "selected" : ""}
+          onActivate={() => chooseSpeechLang("en")}
+        >
+          🎤 English
+        </TapButton>
+      </div>
       <div className={`listening-panel ${listening ? "is-listening" : ""}`}>
         <p className="notice">
           {recognitionMode === "local"
-            ? "Local recognition only. If unavailable, type or choose a topic."
-            : "Browser recognition may send audio to its vendor."}
+            ? copy(
+                settings.lang,
+                "Local recognition only. If unavailable, type or choose a topic.",
+                "சாதனத்தில் மட்டும் கேட்கும். முடியாவிட்டால் எழுதுங்கள் அல்லது தலைப்பைத் தேர்ந்தெடுங்கள்.",
+              )
+            : copy(
+                settings.lang,
+                "Browser recognition may send audio to its vendor.",
+                "உலாவி உங்கள் குரலை அதன் சேவைக்கு அனுப்பலாம்.",
+              )}
         </p>
         <div className="mic-orb">
           <Mic size={46} />
@@ -1250,10 +1512,22 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
         <p>{heard || "உங்க குரல் · Your voice"}</p>
         <small>
           {listening
-            ? "Listening through your browser"
+            ? copy(
+                settings.lang,
+                "Listening through your browser",
+                "கேட்டுக்கொண்டிருக்கிறது",
+              )
             : starting
-              ? "Waiting for the browser to start the microphone…"
-              : "Microphone is not recording"}
+              ? copy(
+                  settings.lang,
+                  "Waiting for the browser to start the microphone…",
+                  "மைக் தொடங்கக் காத்திருக்கிறது…",
+                )
+              : copy(
+                  settings.lang,
+                  "Microphone is not recording",
+                  "மைக் பதிவு செய்யவில்லை",
+                )}
         </small>
       </div>
       {error && (
@@ -1261,25 +1535,62 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
           {error}
         </div>
       )}
-      <TapButton
-        className="secondary"
-        onActivate={() => {
-          stopRecognition.current();
-          navigate("/settings?tab=privacy");
-        }}
-      >
-        Speech recognition settings
-      </TapButton>
+      {/* When listening is not possible, offer the other ways first. */}
+      {unsupported && !partner && (
+        <div className="speaking-actions">
+          <TapButton className="primary" onActivate={() => navigate("/topics")}>
+            <Grid2X2 />
+            {uiText(settings.lang, "Topics")}
+          </TapButton>
+          <TapButton className="primary" onActivate={() => navigate("/type")}>
+            <Keyboard />
+            {copy(settings.lang, "Type", "எழுது")}
+          </TapButton>
+        </div>
+      )}
+      {partner && typingQuestion && (
+        <form onSubmit={(event) => event.preventDefault()}>
+          <label className="field-label" htmlFor="partner-question">
+            {copy(
+              settings.lang,
+              "Type their question",
+              "அவர்கள் கேட்டதை எழுதுங்கள்",
+            )}
+          </label>
+          <textarea
+            id="partner-question"
+            className="fragment-input"
+            rows={2}
+            maxLength={300}
+            autoFocus
+            value={typedQuestion}
+            onChange={(event) => setTypedQuestion(event.target.value)}
+          />
+          <TapButton
+            className="primary full"
+            disabled={!typedQuestion.trim()}
+            onActivate={() => {
+              stopRecognition.current();
+              setQuestion(typedQuestion.trim());
+              navigate("/");
+            }}
+          >
+            <Check />
+            {copy(settings.lang, "Keep this question", "இந்தக் கேள்வியை வை")}
+          </TapButton>
+        </form>
+      )}
       <div className="speaking-actions">
-        <TapButton onActivate={() => setRecordingRun((v) => v + 1)}>
-          {copy(settings.lang, "Keep listening", "தொடர்ந்து கேள்")}
-        </TapButton>
+        {!noRecognizer && (
+          <TapButton onActivate={() => setRecordingRun((v) => v + 1)}>
+            {copy(settings.lang, "Keep listening", "தொடர்ந்து கேள்")}
+          </TapButton>
+        )}
         <TapButton
           className="primary"
           disabled={!heard}
           onActivate={() => {
-            stopRecognition.current();
-            submitRef.current(heard);
+            finishNow.current();
           }}
         >
           <Check />
@@ -1288,6 +1599,11 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
         <TapButton
           className="secondary"
           onActivate={() => {
+            // A partner's question is typed here, never as the person's message.
+            if (partner) {
+              setTypingQuestion(true);
+              return;
+            }
             stopRecognition.current();
             navigate("/type");
           }}
@@ -1296,6 +1612,19 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
           {copy(settings.lang, "Type instead", "எழுதுகிறேன்")}
         </TapButton>
       </div>
+      <TapButton
+        className="secondary"
+        onActivate={() => {
+          stopRecognition.current();
+          navigate("/settings?tab=privacy");
+        }}
+      >
+        {copy(
+          settings.lang,
+          "Speech recognition settings",
+          "பேச்சு அறிதல் அமைப்புகள்",
+        )}
+      </TapButton>
       {settings.demo && (
         <div className="demo-fragments">
           <span className="eyebrow">DEMO INPUT · NO TRANSCRIPTION</span>
@@ -1318,115 +1647,6 @@ export function SpeakPage({ partner = false }: { partner?: boolean }) {
           ))}
         </div>
       )}
-      <p className="privacy-inline">
-        {recognitionMode === "local"
-          ? "Only supported on-device recognition is allowed. Tamil requires an installed local language pack."
-          : "Speech may be processed by your browser’s online service. Tamil support depends on your browser."}
-      </p>
-    </>
-  );
-}
-export function BaselinePage() {
-  const { begin, finishBaseline, settings } = useApp();
-  const [words, setWords] = useState<string[]>([]),
-    [result, setResult] = useState("");
-  const text = words.join(" ");
-  const keys = [
-    ["I", "🙋", "எனக்கு"],
-    ["want", "🤲", "வேண்டும்"],
-    ["need", "🙏", "தேவை"],
-    ["go", "🚶", "போக"],
-    ["eat", "🍽️", "சாப்பிட"],
-    ["drink", "🥤", "குடிக்க"],
-    ["water", "💧", "தண்ணீர்"],
-    ["tablet", "💊", "மாத்திரை"],
-    ["toilet", "🚻", "கழிப்பறை"],
-    ["pain", "🤕", "வலி"],
-    ["help", "🆘", "உதவி"],
-    ["yes", "👍", "ஆம்"],
-    ["no", "✋", "இல்லை"],
-    ["more", "➕", "இன்னும்"],
-    ["please", "🤝", "தயவுசெய்து"],
-    ["night", "🌙", "இரவு"],
-  ].map(([en, icon, ta]) => [copy(settings.lang, en, ta), icon]);
-  return (
-    <>
-      <Back />
-      <PageTitle
-        eyebrow="THE SAME TASK. THE SAME COUNTER."
-        title="Picture board"
-        subtitle="Build a sentence, one word at a time. Then tap that sentence to speak."
-      />
-      <div className="baseline-strip">
-        <p>{text || "Your sentence appears here"}</p>
-        <TapButton
-          disabled={!words.length}
-          onActivate={() => setWords((w) => w.slice(0, -1))}
-        >
-          <ChevronLeft />
-          Undo
-        </TapButton>
-      </div>
-      <div className="baseline-grid">
-        {keys.map(([word, icon]) => (
-          <TapButton
-            key={word}
-            onActivate={() => {
-              if (!words.length) begin({ modality: "topic", raw: "baseline" });
-              setWords((w) => [...w, word]);
-            }}
-          >
-            <span>{icon}</span>
-            {word}
-          </TapButton>
-        ))}
-      </div>
-      <TapButton
-        className="primary full"
-        disabled={!text}
-        onActivate={(event) => {
-          const t = audio.createTap(event, text, {
-            role: "patient",
-            surface: "baseline",
-          });
-          void audio
-            .speak({
-              text,
-              lang: settings.lang,
-              ticket: t,
-              channel: "baseline",
-              onStart: () => {
-                const a = finishBaseline(text);
-                if (a)
-                  setResult(
-                    `${a.taps} taps · ${((a.timeToSpeechMs ?? 0) / 1000).toFixed(1)} seconds`,
-                  );
-              },
-            })
-            .then((r) => {
-              if (r.status === "unavailable")
-                setResult(
-                  copy(
-                    settings.lang,
-                    "A voice for this language is not installed.",
-                    "இந்த மொழிக்கான குரல் நிறுவப்படவில்லை.",
-                  ),
-                );
-            });
-        }}
-      >
-        <Volume2 />
-        {text || "Build a sentence first"}
-      </TapButton>
-      {result && <div className="notice">{result} · Device voice</div>}
-      <p className="privacy-inline">
-        {copy(
-          settings.lang,
-          "A word board in your selected language. Compare the same intended messages and access settings.",
-          "தேர்ந்தெடுத்த மொழியில் சொற்கள். ஒரே செய்திகளை ஒப்பிடுங்கள்.",
-        )}{" "}
-        {settings.demo ? "Demo clock is on." : ""}
-      </p>
     </>
   );
 }

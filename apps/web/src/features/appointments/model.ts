@@ -15,7 +15,24 @@ export interface Appointment extends AppointmentDetails {
   id: string;
   status: AppointmentStatus;
   createdAt: number;
+  /** iCalendar revision; absent on records saved before revisions were tracked. */
+  sequence?: number;
 }
+
+/** Current calendar revision, treating missing or invalid values as the first. */
+export function appointmentSequence(
+  appointment?: Pick<Appointment, "sequence">,
+) {
+  const value = appointment?.sequence;
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : 0;
+}
+
+/** Revision for a reschedule or status change of an existing appointment. */
+export const nextAppointmentSequence = (
+  appointment: Pick<Appointment, "sequence">,
+) => appointmentSequence(appointment) + 1;
 
 export interface AppointmentForm {
   clinician: string;
@@ -156,8 +173,13 @@ function foldCalendarLine(line: string): string {
   return lines.join("\r\n");
 }
 
-/** Calendar export only: importing this file neither books nor cancels with a clinic. */
-export function appointmentCalendar(appointment: Appointment): string {
+/** Calendar export only: importing this file neither books nor cancels with a clinic.
+ * DTSTAMP is the export time and SEQUENCE the stored revision, so calendars that
+ * already imported the event apply reschedules and cancellations. */
+export function appointmentCalendar(
+  appointment: Appointment,
+  exportedAt = Date.now(),
+): string {
   const status = {
     requested: "TENTATIVE",
     confirmed: "CONFIRMED",
@@ -185,7 +207,8 @@ export function appointmentCalendar(appointment: Appointment): string {
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",
     `UID:${encodeURIComponent(appointment.id)}@sollu.local`,
-    `DTSTAMP:${calendarDate(appointment.createdAt)}`,
+    `DTSTAMP:${calendarDate(exportedAt)}`,
+    `SEQUENCE:${appointmentSequence(appointment)}`,
     `DTSTART:${calendarDate(appointment.startsAt)}`,
     `DTEND:${calendarDate(appointment.startsAt + appointment.durationMinutes * 60_000)}`,
     `SUMMARY:${calendarText(`Appointment with ${appointment.clinician}`)}`,

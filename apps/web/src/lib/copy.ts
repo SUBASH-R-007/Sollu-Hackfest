@@ -2,17 +2,34 @@ import type { Lang } from "@sollu/shared";
 export const copy = (lang: Lang, en: string, ta: string) =>
   lang === "ta" ? ta : en;
 const labels: Record<string, string> = {
-  "There’s no right spelling. Tamil, English, or a little of both.": "தமிழ், ஆங்கிலம் அல்லது இரண்டையும் கலந்து எழுதலாம்.",
-  "A family member can record these exact phrases in Voice Studio.": "இந்த வாக்கியங்களுக்கான குரலைக் குடும்பத்தினர் பதிவு செய்யலாம்.",
-  "Choose Speak, Topics, Camera or Type from Home.": "முகப்பில் பேசு, தலைப்புகள், கேமரா அல்லது எழுது என்பதைத் தேர்ந்தெடு.",
-  "Choose an exact sentence first.": "முதலில் ஒரு வாக்கியத்தைத் தேர்ந்தெடுங்கள்.",
-  "After you choose and speak a sentence, you can find it here.": "நீங்கள் தேர்ந்தெடுத்துப் பேசிய வாக்கியங்கள் இங்கே இருக்கும்.",
-  "Getting your voice ready…": "குரல் தயாராகிறது…", "Speaking…": "பேசுகிறது…", "Said, in your words.": "நீங்கள் தேர்ந்தெடுத்தது பேசப்பட்டது.",
-  "Stopped.": "நிறுத்தப்பட்டது.", "Waiting for playback": "பேசக் காத்திருக்கிறது", "Device voice": "சாதனக் குரல்", "Your recorded voice": "உங்கள் பதிவுசெய்த குரல்", "Consented family recording": "ஒப்புதலுடன் குடும்பத்தினர் பதிவுசெய்த குரல்", "Help alert tone": "உதவி எச்சரிக்கை ஒலி", "Help alert sounded.": "உதவி ஒலி எழுப்பப்பட்டது.",
-  "Ready now. Tap the sentence again to speak.": "தயார். பேச வாக்கியத்தை மீண்டும் தொடுங்கள்.",
-  "A voice for this language isn’t installed. Show this sentence to the person.": "இந்த மொழிக்கான குரல் இல்லை. வாக்கியத்தை மற்றவருக்குக் காட்டுங்கள்.",
-  "Couldn’t play audio. Show this sentence to the person.": "ஒலி வரவில்லை. வாக்கியத்தை மற்றவருக்குக் காட்டுங்கள்.",
-  "Could not load your voice. Show this sentence to the person.": "குரல் கிடைக்கவில்லை. வாக்கியத்தை மற்றவருக்குக் காட்டுங்கள்.",
+  "There’s no right spelling. Tamil, English, or a little of both.":
+    "தமிழ், ஆங்கிலம் அல்லது இரண்டையும் கலந்து எழுதலாம்.",
+  "A family member can record these exact phrases in Voice Studio.":
+    "இந்த வாக்கியங்களுக்கான குரலைக் குடும்பத்தினர் பதிவு செய்யலாம்.",
+  "Choose Speak, Topics, Camera or Type from Home.":
+    "முகப்பில் பேசு, தலைப்புகள், கேமரா அல்லது எழுது என்பதைத் தேர்ந்தெடு.",
+  "Choose an exact sentence first.":
+    "முதலில் ஒரு வாக்கியத்தைத் தேர்ந்தெடுங்கள்.",
+  "After you choose and speak a sentence, you can find it here.":
+    "நீங்கள் தேர்ந்தெடுத்துப் பேசிய வாக்கியங்கள் இங்கே இருக்கும்.",
+  "Getting your voice ready…": "குரல் தயாராகிறது…",
+  "Speaking…": "பேசுகிறது…",
+  "Said, in your words.": "நீங்கள் தேர்ந்தெடுத்தது பேசப்பட்டது.",
+  "Stopped.": "நிறுத்தப்பட்டது.",
+  "Waiting for playback": "பேசக் காத்திருக்கிறது",
+  "Device voice": "சாதனக் குரல்",
+  "Your recorded voice": "உங்கள் பதிவுசெய்த குரல்",
+  "Consented family recording": "ஒப்புதலுடன் குடும்பத்தினர் பதிவுசெய்த குரல்",
+  "Help alert tone": "உதவி எச்சரிக்கை ஒலி",
+  "Help alert sounded.": "உதவி ஒலி எழுப்பப்பட்டது.",
+  "Ready now. Tap the sentence again to speak.":
+    "தயார். பேச வாக்கியத்தை மீண்டும் தொடுங்கள்.",
+  "A voice for this language isn’t installed. Show this sentence to the person.":
+    "இந்த மொழிக்கான குரல் இல்லை. வாக்கியத்தை மற்றவருக்குக் காட்டுங்கள்.",
+  "Couldn’t play audio. Show this sentence to the person.":
+    "ஒலி வரவில்லை. வாக்கியத்தை மற்றவருக்குக் காட்டுங்கள்.",
+  "Could not load your voice. Show this sentence to the person.":
+    "குரல் கிடைக்கவில்லை. வாக்கியத்தை மற்றவருக்குக் காட்டுங்கள்.",
   "என்ன சொல்லணும்? Take your time. We’re listening.":
     "நிதானமாகத் தேர்ந்தெடுங்கள்.",
   "Is this what you mean?": "இதைத்தான் சொல்ல விரும்புகிறீர்களா?",
@@ -69,6 +86,9 @@ const labels: Record<string, string> = {
   "My tools": "என் கருவிகள்",
   Rehabilitation: "மறுவாழ்வு",
   Clinician: "சிகிச்சை நிபுணர்",
+  "Voice flow": "பேச்சு → எழுத்து",
+  "Speech companion": "பேச்சுத் துணை",
+  Companion: "துணை",
   "My rehabilitation": "என் மறுவாழ்வு",
   "Clinician dashboard": "சிகிச்சை நிபுணர் பலகை",
   Practice: "பயிற்சி",

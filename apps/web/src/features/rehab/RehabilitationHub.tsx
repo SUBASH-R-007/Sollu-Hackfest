@@ -14,7 +14,7 @@ import { PageTitle } from "../../ui";
 import {
   CONDITION_PROFILES,
   COMMUNICATION_METHODS,
-  EXERCISES,
+  exerciseInLanguage,
   type CommunicationMethod,
   type PracticeRecord,
   type RehabPlan,
@@ -121,11 +121,13 @@ function Hub({
   const condition = CONDITION_PROFILES.find(
     (item) => item.id === profile.condition,
   )!;
-  const libraryTargets = EXERCISES.filter(
-    (exercise) =>
-      plan.exerciseIds.includes(exercise.id) &&
-      exercise.language === profile.language,
-  );
+  const libraryTargets = [
+    ...new Set(
+      plan.exerciseIds.flatMap(
+        (id) => exerciseInLanguage(id, profile.language) ?? [],
+      ),
+    ),
+  ];
   const planTargets = [
     ...libraryTargets.map((exercise) => exercise.target),
     ...plan.customTargets,

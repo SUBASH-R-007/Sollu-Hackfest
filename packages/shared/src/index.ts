@@ -8,3 +8,4 @@ export * from "./modelGrounding";
 export * from "./contextEngine";
 export * from "./fragmentRepair";
 export * from "./predefinedCommunication";
+export * from "./topicFragment";

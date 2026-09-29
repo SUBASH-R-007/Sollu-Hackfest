@@ -33,7 +33,7 @@ test("rehearsal warm-up stays silent and cached Type suggestions work offline", 
     page
       .getByRole("status")
       .filter({ hasText: "of 3 local vocabulary sets stored" }),
-  ).toContainText("2 of 3 local vocabulary sets stored");
+  ).toContainText("1 of 3 local vocabulary sets stored");
   expect(inferenceRequests).toEqual([]);
   expect(await spokenCalls(page)).toEqual([]);
   await startTyped(page, "water");
@@ -205,9 +205,10 @@ test("Topics pain templates work before AI, including side and round-two recover
 
 test("speech starts on the input tile and simulated recognition reaches confirmation without Done", async ({
   browser,
+  baseURL,
 }) => {
   const context = await browser.newContext({
-    baseURL: "http://localhost:5173",
+    baseURL,
     viewport: { width: 390, height: 844 },
   });
   await installSpeechHarness(context, true);

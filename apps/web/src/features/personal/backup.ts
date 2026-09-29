@@ -12,6 +12,7 @@ import {
   type PersonalStore,
 } from "./model";
 import { emptyPersonal, readPersonal } from "./store";
+import { isConsentWithdrawn, readConsentWithdrawals } from "./withdrawals";
 
 const MAX_FILE = 40 * 1024 * 1024;
 const MAX_PLAIN = 25 * 1024 * 1024;
@@ -399,6 +400,8 @@ export async function mergeEncryptedBackup(
     let added = merged.added,
       skipped = merged.skipped;
     await db.kv.put({ key: PERSONAL_KEY, value: merged.store });
+    // I-7: consent withdrawn on this device is never restored from a backup.
+    const withdrawals = await readConsentWithdrawals();
     // Consent rows precede their recordings. Existing entries are never replaced.
     for (const name of [
       "consents",
@@ -413,6 +416,10 @@ export async function mergeEncryptedBackup(
           skipped++;
           continue;
         }
+        if (name === "consents" && isConsentWithdrawn(entry, withdrawals)) {
+          skipped++;
+          continue;
+        }
         if (name === "recordings") {
           const actual = await db.consents.get(entry.consentId as string);
           const archived = payload.tables.consents.find(
@@ -421,6 +428,7 @@ export async function mergeEncryptedBackup(
           if (
             !actual ||
             !archived ||
+            isConsentWithdrawn(archived, withdrawals) ||
             actual.name !== archived.name ||
             actual.at !== archived.at ||
             actual.givenBy !== archived.givenBy

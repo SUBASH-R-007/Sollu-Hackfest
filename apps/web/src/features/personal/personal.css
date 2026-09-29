@@ -50,7 +50,8 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 10px;
-  border: 1px solid var(--line, #d6cbdc);
+  min-height: 120px;
+  border: 2px solid #85718f;
   border-radius: 20px;
   background: var(--surface, #fff);
 }
@@ -66,8 +67,27 @@
 .personal-actions > .tap {
   flex: 1 1 120px;
   padding: 12px 18px;
-  border: 1px solid var(--line, #d6cbdc);
+  border: 2px solid #85718f;
   border-radius: 14px;
+  background: #fff;
+}
+.personal-actions > .tap[aria-pressed="true"] {
+  background: #eadbf3;
+  border-color: #71338b;
+}
+/* Category chips replace a small dropdown: each is a full-size target. */
+.personal-categories > .tap {
+  flex: 1 1 150px;
+  font-weight: 600;
+}
+.personal-selected-word {
+  scroll-margin-top: 16px;
+}
+.personal-edit-access > .tap {
+  padding: 12px 18px;
+  border: 2px solid #85718f;
+  border-radius: 14px;
+  background: #fff;
 }
 .personal-tools label,
 .personal-backup label {

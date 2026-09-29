@@ -41,10 +41,16 @@ function anthropicSchema(value: unknown): unknown {
       .map(([key, child]) => [key, anthropicSchema(child)]),
   );
 }
-async function boundedJson(response: Response): Promise<unknown> {
+/** A provider HTTP failure; only the status is kept, never the error body. */
+export class ProviderRequestError extends Error {
+  constructor(readonly status: number) {
+    super("Language provider request failed");
+  }
+}
+export async function boundedJson(response: Response): Promise<unknown> {
   if (!response.ok) {
     await response.body?.cancel();
-    throw new Error("Language provider request failed");
+    throw new ProviderRequestError(response.status);
   }
   const declaredLength = Number(response.headers.get("content-length"));
   if (declaredLength > maxResponseBytes || !response.body) {

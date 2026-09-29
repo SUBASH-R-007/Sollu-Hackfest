@@ -240,6 +240,15 @@ export const localDay = (at: number) => {
 };
 export const inDateRange = (at: number, from: string, to: string) =>
   localDay(at) >= from && localDay(at) <= to;
+/**
+ * Converts a communication attempt's time-to-speech into report seconds.
+ * Missing, non-finite, negative or implausible (> 24 h) times stay missing,
+ * never zero, so one bad attempt cannot break the report or skew medians.
+ */
+export const attemptSeconds = (ms: number | undefined): number | null =>
+  typeof ms === "number" && Number.isFinite(ms) && ms >= 0 && ms <= 86_400_000
+    ? ms / 1000
+    : null;
 
 export function buildReport(input: {
   profile: RehabProfile;
@@ -348,8 +357,7 @@ export function buildReport(input: {
         spoken: a.outcome === "spoken",
         outcome: a.communicationOutcome ?? "unconfirmed",
         taps: a.taps,
-        seconds:
-          a.timeToSpeechMs === undefined ? null : a.timeToSpeechMs / 1000,
+        seconds: attemptSeconds(a.timeToSpeechMs),
         excluded: a.demoClock || a.demoCached,
       })),
     corrections: includeContent
@@ -443,21 +451,28 @@ export function weeklyReport(report: TherapyReport) {
   for (const session of report.sessions) {
     const date = new Date(session.at);
     date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
-    groups.get(localDay(date.getTime()))?.push(session);
+    const week = localDay(date.getTime());
+    // Sessions from another device time zone can fall outside the expected
+    // local weeks; give them their own bucket so totals equal session count.
+    const rows = groups.get(week);
+    if (rows) rows.push(session);
+    else groups.set(week, [session]);
   }
-  return [...groups].map(([week, rows]) => ({
-    week,
-    rows,
-    count: rows.length,
-    activeDays: new Set(rows.map((s) => localDay(s.at))).size,
-    textMatch: describe(rows.map((s) => s.textMatch)),
-    response: describe(rows.map((s) => s.responseSeconds)),
-    fatigue: describe(
-      rows
-        .filter((s) => s.fatigueBefore !== null && s.fatigueAfter !== null)
-        .map((s) => s.fatigueAfter! - s.fatigueBefore!),
-    ),
-  }));
+  return [...groups]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([week, rows]) => ({
+      week,
+      rows,
+      count: rows.length,
+      activeDays: new Set(rows.map((s) => localDay(s.at))).size,
+      textMatch: describe(rows.map((s) => s.textMatch)),
+      response: describe(rows.map((s) => s.responseSeconds)),
+      fatigue: describe(
+        rows
+          .filter((s) => s.fatigueBefore !== null && s.fatigueAfter !== null)
+          .map((s) => s.fatigueAfter! - s.fatigueBefore!),
+      ),
+    }));
 }
 
 export function reportCsv(report: TherapyReport): string {

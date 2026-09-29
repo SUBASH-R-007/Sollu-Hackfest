@@ -47,7 +47,12 @@ export function BackupPanel() {
   return (
     <section className="personal-panel personal-backup">
       <h2>{t("பூட்டிய காப்புப் பிரதி", "Encrypted local backup")}</h2>
-      <p>Therapy practice and evidence use a separate store. Export those from the Therapist dashboard before clearing device data.</p>
+      <p>
+        {t(
+          "மறுவாழ்வுப் பயிற்சியும் பதிவுகளும் தனிச் சேமிப்பில் உள்ளன; இந்தக் காப்புப் பிரதியில் இல்லை. சாதனத் தரவை அழிக்கும் முன், ‘சிகிச்சை நிபுணர்’ தாவலில் அவற்றை ஏற்றுமதி செய்யவும்.",
+          "Rehabilitation practice and its recordings use a separate store and are not in this backup. Export them from the Clinician tab before clearing device data.",
+        )}
+      </p>
       <p>
         {t(
           "உங்கள் அட்டைகள், படங்கள், பதிவு செய்த குரல், ஒப்புதல், சொற்றொடர்கள் மற்றும் பதிவேடு ஒரு பூட்டிய கோப்பில் சேமிக்கப்படும். இணையத்தில் அனுப்பப்படாது.",

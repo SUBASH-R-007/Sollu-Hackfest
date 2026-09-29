@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { FlaskConical, RefreshCw, Save, Trash2 } from "lucide-react";
-import { api } from "../../lib/api";
+import { api, rememberSentenceEngine } from "../../lib/api";
 import { TapButton } from "../../ui";
 import { SettingsCard, SettingsField, SettingsToggle } from "./Controls";
 import { useApp } from "../../state";
@@ -40,7 +40,7 @@ const environmentKeys: Partial<Record<ProviderId, string>> = {
 };
 
 export function LlmSettings({ onChanged }: { onChanged: () => void }) {
-  const { settings } = useApp();
+  const { settings, updateSettings } = useApp();
   const [sentenceAllowed, setSentenceAllowed] = useState(
     cloudSentencePermission,
   );
@@ -186,6 +186,7 @@ export function LlmSettings({ onChanged }: { onChanged: () => void }) {
         body,
         controller.signal,
       );
+      rememberSentenceEngine(result.provider);
       if (!mounted.current || controller.signal.aborted) return;
       apply(result);
       changed();
@@ -356,10 +357,24 @@ export function LlmSettings({ onChanged }: { onChanged: () => void }) {
                 </select>
               </SettingsField>
             </div>
+            <SettingsToggle
+              checked={settings.mixPreparedWithAi === true}
+              onChange={(value) => {
+                void updateSettings({ mixPreparedWithAi: value }).catch(() =>
+                  setMessage(
+                    "This choice could not be saved. Please try again.",
+                  ),
+                );
+              }}
+            >
+              Also offer prepared vocabulary phrases with AI suggestions
+            </SettingsToggle>
             <p className="settings-feature-muted">
-              Model access and pricing depend on the provider account. If the
-              engine fails, times out or cannot support a safe interpretation,
-              Sollu uses grounded vocabulary choices or asks for clarification.
+              Model access and pricing depend on the provider account.{" "}
+              {settings.mixPreparedWithAi === true
+                ? "AI suggestions come first; prepared vocabulary phrases may fill spare choices and replace AI suggestions when the engine fails, times out or cannot be verified."
+                : "Only the selected engine’s suggestions are shown. If it fails, times out or cannot be verified, Sollu says so and offers prepared phrases only when the person taps for them."}{" "}
+              Health and help words always use prepared wording.
             </p>
             {provider === "mock" ? (
               <p className="settings-key-status">

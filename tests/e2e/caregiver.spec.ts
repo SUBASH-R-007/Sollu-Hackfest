@@ -16,6 +16,7 @@ import {
 test("two isolated devices pair, exchange encrypted words/receipts/questions and acknowledge Help", async ({
   page,
   browser,
+  baseURL,
 }) => {
   const sentFrames: string[] = [];
   page.on("websocket", (socket) =>
@@ -30,7 +31,7 @@ test("two isolated devices pair, exchange encrypted words/receipts/questions and
   const link = await page.getByLabel("Private pairing link").inputValue();
   expect(new URL(link).hash).toContain("k=");
   const caregiver = await browser.newContext({
-    baseURL: "http://localhost:5173",
+    baseURL,
     viewport: { width: 390, height: 844 },
   });
   await installSpeechHarness(caregiver);

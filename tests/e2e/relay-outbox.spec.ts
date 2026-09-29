@@ -12,6 +12,7 @@ test("an offline patient message remains encrypted locally and is removed only a
   page,
   context,
   browser,
+  baseURL,
 }) => {
   // Keep real WebSockets; retaining references lets the test end the existing connection
   // when Chromium's offline emulation leaves an already-established socket open.
@@ -34,7 +35,7 @@ test("an offline patient message remains encrypted locally and is removed only a
   await expect(page.getByLabel("Private pairing link")).toBeVisible();
   const link = await page.getByLabel("Private pairing link").inputValue();
   const caregiver = await browser.newContext({
-    baseURL: "http://localhost:5173",
+    baseURL,
     viewport: { width: 390, height: 844 },
   });
   await installSpeechHarness(caregiver);

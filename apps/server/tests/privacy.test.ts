@@ -280,7 +280,8 @@ describe("server cloud privacy policy", () => {
         payload,
       });
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toMatchObject({ provider: "mock", ok: true });
+      // The blocked cloud choice is reported honestly, never as a Free vocabulary pass.
+      expect(response.json()).toMatchObject({ provider: "openai", ok: false });
       expect(fetch).not.toHaveBeenCalled();
     },
   );

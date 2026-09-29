@@ -8,6 +8,14 @@ import {
 } from "./phrases";
 import { getVocabularyCandidates, prepareCatalogFragment } from "./vocabulary";
 import {
+  hasNegation,
+  isFusedTanglishPain,
+  isRefusalOnly,
+  sideMentions,
+  tanglishBodyPartForms,
+} from "./lexicon";
+import { explicitFragmentText } from "./topicFragment";
+import {
   ContextPacketSchema,
   type Candidate,
   type ContextInput,
@@ -22,10 +30,44 @@ const mentions = (text: string, term: string) =>
     `(^|[^\\p{L}\\p{M}\\p{N}])${escape(norm(term))}(?=$|[^\\p{L}\\p{M}\\p{N}])`,
     "u",
   ).test(norm(text));
-const negative = (raw: string) =>
-  /\b(?:no|not|never|don['’]?t|without|venam|vendam|vendaam|illai)\b|வேணாம்|வேண்டாம்|இல்லை/u.test(
-    raw,
+const negative = hasNegation;
+// The authored "unbearable" wording is an intensity, not a denial of pain.
+const unbearable =
+  /தாங்க முடியல(?:ை)?|thaa?nga mudiyala|can['’]?t bear(?: it)?|cannot bear(?: it)?/gu;
+// Inflected/compound Tamil body-part forms (வயிற்று வலி, தலைவலி) keep the body part.
+const partForms: Partial<Record<(typeof painParts)[number]["id"], string[]>> = {
+  stomach: ["வயிற்று", "வயித்து"],
+};
+// Tanglish forms (thalai vali, thalaivali, vayiru vali) select the same authored templates.
+const mentionsPart = (raw: string, part: (typeof painParts)[number]) =>
+  [
+    part.ta,
+    ...(partForms[part.id] ?? []),
+    ...(tanglishBodyPartForms[part.id] ?? []),
+  ].some(
+    (form) =>
+      mentions(raw, form) ||
+      (norm(raw).match(/[\p{L}\p{M}]+/gu) ?? []).some(
+        (token) =>
+          token.startsWith(`${form}வலி`) || isFusedTanglishPain(token, part.id),
+      ),
   );
+/** Pain words: English, Tamil வலி and Tanglish vali (thalaivali, valikuthu). Bare Tanglish
+ * "nenju" is not treated as a pain statement (English "chest" alone is not either). */
+const painCue = /pain|hurts|வலி|நெஞ்சு|vali/u;
+/** Tamil accusative for a name: கார்த்திக் → கார்த்திக்கை, ராவ் → ராவை, ராணி → ராணியை,
+ * லதா → லதாவை. Draft wording pending native-speaker review. */
+function accusative(name: string): string {
+  if (!/\p{Script=Tamil}$/u.test(name)) return `${name}யை`;
+  if (name.endsWith("்")) {
+    const consonant = name.at(-2) ?? "";
+    return "கசடதபற".includes(consonant)
+      ? `${name}${consonant}ை`
+      : `${name.slice(0, -1)}ை`;
+  }
+  // Glide: ய் after இ/ஈ/ஐ/எ/ஏ vowels, otherwise வ்.
+  return /[ிீைெேஇஈஐஎஏ]$/u.test(name) ? `${name}யை` : `${name}வை`;
+}
 
 function card(
   c: ContextPacket,
@@ -109,7 +151,7 @@ function contactCandidates(
       card(
         c,
         "person.pickup",
-        `${ta}யை கூட்டிட்டு வாங்க.`,
+        `${accusative(ta)} கூட்டிட்டு வாங்க.`,
         `Please pick up ${person.name}.`,
         "request",
         "person",
@@ -144,7 +186,7 @@ function contactCandidates(
     card(
       c,
       "person.callback",
-      `${ta}யை எனக்கு ஃபோன் பண்ண சொல்லுங்க.`,
+      `${accusative(ta)} எனக்கு ஃபோன் பண்ண சொல்லுங்க.`,
       `Please ask ${person.name} to call me.`,
       "request",
       "person",
@@ -162,9 +204,8 @@ export function getMockCandidates(input: ContextInput): Candidate[] {
   const prepared = prepareCatalogFragment(c);
   if (prepared.ambiguous) return [];
   const path = c.fragment.topicPath ?? [];
-  const raw = norm(
-    [prepared.text, c.fragment.objectLabel, ...path].filter(Boolean).join(" "),
-  );
+  // Navigation ids (food, people, tv_phone) and contact ids are not patient words.
+  const raw = norm(explicitFragmentText(c.fragment, prepared.text));
   const correction = prepared.reading ?? "";
   // Corrections have already been applied once; they must never form a chain.
   const corrected = {
@@ -174,15 +215,12 @@ export function getMockCandidates(input: ContextInput): Candidate[] {
   };
   let result: Candidate[] = [];
   const part = painParts.find(
-    (p) =>
-      path.includes(p.id) ||
-      mentions(raw, p.en) ||
-      p.ta.split(" / ").some((t) => mentions(raw, t)),
+    (p) => path.includes(p.id) || mentions(raw, p.en) || mentionsPart(raw, p),
   );
   // Reuse the existing authored Help message only for an exact request. Negation,
   // uncertainty, names, time or other qualifiers must not disappear into generic help.
   if (
-    /^(?:help|i need help|need help|help please|please help|உதவி|உதவி வேணும்)[.!?\s]*$/u.test(
+    /^(?:help|i need help|need help|help please|please help|help me|help me please|please help me|udhavi|uthavi|udhavi venum|uthavi venum|உதவி|உதவி வேணும்)[.!?\s]*$/u.test(
       raw,
     )
   )
@@ -200,11 +238,13 @@ export function getMockCandidates(input: ContextInput): Candidate[] {
         templateVersion: "help-1",
       },
     ];
-  else if ((path[0] === "pain" || /pain|hurts|வலி|நெஞ்சு/.test(raw)) && part) {
-    if (negative(raw)) return [];
-    const left = path.includes("left") || /\bleft\b|இடது|\bidathu\b/.test(raw);
-    const right =
-      path.includes("right") || /\bright\b|வலது|\bvalathu\b/.test(raw);
+  else if ((path[0] === "pain" || painCue.test(raw)) && part) {
+    // "No pain"/"doesn't hurt" with a body part has no authored card: ask instead.
+    if (negative(raw.replace(unbearable, " "))) return [];
+    // "right now", "all right" and "he left" are not body sides.
+    const sides = sideMentions(raw);
+    const left = path.includes("left") || sides.left;
+    const right = path.includes("right") || sides.right;
     if (left && right) return [];
     const side = left ? "left" : right ? "right" : undefined;
     result =
@@ -215,7 +255,9 @@ export function getMockCandidates(input: ContextInput): Candidate[] {
     const person = contactCandidates(corrected, raw);
     if (person) result = person;
     else if (
-      /\b(?:tablet|tablets|medicine)\b|மாத்திரை|மருந்து/.test(raw) ||
+      /\b(?:tablet|tablets|medicine|maathirai|mathirai|marunthu|marundhu)\b|மாத்திரை|மருந்து/.test(
+        raw,
+      ) ||
       (mentions(raw, "table") &&
         (c.routine?.dueNow ?? []).some((r) => /night/i.test(r.label)))
     ) {
@@ -248,6 +290,9 @@ export function getMockCandidates(input: ContextInput): Candidate[] {
             ? ["fragment", "routine"]
             : ["fragment"],
       };
+      // Only an explicit refusal gets the refusal card; "didn't", "இல்ல" or "முடியல" may be
+      // an adherence, supply or ability statement that has no authored renderer.
+      if (negative(raw) && !isRefusalOnly(raw)) return [];
       result = negative(raw)
         ? [
             card(

@@ -9,8 +9,44 @@ import {
 } from "@sollu/shared";
 import { ollamaIntent, resolveSelectionResult } from "../providers/ollama.js";
 import { isCloudProvider, type ServerConfig } from "../config.js";
-import { generateStructured } from "../providers/cloud.js";
+import {
+  generateStructured,
+  ProviderRequestError,
+} from "../providers/cloud.js";
 import { contextualPrompt } from "./contextualPrompt.js";
+
+/** Why a selected AI engine produced no suggestions (AI-only mode). */
+export type EngineFailure = "unavailable" | "unverified";
+/** Why the engine was unavailable, from status codes only (no provider text). */
+export type EngineFailureDetail =
+  | "timeout"
+  | "key"
+  | "model"
+  | "quota"
+  | "provider"
+  | "network"
+  | "invalid-output";
+export function engineFailureDetail(error: unknown): EngineFailureDetail {
+  if (error instanceof ProviderRequestError)
+    return error.status === 401 || error.status === 403
+      ? "key"
+      : error.status === 404
+        ? "model"
+        : error.status === 429
+          ? "quota"
+          : error.status >= 500
+            ? "provider"
+            : "invalid-output";
+  if (error instanceof Error) {
+    if (error.message === "Provider timeout" || error.name === "TimeoutError")
+      return "timeout";
+    if (/key is not configured/.test(error.message)) return "key";
+    if (error.name === "SyntaxError" || error.name === "ZodError")
+      return "invalid-output";
+    if (/declined/.test(error.message)) return "invalid-output";
+  }
+  return "network";
+}
 
 export async function selectIntent(
   context: ContextPacket,
@@ -18,10 +54,29 @@ export async function selectIntent(
   signal?: AbortSignal,
   legacySelector?: typeof ollamaIntent,
   generator: typeof generateStructured = generateStructured,
+  // false = AI-only: a selected model's results are never mixed with or
+  // silently replaced by prepared vocabulary; failures are reported instead.
+  options: { preparedAlternatives?: boolean } = {},
 ) {
   if (signal?.aborted) throw new Error("Cancelled");
   const start = performance.now();
   const controlled = applyCandidatePolicy(getMockCandidates(context), context);
+  const aiOnly = options.preparedAlternatives === false;
+  const engineFailure = (
+    failure: EngineFailure,
+    model: string,
+    drops = 0,
+    failureDetail?: EngineFailureDetail,
+  ) => ({
+    candidates: [] as Candidate[],
+    model,
+    clarification: false,
+    validationDrops: drops,
+    latencyMs: Math.round(performance.now() - start),
+    fallback: true,
+    failure,
+    ...(failureDetail ? { failureDetail } : {}),
+  });
   // The route is lexical and deliberately applies to negated/historical wording too.
   // It is not a severity assessment: unchanged catalog validation must preserve qualifiers
   // or ask for clarification. No provider receives these fragments on this path.
@@ -39,14 +94,19 @@ export async function selectIntent(
   if (legacySelector)
     return selectCatalogIntent(context, config, signal, legacySelector);
   if (isCloudProvider(config.intentProvider) && config.allowCloudAI !== true)
-    return {
-      candidates: controlled.candidates,
-      model: "catalog-v2 · cloud disabled by server privacy policy",
-      clarification: controlled.clarification,
-      validationDrops: controlled.dropped,
-      latencyMs: Math.round(performance.now() - start),
-      fallback: true,
-    };
+    return aiOnly
+      ? engineFailure(
+          "unavailable",
+          `${config.intentProvider} · blocked by server privacy policy`,
+        )
+      : {
+          candidates: controlled.candidates,
+          model: "catalog-v2 · cloud disabled by server privacy policy",
+          clarification: controlled.clarification,
+          validationDrops: controlled.dropped,
+          latencyMs: Math.round(performance.now() - start),
+          fallback: true,
+        };
   if (config.intentProvider === "mock")
     return {
       candidates: controlled.candidates,
@@ -92,6 +152,12 @@ export async function selectIntent(
     });
     const hasRejectedOutput =
       generated.reasons.length > 0 && verified.candidates.length === 0;
+    if (hasRejectedOutput && aiOnly)
+      return engineFailure(
+        "unverified",
+        `${config.intentProvider}:${config.llmModel ?? config.ollamaModel} · suggestions could not be verified`,
+        generated.reasons.length + verified.dropped,
+      );
     if (hasRejectedOutput)
       return {
         candidates: controlled.candidates,
@@ -105,13 +171,14 @@ export async function selectIntent(
     // Valid model suggestions lead; already-grounded prepared meanings can fill spare
     // slots. Apply the same cross-source rejection and deduplication policy again.
     // An explicit model abstention must remain a request for clarification.
-    const choices = verified.candidates.length
-      ? applyCandidatePolicy(
-          [...verified.candidates, ...controlled.candidates],
-          context,
-          { serverGeneratedCandidates: verified.candidates },
-        )
-      : verified;
+    const choices =
+      verified.candidates.length && !aiOnly
+        ? applyCandidatePolicy(
+            [...verified.candidates, ...controlled.candidates],
+            context,
+            { serverGeneratedCandidates: verified.candidates },
+          )
+        : verified;
     const includesPrepared = choices.candidates.some(
       (candidate) => candidate.source !== "model",
     );
@@ -126,8 +193,17 @@ export async function selectIntent(
       latencyMs: Math.round(performance.now() - start),
       fallback: false,
     };
-  } catch {
+  } catch (error) {
     if (signal?.aborted) throw new Error("Cancelled");
+    if (aiOnly) {
+      const detail = engineFailureDetail(error);
+      return engineFailure(
+        "unavailable",
+        `${config.intentProvider}:${config.llmModel ?? config.ollamaModel} · ${detail === "timeout" ? `no answer within ${Math.round(config.timeoutMs / 1000)} s` : "unavailable"}`,
+        0,
+        detail,
+      );
+    }
     return {
       candidates: controlled.candidates,
       model: "catalog-v2 · model unavailable",

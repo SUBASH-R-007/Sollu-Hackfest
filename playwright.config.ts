@@ -34,6 +34,12 @@ function availableChrome(): string | undefined {
   return undefined;
 }
 
+// SOLLU_WEB_PORT / SOLLU_API_PORT let E2E run beside another checkout's dev
+// servers instead of silently reusing them. Defaults match `pnpm dev`.
+const webPort = process.env.SOLLU_WEB_PORT || "5173";
+const apiPort = process.env.SOLLU_API_PORT || "8787";
+const baseURL = `http://localhost:${webPort}`;
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
@@ -44,7 +50,7 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
-    baseURL: "http://localhost:5173",
+    baseURL,
     browserName: "chromium",
     viewport: { width: 390, height: 844 },
     headless: true,
@@ -56,13 +62,19 @@ export default defineConfig({
   },
   webServer: {
     command: "pnpm dev",
-    url: "http://localhost:5173",
+    url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     env: {
       MOCK_PROVIDERS: "1",
       LLM_PROVIDER: "mock",
-      PUBLIC_ORIGIN: "http://localhost:5173",
+      // Tests mock policy responses; pin the real server to the checked-in
+      // default so a developer's local .env cannot change results.
+      ALLOW_CLOUD_AI: "0",
+      PORT: apiPort,
+      SOLLU_WEB_PORT: webPort,
+      SOLLU_API_PORT: apiPort,
+      PUBLIC_ORIGIN: baseURL,
     },
   },
 });

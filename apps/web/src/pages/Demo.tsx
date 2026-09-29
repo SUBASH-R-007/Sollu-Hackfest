@@ -12,6 +12,7 @@ import {
 import {
   applyCandidatePolicy,
   getMockCandidates,
+  requiresPredefinedCommunication,
   type Fragment,
   type Lang,
 } from "@sollu/shared";
@@ -149,10 +150,17 @@ export default function Demo() {
         round: 2,
         exclude: getMockCandidates(first).map((c) => c.text),
       });
-      let stored = 0;
+      let stored = 0,
+        prepared = 0;
       for (const [index, context] of [night, water, recovery].entries()) {
         if (mounted.current)
           setStatus(`Preparing ${index + 1} of 3 sentence sets…`);
+        // Health/help input uses prepared wording or clarification before any
+        // generator or rehearsal cache, so it is never stored here.
+        if (requiresPredefinedCommunication(context)) {
+          prepared++;
+          continue;
+        }
         const result = {
           candidates: applyCandidatePolicy(getMockCandidates(context), context)
             .candidates,
@@ -165,8 +173,20 @@ export default function Demo() {
       }
       if (mounted.current) {
         setCount(await getRehearsalCount());
+        const clarify = 3 - stored - prepared;
         setStatus(
-          `${stored} of 3 local vocabulary sets stored. ${3 - stored} needed clarification and were not cached. Reused results are labelled CACHED. No external request, speech or live AI measurement was made.`,
+          [
+            `${stored} of 3 local vocabulary sets stored.`,
+            prepared
+              ? `${prepared} ${prepared === 1 ? "scene uses" : "scenes use"} prepared wording and ${prepared === 1 ? "was" : "were"} not cached.`
+              : "",
+            clarify
+              ? `${clarify} needed clarification and ${clarify === 1 ? "was" : "were"} not cached.`
+              : "",
+            "Reused results are labelled CACHED. No external request, speech or live AI measurement was made.",
+          ]
+            .filter(Boolean)
+            .join(" "),
         );
       }
     } catch (error) {
